@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Bills from './pages/Bills';
+import Expenses from './pages/Expenses';
 import Paychecks from './pages/Paychecks';
 import Goals from './pages/Goals';
 import CalendarView from './pages/Calendar';
@@ -14,6 +15,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/bills" element={<Bills />} />
+        <Route path="/expenses" element={<Expenses />} />
         <Route path="/paychecks" element={<Paychecks />} />
         <Route path="/goals" element={<Goals />} />
         <Route path="/calendar" element={<CalendarView />} />

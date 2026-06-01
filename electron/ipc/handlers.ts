@@ -41,12 +41,29 @@ export function registerIpcHandlers() {
   ipcMain.handle(IPC.UPDATE_PAYCHECK, (_e, id, input) => repo.updatePaycheck(id, input));
   ipcMain.handle(IPC.DELETE_PAYCHECK, (_e, id) => repo.deletePaycheck(id));
 
+  // ---------- Expense categories ----------
+  ipcMain.handle(IPC.LIST_EXPENSE_CATEGORIES, () => repo.listExpenseCategories());
+  ipcMain.handle(IPC.CREATE_EXPENSE_CATEGORY, (_e, input) => repo.createExpenseCategory(input));
+  ipcMain.handle(IPC.UPDATE_EXPENSE_CATEGORY, (_e, id, input) =>
+    repo.updateExpenseCategory(id, input)
+  );
+  ipcMain.handle(IPC.DELETE_EXPENSE_CATEGORY, (_e, id) => repo.deleteExpenseCategory(id));
+
+  // ---------- Expenses ----------
+  ipcMain.handle(IPC.LIST_EXPENSES, () => repo.listExpenses());
+  ipcMain.handle(IPC.CREATE_EXPENSE, (_e, input) => repo.createExpense(input));
+  ipcMain.handle(IPC.UPDATE_EXPENSE, (_e, id, input) => repo.updateExpense(id, input));
+  ipcMain.handle(IPC.DELETE_EXPENSE, (_e, id) => repo.deleteExpense(id));
+
   // ---------- Dashboard / Reports / Calendar ----------
   ipcMain.handle(IPC.DASHBOARD, () => repo.dashboardSnapshot());
   ipcMain.handle(IPC.REPORT_CATEGORIES, (_e, fromDate, toDate) =>
     repo.reportByCategory(fromDate, toDate)
   );
   ipcMain.handle(IPC.REPORT_MONTHLY, (_e, months) => repo.reportMonthly(months));
+  ipcMain.handle(IPC.REPORT_EXPENSES, (_e, fromDate, toDate) =>
+    repo.reportExpenses(fromDate, toDate)
+  );
   ipcMain.handle(IPC.CALENDAR_EVENTS, (_e, fromDate, toDate) =>
     repo.calendarEvents(fromDate, toDate)
   );

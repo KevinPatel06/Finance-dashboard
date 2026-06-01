@@ -8,6 +8,50 @@ interface Migration {
 
 const migrations: Migration[] = [
   {
+    version: 3,
+    name: 'expenses',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS expense_categories (
+          id    INTEGER PRIMARY KEY AUTOINCREMENT,
+          name  TEXT NOT NULL UNIQUE,
+          color TEXT NOT NULL DEFAULT '#64748b'
+        );
+
+        CREATE TABLE IF NOT EXISTS expenses (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          description TEXT NOT NULL,
+          amount      REAL NOT NULL CHECK (amount >= 0),
+          date        TEXT NOT NULL,
+          category_id INTEGER REFERENCES expense_categories(id) ON DELETE SET NULL,
+          note        TEXT,
+          created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+        CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id);
+      `);
+
+      // Seed common expense categories ONCE (inside the migration, so deleting
+      // one doesn't make it reappear on next launch). Colors drawn from the
+      // shared palette used in Bills.tsx.
+      const seed = db.prepare(
+        'INSERT OR IGNORE INTO expense_categories (name, color) VALUES (?, ?)'
+      );
+      const defaults: [string, string][] = [
+        ['Food', '#ef4444'],
+        ['Groceries', '#10b981'],
+        ['Gas', '#f59e0b'],
+        ['Dining', '#ec4899'],
+        ['Shopping', '#8b5cf6'],
+        ['Entertainment', '#06b6d4'],
+        ['Transport', '#3b82f6'],
+        ['Health', '#14b8a6'],
+        ['Other', '#64748b'],
+      ];
+      for (const [name, color] of defaults) seed.run(name, color);
+    },
+  },
+  {
     version: 2,
     name: 'goals_archived_at',
     up: (db) => {

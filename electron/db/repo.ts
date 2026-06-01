@@ -5,6 +5,10 @@ import type {
   BillInput,
   Category,
   DashboardSnapshot,
+  Expense,
+  ExpenseCategory,
+  ExpenseInput,
+  ExpenseReport,
   Paycheck,
   PaycheckAllocationInput,
   PaycheckWithAllocations,
@@ -587,4 +591,171 @@ export function calendarEvents(fromIso: string, toIso: string) {
     .prepare('SELECT id, date, amount FROM paychecks WHERE date BETWEEN ? AND ?')
     .all(fromIso, toIso) as { id: number; date: string; amount: number }[];
   return { upcoming, paid, paychecks };
+}
+
+// ============================================================================
+// Expenses — fully self-contained. None of the functions below read from or
+// write to paychecks/bills/goals, so expenses never affect dashboard, paycheck,
+// or calendar numbers.
+// ============================================================================
+
+// ---------- Expense categories ----------
+export function listExpenseCategories(): ExpenseCategory[] {
+  return getDb()
+    .prepare('SELECT * FROM expense_categories ORDER BY name')
+    .all() as ExpenseCategory[];
+}
+
+export function createExpenseCategory(input: { name: string; color: string }): ExpenseCategory {
+  const db = getDb();
+  const info = db
+    .prepare('INSERT INTO expense_categories (name, color) VALUES (?, ?)')
+    .run(input.name, input.color);
+  return db
+    .prepare('SELECT * FROM expense_categories WHERE id = ?')
+    .get(info.lastInsertRowid) as ExpenseCategory;
+}
+
+export function updateExpenseCategory(
+  id: number,
+  input: { name?: string; color?: string }
+): ExpenseCategory {
+  const db = getDb();
+  const cur = db.prepare('SELECT * FROM expense_categories WHERE id = ?').get(id) as ExpenseCategory;
+  if (!cur) throw new Error('Expense category not found');
+  db.prepare('UPDATE expense_categories SET name = ?, color = ? WHERE id = ?').run(
+    input.name ?? cur.name,
+    input.color ?? cur.color,
+    id
+  );
+  return db.prepare('SELECT * FROM expense_categories WHERE id = ?').get(id) as ExpenseCategory;
+}
+
+export function deleteExpenseCategory(id: number): { ok: true } {
+  // ON DELETE SET NULL keeps the expenses but clears their category.
+  getDb().prepare('DELETE FROM expense_categories WHERE id = ?').run(id);
+  return { ok: true };
+}
+
+// ---------- Expenses ----------
+export function listExpenses(): Expense[] {
+  return getDb()
+    .prepare('SELECT * FROM expenses ORDER BY date DESC, id DESC')
+    .all() as Expense[];
+}
+
+export function createExpense(input: ExpenseInput): Expense {
+  const db = getDb();
+  const info = db
+    .prepare(
+      `INSERT INTO expenses (description, amount, date, category_id, note)
+       VALUES (?, ?, ?, ?, ?)`
+    )
+    .run(
+      input.description,
+      input.amount,
+      input.date,
+      input.category_id ?? null,
+      input.note ?? null
+    );
+  return db.prepare('SELECT * FROM expenses WHERE id = ?').get(info.lastInsertRowid) as Expense;
+}
+
+export function updateExpense(id: number, input: Partial<ExpenseInput>): Expense {
+  const db = getDb();
+  const cur = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id) as Expense;
+  if (!cur) throw new Error('Expense not found');
+  db.prepare(
+    `UPDATE expenses SET description = ?, amount = ?, date = ?, category_id = ?, note = ?
+       WHERE id = ?`
+  ).run(
+    input.description ?? cur.description,
+    input.amount ?? cur.amount,
+    input.date ?? cur.date,
+    input.category_id === undefined ? cur.category_id : input.category_id,
+    input.note === undefined ? cur.note : input.note,
+    id
+  );
+  return db.prepare('SELECT * FROM expenses WHERE id = ?').get(id) as Expense;
+}
+
+export function deleteExpense(id: number): { ok: true } {
+  getDb().prepare('DELETE FROM expenses WHERE id = ?').run(id);
+  return { ok: true };
+}
+
+// ---------- Expense reports ----------
+export function reportExpenses(fromIso: string, toIso: string): ExpenseReport {
+  const db = getDb();
+
+  const totals = db
+    .prepare(
+      'SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expenses WHERE date BETWEEN ? AND ?'
+    )
+    .get(fromIso, toIso) as { total: number; count: number };
+
+  const byCategory = db
+    .prepare(
+      `SELECT c.id, c.name, c.color, COALESCE(SUM(e.amount), 0) AS total
+         FROM expenses e
+         LEFT JOIN expense_categories c ON c.id = e.category_id
+        WHERE e.date BETWEEN ? AND ?
+        GROUP BY c.id
+        ORDER BY total DESC`
+    )
+    .all(fromIso, toIso) as {
+    id: number | null;
+    name: string | null;
+    color: string | null;
+    total: number;
+  }[];
+
+  const overTime = db
+    .prepare(
+      `SELECT strftime('%Y-%m', date) AS month, COALESCE(SUM(amount), 0) AS total
+         FROM expenses
+        WHERE date BETWEEN ? AND ?
+        GROUP BY month
+        ORDER BY month`
+    )
+    .all(fromIso, toIso) as { month: string; total: number }[];
+
+  const topPurchases = db
+    .prepare(
+      `SELECT e.id, e.description, e.amount, e.date,
+              c.name AS category_name, c.color AS category_color
+         FROM expenses e
+         LEFT JOIN expense_categories c ON c.id = e.category_id
+        WHERE e.date BETWEEN ? AND ?
+        ORDER BY e.amount DESC, e.date DESC
+        LIMIT 8`
+    )
+    .all(fromIso, toIso) as {
+    id: number;
+    description: string;
+    amount: number;
+    date: string;
+    category_name: string | null;
+    category_color: string | null;
+  }[];
+
+  return {
+    totalSpent: totals.total,
+    count: totals.count,
+    byCategory: byCategory.map((r) => ({
+      id: r.id,
+      name: r.name ?? 'Uncategorized',
+      color: r.color ?? '#64748b',
+      total: r.total,
+    })),
+    overTime,
+    topPurchases: topPurchases.map((r) => ({
+      id: r.id,
+      description: r.description,
+      amount: r.amount,
+      date: r.date,
+      categoryName: r.category_name ?? 'Uncategorized',
+      categoryColor: r.category_color ?? '#64748b',
+    })),
+  };
 }

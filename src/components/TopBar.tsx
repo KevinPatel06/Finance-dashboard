@@ -4,6 +4,7 @@ import ThemeToggle from './ThemeToggle';
 const titles: Record<string, string> = {
   '/': 'Dashboard',
   '/bills': 'Bills',
+  '/expenses': 'Expenses',
   '/paychecks': 'Paychecks',
   '/goals': 'Savings Goals',
   '/calendar': 'Calendar',

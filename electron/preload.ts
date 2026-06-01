@@ -39,6 +39,18 @@ const api = {
     update: (id: number, input: unknown) => invoke(IPC.UPDATE_PAYCHECK, id, input),
     remove: (id: number) => invoke(IPC.DELETE_PAYCHECK, id),
   },
+  expenseCategories: {
+    list: () => invoke(IPC.LIST_EXPENSE_CATEGORIES),
+    create: (input: unknown) => invoke(IPC.CREATE_EXPENSE_CATEGORY, input),
+    update: (id: number, input: unknown) => invoke(IPC.UPDATE_EXPENSE_CATEGORY, id, input),
+    remove: (id: number) => invoke(IPC.DELETE_EXPENSE_CATEGORY, id),
+  },
+  expenses: {
+    list: () => invoke(IPC.LIST_EXPENSES),
+    create: (input: unknown) => invoke(IPC.CREATE_EXPENSE, input),
+    update: (id: number, input: unknown) => invoke(IPC.UPDATE_EXPENSE, id, input),
+    remove: (id: number) => invoke(IPC.DELETE_EXPENSE, id),
+  },
   dashboard: {
     get: () => invoke(IPC.DASHBOARD),
   },
@@ -46,6 +58,8 @@ const api = {
     categories: (fromDate: string, toDate: string) =>
       invoke(IPC.REPORT_CATEGORIES, fromDate, toDate),
     monthly: (months: number) => invoke(IPC.REPORT_MONTHLY, months),
+    expenses: (fromDate: string, toDate: string) =>
+      invoke(IPC.REPORT_EXPENSES, fromDate, toDate),
   },
   calendar: {
     events: (fromDate: string, toDate: string) =>

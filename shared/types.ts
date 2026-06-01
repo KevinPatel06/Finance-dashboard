@@ -135,3 +135,48 @@ export interface DashboardSnapshot {
   averageSavingsPerPaycheck: number; // historical avg: total goal allocations / number of logged paychecks
   paycheckCount: number;
 }
+
+// ---------- Expenses (self-contained; does not affect other sections) ----------
+export interface ExpenseCategory {
+  id: number;
+  name: string;
+  color: string;
+}
+
+export interface Expense {
+  id: number;
+  description: string;
+  amount: number;
+  date: string; // ISO YYYY-MM-DD
+  category_id: number | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface ExpenseInput {
+  description: string;
+  amount: number;
+  date: string;
+  category_id: number | null;
+  note?: string | null;
+}
+
+export interface ExpenseReport {
+  totalSpent: number;
+  count: number;
+  byCategory: Array<{
+    id: number | null;
+    name: string;
+    color: string;
+    total: number;
+  }>;
+  overTime: Array<{ month: string; total: number }>;
+  topPurchases: Array<{
+    id: number;
+    description: string;
+    amount: number;
+    date: string;
+    categoryName: string;
+    categoryColor: string;
+  }>;
+}

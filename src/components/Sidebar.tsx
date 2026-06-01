@@ -6,6 +6,7 @@ import {
   Target,
   CalendarDays,
   BarChart3,
+  ShoppingCart,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,6 +15,7 @@ import { useTheme } from '@/lib/theme';
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/paychecks', label: 'Paychecks', icon: Wallet },
+  { to: '/expenses', label: 'Expenses', icon: ShoppingCart },
   { to: '/bills', label: 'Bills', icon: Receipt },
   { to: '/goals', label: 'Goals', icon: Target },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
