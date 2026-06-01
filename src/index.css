@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Theme tokens ---------- */
+:root {
+  /* Light theme — neutral surfaces */
+  --surface: 248 250 252;        /* slate-50 */
+  --surface-2: 255 255 255;      /* white */
+  --surface-3: 241 245 249;      /* slate-100 */
+  --border: 226 232 240;         /* slate-200 */
+  --border-strong: 203 213 225;  /* slate-300 */
+  --content: 15 23 42;           /* slate-900 */
+  --content-muted: 71 85 105;    /* slate-600 */
+  --content-subtle: 148 163 184; /* slate-400 */
+  /* Brand defaults to emerald — overridden by JS to support accent picker */
+  --brand: 16 185 129;
+  --brand-hover: 5 150 105;
+  --brand-soft: 209 250 229;
+  --success: 16 185 129;
+  --warning: 234 179 8;
+  --danger: 239 68 68;
+  --info: 59 130 246;
+}
+
+.dark {
+  /* Dark theme — deep slate with subtle blue undertone */
+  --surface: 11 14 22;
+  --surface-2: 17 21 32;
+  --surface-3: 24 30 44;
+  --border: 34 41 58;
+  --border-strong: 51 61 84;
+  --content: 241 245 249;
+  --content-muted: 148 163 184;
+  --content-subtle: 100 116 139;
+  --brand: 52 211 153;
+  --brand-hover: 110 231 183;
+  --brand-soft: 6 78 59;
+  --success: 52 211 153;
+  --warning: 250 204 21;
+  --danger: 248 113 113;
+  --info: 96 165 250;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface text-content font-sans antialiased;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border-strong));
+  border-radius: 6px;
+  border: 2px solid rgb(var(--surface));
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--content-subtle));
+}
+
+/* ---------- Components (placed in components layer so utilities can override) ---------- */
+@layer components {
+  .input {
+    @apply w-full rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm
+           text-content placeholder:text-content-subtle
+           focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand
+           transition;
+  }
+
+  .label {
+    @apply text-xs font-medium text-content-muted mb-1.5 block uppercase tracking-wide;
+  }
+
+  .card {
+    @apply bg-surface-2 border border-border rounded-2xl shadow-card;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+           transition disabled:opacity-50 disabled:cursor-not-allowed select-none;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand/40;
+  }
+  .dark .btn-primary {
+    @apply text-slate-950;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-content hover:bg-surface-3;
+  }
+  .btn-outline {
+    @apply btn bg-transparent text-content border border-border hover:bg-surface-3;
+  }
+  .btn-danger {
+    @apply btn bg-danger/10 text-danger hover:bg-danger/20;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+}
+
+/* Helper for monospace numbers */
+.num {
+  font-variant-numeric: tabular-nums;
+}
