@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Receipt, Zap } from 'lucide-react';
+import { Plus, Pencil, Trash2, Receipt, Zap, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import { fmtMoney, fmtDate } from '@/lib/format';
-import type { Bill, BillFrequency, Category } from '@shared/types';
+import { cn } from '@/lib/utils';
+import type { Bill, BillFrequency, BillStatus, Category } from '@shared/types';
 import { format } from 'date-fns';
 
 const FREQ_LABEL: Record<BillFrequency, string> = {
@@ -22,17 +23,20 @@ const CATEGORY_PALETTE = [
 export default function Bills() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [cats, setCats] = useState<Category[]>([]);
+  const [statuses, setStatuses] = useState<Map<number, BillStatus>>(new Map());
   const [editing, setEditing] = useState<Bill | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [manageCats, setManageCats] = useState(false);
 
   const load = async () => {
-    const [b, c] = await Promise.all([
+    const [b, c, s] = await Promise.all([
       window.api.bills.list() as Promise<Bill[]>,
       window.api.categories.list() as Promise<Category[]>,
+      window.api.bills.statuses() as Promise<BillStatus[]>,
     ]);
     setBills(b);
     setCats(c);
+    setStatuses(new Map(s.map((row) => [row.bill.id, row])));
   };
 
   useEffect(() => {
@@ -44,6 +48,23 @@ export default function Bills() {
     await window.api.bills.remove(id);
     load();
   };
+
+  // Sort by status (overdue → due soon → up to date), then by next due date.
+  const STATUS_RANK: Record<BillStatus['status'], number> = {
+    overdue: 0,
+    due_soon: 1,
+    ok: 2,
+  };
+  const sortedBills = [...bills].sort((a, b) => {
+    const sa = statuses.get(a.id);
+    const sb = statuses.get(b.id);
+    const ra = sa ? STATUS_RANK[sa.status] : 3;
+    const rb = sb ? STATUS_RANK[sb.status] : 3;
+    if (ra !== rb) return ra - rb;
+    const da = sa?.nextDueDate ?? a.anchor_date;
+    const db = sb?.nextDueDate ?? b.anchor_date;
+    return da.localeCompare(db);
+  });
 
   return (
     <div className="space-y-5">
@@ -80,6 +101,7 @@ export default function Bills() {
             <thead className="bg-surface-3 text-content-muted">
               <tr className="text-left">
                 <th className="px-5 py-3 font-medium">Name</th>
+                <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">Category</th>
                 <th className="px-5 py-3 font-medium">Frequency</th>
                 <th className="px-5 py-3 font-medium">Next due</th>
@@ -88,8 +110,9 @@ export default function Bills() {
               </tr>
             </thead>
             <tbody>
-              {bills.map((b) => {
+              {sortedBills.map((b) => {
                 const cat = cats.find((c) => c.id === b.category_id);
+                const st = statuses.get(b.id);
                 return (
                   <tr
                     key={b.id}
@@ -104,6 +127,9 @@ export default function Bills() {
                           </span>
                         ) : null}
                       </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <BillStatusBadge status={st} />
                     </td>
                     <td className="px-5 py-3">
                       {cat ? (
@@ -124,7 +150,9 @@ export default function Bills() {
                         ? ` · ${b.custom_days}d`
                         : ''}
                     </td>
-                    <td className="px-5 py-3 text-content-muted num">{fmtDate(b.anchor_date)}</td>
+                    <td className="px-5 py-3 text-content-muted num">
+                      {fmtDate(st?.nextDueDate ?? b.anchor_date)}
+                    </td>
                     <td className="px-5 py-3 text-right font-semibold num">
                       {fmtMoney(b.amount)}
                     </td>
@@ -176,6 +204,31 @@ export default function Bills() {
         onChanged={load}
       />
     </div>
+  );
+}
+
+function BillStatusBadge({ status }: { status: BillStatus | undefined }) {
+  if (!status) return <span className="text-content-subtle">—</span>;
+
+  if (status.status === 'overdue') {
+    return (
+      <span className="pill bg-danger/15 text-danger">
+        <AlertTriangle size={11} />
+        {status.overdueCount > 1 ? `${status.overdueCount} overdue` : 'Overdue'}
+      </span>
+    );
+  }
+  if (status.status === 'due_soon') {
+    return (
+      <span className="pill bg-warning/15 text-warning">
+        <Clock size={11} /> Due soon
+      </span>
+    );
+  }
+  return (
+    <span className={cn('pill bg-success/10 text-success')}>
+      <CheckCircle2 size={11} /> Up to date
+    </span>
   );
 }
 

@@ -113,14 +113,35 @@ export interface AppSettings {
   user_name: string;
 }
 
+export interface BillToPay {
+  bill: Bill;
+  dueDate: string;
+  category: Category | null;
+  overdue: boolean;
+}
+
+/** A bill occurrence falling in the current calendar month, paid or not. */
+export interface BillMonthItem {
+  bill: Bill;
+  dueDate: string;
+  category: Category | null;
+  overdue: boolean;
+  paid: boolean;
+}
+
+export interface BillStatus {
+  bill: Bill;
+  category: Category | null;
+  status: 'overdue' | 'due_soon' | 'ok';
+  nextDueDate: string | null;
+  overdueCount: number;
+  overdueAmount: number;
+}
+
 export interface DashboardSnapshot {
   nextPaycheckDate: string | null;
   daysUntilNextPaycheck: number | null;
-  upcomingBills: Array<{
-    bill: Bill;
-    dueDate: string;
-    category: Category | null;
-  }>;
+  billsThisMonth: BillMonthItem[];
   goalProgress: Array<{
     goal: SavingsGoal;
     pctComplete: number;

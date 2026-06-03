@@ -7,8 +7,11 @@ import {
   PiggyBank,
   Sparkles,
   Wallet,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { fmtMoney, fmtDateShort } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { DashboardSnapshot } from '@shared/types';
 import EmptyState from '@/components/ui/EmptyState';
 
@@ -24,7 +27,7 @@ export default function Dashboard() {
   }
 
   const empty =
-    snap.upcomingBills.length === 0 &&
+    snap.billsThisMonth.length === 0 &&
     snap.goalProgress.length === 0 &&
     snap.thisMonth.income === 0;
 
@@ -178,36 +181,81 @@ function StatCard({
 }
 
 function UpcomingBillsCard({ snap }: { snap: DashboardSnapshot }) {
+  const items = snap.billsThisMonth;
+  const overdueCount = items.filter((e) => e.overdue).length;
+  const unpaidCount = items.filter((e) => !e.paid).length;
+
   return (
     <div className="card p-5 lg:col-span-2">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold">Upcoming in next 30 days</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold">Bills to pay this month</h2>
+          {overdueCount > 0 && (
+            <span className="pill bg-danger/15 text-danger">
+              <AlertTriangle size={10} /> {overdueCount} overdue
+            </span>
+          )}
+        </div>
         <Link to="/bills" className="text-xs text-brand hover:underline inline-flex items-center gap-1">
           Manage bills <ArrowUpRight size={12} />
         </Link>
       </div>
-      {snap.upcomingBills.length === 0 ? (
+      {items.length === 0 ? (
         <div className="text-sm text-content-muted py-6 text-center">
-          No bills coming due in the next 30 days.
+          No bills due this month.
         </div>
       ) : (
-        <ul className="divide-y divide-border">
-          {snap.upcomingBills.map((e, i) => (
-            <li key={i} className="py-3 flex items-center gap-3">
-              <span
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: e.category?.color ?? '#64748b' }}
-              />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{e.bill.name}</div>
-                <div className="text-xs text-content-muted">
-                  {e.category?.name ?? 'Uncategorized'} · {fmtDateShort(e.dueDate)}
+        <>
+          {unpaidCount === 0 && (
+            <div className="text-sm text-success mb-2 flex items-center gap-2">
+              <CheckCircle2 size={15} /> All this month's bills are paid — nice work!
+            </div>
+          )}
+          <ul className="divide-y divide-border">
+            {items.map((e, i) => (
+              <li
+                key={i}
+                className={cn(
+                  'py-3 flex items-center gap-3',
+                  e.paid && 'opacity-55'
+                )}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: e.category?.color ?? '#64748b' }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate flex items-center gap-2">
+                    {e.bill.name}
+                    {e.overdue && (
+                      <span className="pill bg-danger/15 text-danger shrink-0">
+                        <AlertTriangle size={10} /> Overdue
+                      </span>
+                    )}
+                    {e.paid && (
+                      <span className="pill bg-success/15 text-success shrink-0">
+                        <CheckCircle2 size={10} /> Up to date
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    className={cn(
+                      'text-xs',
+                      e.overdue ? 'text-danger' : 'text-content-muted'
+                    )}
+                  >
+                    {e.category?.name ?? 'Uncategorized'} ·{' '}
+                    {e.paid ? 'paid · due ' : e.overdue ? 'was due ' : 'due '}
+                    {fmtDateShort(e.dueDate)}
+                  </div>
                 </div>
-              </div>
-              <div className="num font-semibold">{fmtMoney(e.bill.amount)}</div>
-            </li>
-          ))}
-        </ul>
+                <div className={cn('num font-semibold', e.paid && 'line-through')}>
+                  {fmtMoney(e.bill.amount)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );

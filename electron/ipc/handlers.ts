@@ -24,6 +24,8 @@ export function registerIpcHandlers() {
   ipcMain.handle(IPC.UPCOMING_BILLS, (_e, fromDate, toDate) =>
     repo.upcomingBills(fromDate, toDate)
   );
+  ipcMain.handle(IPC.BILLS_TO_PAY, (_e, windowEnd) => repo.billsToPay(windowEnd));
+  ipcMain.handle(IPC.BILL_STATUSES, () => repo.billStatuses());
 
   // ---------- Goals ----------
   ipcMain.handle(IPC.LIST_GOALS, () => repo.listGoals());

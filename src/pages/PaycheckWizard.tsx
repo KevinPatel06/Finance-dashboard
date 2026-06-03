@@ -8,6 +8,7 @@ import {
   PiggyBank,
   Sparkles,
   FilePlus2,
+  AlertTriangle,
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { fmtMoney, fmtDate } from '@/lib/format';
@@ -21,7 +22,12 @@ import type {
   SavingsGoal,
 } from '@shared/types';
 
-type UpcomingBill = { bill: Bill; dueDate: string; category: Category | null };
+type UpcomingBill = {
+  bill: Bill;
+  dueDate: string;
+  category: Category | null;
+  overdue?: boolean;
+};
 
 type Step = 'amount' | 'bills' | 'savings' | 'fun' | 'review';
 
@@ -90,15 +96,16 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
     setStep('amount');
   }, [open, editing]);
 
-  // Load upcoming bills + goals when the wizard opens or the date changes.
-  // In edit mode, merge in any bills already on this paycheck that aren't in the projection.
+  // Load bills-to-pay + goals when the wizard opens or the date changes.
+  // bills.toPay returns unpaid occurrences (overdue + due within 14 days after
+  // the paycheck), already-paid ones excluded. In edit mode, merge in any bills
+  // already on this paycheck that aren't in that list.
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const from = date;
       const to = format(addDays(parseISO(date), 14), 'yyyy-MM-dd');
       const [u, g] = await Promise.all([
-        window.api.bills.upcoming(from, to) as Promise<UpcomingBill[]>,
+        window.api.bills.toPay(to) as Promise<UpcomingBill[]>,
         window.api.goals.list() as Promise<SavingsGoal[]>,
       ]);
 
@@ -167,6 +174,11 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
     });
     return t;
   }, [upcoming, billChecked, billAmounts]);
+
+  const overdueCount = useMemo(
+    () => upcoming.filter((e) => e.overdue).length,
+    [upcoming]
+  );
 
   const goalsTotal = useMemo(
     () => Object.values(goalAmounts).reduce((a, v) => a + (Number(v) || 0), 0),
@@ -333,26 +345,41 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
 
         {step === 'bills' && (
           <div className="space-y-2">
+            {overdueCount > 0 && (
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-danger/10 text-danger mb-3">
+                <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <span className="font-semibold">
+                    {overdueCount} overdue {overdueCount === 1 ? 'bill' : 'bills'}
+                  </span>{' '}
+                  — these came due and haven't been paid yet. They're checked for you; pay them
+                  off from this paycheck if you can.
+                </div>
+              </div>
+            )}
             <div className="text-sm text-content-muted mb-3">
               {isEditing
-                ? 'Bills currently on this paycheck plus any due in the 14 days after. Adjust freely.'
-                : "These bills are due in the next 14 days. Check the ones you'll pay from this paycheck."}
+                ? 'Bills on this paycheck, plus anything overdue or due within 14 days. Adjust freely.'
+                : "Overdue and soon-due bills are checked for you. Uncheck anything you're not paying from this paycheck."}
             </div>
             {upcoming.length === 0 ? (
-              <div className="text-sm text-content-muted py-6 text-center">
-                No bills in this window.
+              <div className="text-sm text-content-muted py-8 text-center">
+                🎉 You're all caught up — nothing due to pay right now.
               </div>
             ) : (
               upcoming.map((e, i) => {
                 const k = key(e, i);
+                const isOverdue = !!e.overdue;
                 return (
                   <label
                     key={k}
                     className={cn(
                       'flex items-center gap-3 p-3 rounded-lg border transition cursor-pointer',
-                      billChecked[k]
-                        ? 'border-brand bg-brand-soft/50'
-                        : 'border-border hover:bg-surface-3'
+                      isOverdue && !billChecked[k]
+                        ? 'border-danger/50 bg-danger/5'
+                        : billChecked[k]
+                          ? 'border-brand bg-brand-soft/50'
+                          : 'border-border hover:bg-surface-3'
                     )}
                   >
                     <input
@@ -368,8 +395,15 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
                       style={{ backgroundColor: e.category?.color ?? '#64748b' }}
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{e.bill.name}</div>
-                      <div className="text-xs text-content-muted">
+                      <div className="font-medium truncate flex items-center gap-2">
+                        {e.bill.name}
+                        {isOverdue && (
+                          <span className="pill bg-danger/15 text-danger shrink-0">
+                            <AlertTriangle size={10} /> Overdue
+                          </span>
+                        )}
+                      </div>
+                      <div className={cn('text-xs', isOverdue ? 'text-danger' : 'text-content-muted')}>
                         {e.category?.name ?? 'Uncategorized'} · due {fmtDate(e.dueDate)}
                       </div>
                     </div>

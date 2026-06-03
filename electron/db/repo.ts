@@ -3,6 +3,7 @@ import type {
   AppSettings,
   Bill,
   BillInput,
+  BillMonthItem,
   Category,
   DashboardSnapshot,
   Expense,
@@ -247,6 +248,179 @@ export function upcomingBills(fromIso: string, toIso: string) {
   return events;
 }
 
+// ---------- Bills to pay (per-occurrence payment tracking) ----------
+//
+// We don't store a separate "paid" flag. When a paycheck pays a bill, the
+// allocation row records the occurrence's due date in its `note` field
+// (kind='bill'). So the set of paid (billId, dueDate) pairs is derived from
+// existing allocation data — this works retroactively on past paychecks too.
+
+/** Set of "<billId>|<YYYY-MM-DD>" for every bill occurrence already paid. */
+function paidBillOccurrences(db = getDb()): Set<string> {
+  const rows = db
+    .prepare(
+      "SELECT ref_id, note FROM paycheck_allocations WHERE kind = 'bill' AND ref_id IS NOT NULL AND note IS NOT NULL"
+    )
+    .all() as { ref_id: number; note: string }[];
+  const set = new Set<string>();
+  for (const r of rows) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(r.note)) set.add(`${r.ref_id}|${r.note}`);
+  }
+  return set;
+}
+
+/**
+ * Earliest date a bill can be considered "due" for tracking purposes:
+ * the date it was added (so a newly-added bill with an old start date doesn't
+ * instantly show months of fake overdue charges), bounded to at most ~12
+ * months back as a safety cap against pathological data.
+ */
+function billTrackingFloor(bill: Bill, todayD: Date): Date {
+  const created = bill.created_at
+    ? parseISO(bill.created_at.slice(0, 10))
+    : parseISO(bill.anchor_date);
+  const cap = addDays(todayD, -366);
+  return created > cap ? created : cap;
+}
+
+export interface BillToPayRow {
+  bill: Bill;
+  dueDate: string;
+  category: Category | null;
+  overdue: boolean;
+}
+
+/**
+ * Unpaid bill occurrences the user still owes: everything from each bill's
+ * tracking floor through `windowEndIso`, minus occurrences already paid.
+ * `overdue` = due strictly before today. Sorted overdue-first, then by date.
+ */
+export function billsToPay(windowEndIso: string): BillToPayRow[] {
+  const db = getDb();
+  const bills = listBills();
+  const cats = new Map(listCategories().map((c) => [c.id, c]));
+  const paid = paidBillOccurrences(db);
+  const todayD = new Date();
+  const todayStr = today();
+  const windowEnd = parseISO(windowEndIso);
+
+  const rows: BillToPayRow[] = [];
+  for (const b of bills) {
+    const floor = billTrackingFloor(b, todayD);
+    for (const d of occurrencesBetween(b, floor, windowEnd)) {
+      const dueStr = formatISO(d, { representation: 'date' });
+      if (paid.has(`${b.id}|${dueStr}`)) continue; // already paid → skip
+      rows.push({
+        bill: b,
+        dueDate: dueStr,
+        category: b.category_id ? cats.get(b.category_id) ?? null : null,
+        overdue: dueStr < todayStr,
+      });
+    }
+  }
+  rows.sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    return a.dueDate.localeCompare(b.dueDate);
+  });
+  return rows;
+}
+
+/**
+ * Every bill occurrence falling in the current calendar month — paid or not.
+ * Used by the Dashboard "Bills to pay this month" card. Sorted overdue →
+ * due-soon (unpaid) → paid (so paid items sit greyed at the bottom).
+ */
+export function billsThisMonth(): BillMonthItem[] {
+  const db = getDb();
+  const bills = listBills();
+  const cats = new Map(listCategories().map((c) => [c.id, c]));
+  const paid = paidBillOccurrences(db);
+  const todayD = new Date();
+  const todayStr = today();
+  const monthStart = startOfMonth(todayD);
+  const monthEnd = endOfMonth(todayD);
+
+  const rows: BillMonthItem[] = [];
+  for (const b of bills) {
+    const floor = billTrackingFloor(b, todayD);
+    const start = floor > monthStart ? floor : monthStart;
+    for (const d of occurrencesBetween(b, start, monthEnd)) {
+      const dueStr = formatISO(d, { representation: 'date' });
+      const isPaid = paid.has(`${b.id}|${dueStr}`);
+      rows.push({
+        bill: b,
+        dueDate: dueStr,
+        category: b.category_id ? cats.get(b.category_id) ?? null : null,
+        overdue: !isPaid && dueStr < todayStr,
+        paid: isPaid,
+      });
+    }
+  }
+  // group rank: overdue(0) → unpaid upcoming(1) → paid(2); within group by date
+  const rank = (r: BillMonthItem) => (r.paid ? 2 : r.overdue ? 0 : 1);
+  rows.sort((a, b) => {
+    const diff = rank(a) - rank(b);
+    return diff !== 0 ? diff : a.dueDate.localeCompare(b.dueDate);
+  });
+  return rows;
+}
+
+export interface BillStatusRow {
+  bill: Bill;
+  category: Category | null;
+  status: 'overdue' | 'due_soon' | 'ok';
+  nextDueDate: string | null;
+  overdueCount: number;
+  overdueAmount: number;
+}
+
+/** Per-bill payment status for the Bills page + Dashboard tracker. */
+export function billStatuses(): BillStatusRow[] {
+  const db = getDb();
+  const bills = listBills();
+  const cats = new Map(listCategories().map((c) => [c.id, c]));
+  const paid = paidBillOccurrences(db);
+  const todayD = new Date();
+  const todayStr = today();
+  const dueSoonHorizon = addDays(todayD, 14);
+  const lookEnd = addDays(todayD, 366);
+
+  return bills.map((b) => {
+    const floor = billTrackingFloor(b, todayD);
+    let overdueCount = 0;
+    let overdueAmount = 0;
+    let nextUnpaid: string | null = null;
+
+    for (const d of occurrencesBetween(b, floor, lookEnd)) {
+      const dueStr = formatISO(d, { representation: 'date' });
+      if (paid.has(`${b.id}|${dueStr}`)) continue;
+      if (dueStr < todayStr) {
+        overdueCount++;
+        overdueAmount += b.amount;
+      } else if (nextUnpaid === null) {
+        nextUnpaid = dueStr;
+      }
+    }
+
+    let status: BillStatusRow['status'];
+    if (overdueCount > 0) status = 'overdue';
+    else if (nextUnpaid && parseISO(nextUnpaid) <= dueSoonHorizon) status = 'due_soon';
+    else status = 'ok';
+
+    const nextDueDate =
+      nextUnpaid ?? formatISO(nextDueOnOrAfter(b, todayD), { representation: 'date' });
+
+    return {
+      bill: b,
+      category: b.category_id ? cats.get(b.category_id) ?? null : null,
+      status,
+      nextDueDate,
+      overdueCount,
+      overdueAmount,
+    };
+  });
+}
+
 // ---------- Goals ----------
 export function listGoals(): SavingsGoal[] {
   const db = getDb();
@@ -456,11 +630,9 @@ export function dashboardSnapshot(): DashboardSnapshot {
     ? differenceInCalendarDays(parseISO(nextDate), todayDate)
     : null;
 
-  const horizon = addDays(todayDate, 30);
-  const upcoming = upcomingBills(todayIso, formatISO(horizon, { representation: 'date' })).slice(
-    0,
-    8
-  );
+  // Dashboard tracker: this calendar month's bills (paid + unpaid), sorted
+  // overdue → due-soon → paid.
+  const billsMonth = billsThisMonth();
 
   const goals = listGoals();
   const goalProgress = goals.map((g) => ({
@@ -510,7 +682,7 @@ export function dashboardSnapshot(): DashboardSnapshot {
   return {
     nextPaycheckDate: nextDate,
     daysUntilNextPaycheck: daysUntil,
-    upcomingBills: upcoming,
+    billsThisMonth: billsMonth,
     goalProgress,
     thisMonth,
     smoothedPerPaycheck: smoothed,

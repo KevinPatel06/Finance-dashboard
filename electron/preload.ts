@@ -22,6 +22,8 @@ const api = {
     remove: (id: number) => invoke(IPC.DELETE_BILL, id),
     upcoming: (fromDate: string, toDate: string) =>
       invoke(IPC.UPCOMING_BILLS, fromDate, toDate),
+    toPay: (windowEnd: string) => invoke(IPC.BILLS_TO_PAY, windowEnd),
+    statuses: () => invoke(IPC.BILL_STATUSES),
   },
   goals: {
     list: () => invoke(IPC.LIST_GOALS),

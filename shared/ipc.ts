@@ -17,6 +17,8 @@ export const IPC = {
   UPDATE_BILL: 'bills:update',
   DELETE_BILL: 'bills:delete',
   UPCOMING_BILLS: 'bills:upcoming',
+  BILLS_TO_PAY: 'bills:toPay',
+  BILL_STATUSES: 'bills:statuses',
 
   // Goals
   LIST_GOALS: 'goals:list',
