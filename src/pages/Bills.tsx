@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Receipt, Zap, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Receipt, Zap, AlertTriangle, Clock, CheckCircle2, CalendarRange } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import { fmtMoney, fmtDate } from '@/lib/format';
@@ -49,6 +49,23 @@ export default function Bills() {
     load();
   };
 
+  // Yearly cost of all current bills, and the monthly average that implies.
+  const PER_YEAR: Record<BillFrequency, number> = {
+    biweekly: 26,
+    monthly: 12,
+    semi_annual: 2,
+    yearly: 1,
+    custom_days: 0, // handled below
+  };
+  const yearlyTotal = bills.reduce((acc, b) => {
+    const times =
+      b.frequency === 'custom_days'
+        ? 365.25 / Math.max(1, b.custom_days ?? 30)
+        : PER_YEAR[b.frequency];
+    return acc + b.amount * times;
+  }, 0);
+  const monthlyAvg = yearlyTotal / 12;
+
   // Sort by status (overdue → due soon → up to date), then by next due date.
   const STATUS_RANK: Record<BillStatus['status'], number> = {
     overdue: 0,
@@ -96,7 +113,40 @@ export default function Bills() {
           }
         />
       ) : (
-        <div className="card overflow-hidden">
+        <>
+          {/* Cost summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="card p-5 flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-brand-soft text-brand grid place-items-center shrink-0">
+                <CalendarRange size={20} />
+              </div>
+              <div>
+                <div className="text-xs text-content-muted uppercase tracking-wide font-medium">
+                  Monthly average
+                </div>
+                <div className="text-2xl font-bold num leading-tight">{fmtMoney(monthlyAvg)}</div>
+                <div className="text-xs text-content-subtle">
+                  what your bills cost per month, averaged
+                </div>
+              </div>
+            </div>
+            <div className="card p-5 flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-surface-3 text-content-muted grid place-items-center shrink-0">
+                <Receipt size={20} />
+              </div>
+              <div>
+                <div className="text-xs text-content-muted uppercase tracking-wide font-medium">
+                  Yearly total
+                </div>
+                <div className="text-2xl font-bold num leading-tight">{fmtMoney(yearlyTotal)}</div>
+                <div className="text-xs text-content-subtle">
+                  across {bills.length} bill{bills.length === 1 ? '' : 's'} at current amounts
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-surface-3 text-content-muted">
               <tr className="text-left">
@@ -179,7 +229,8 @@ export default function Bills() {
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       <BillEditor

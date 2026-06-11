@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import { fmtMoney, fmtDateShort } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { DashboardSnapshot } from '@shared/types';
+import { interestPerMonth } from '@/lib/debtMath';
+import type { DashboardSnapshot, Debt } from '@shared/types';
 import EmptyState from '@/components/ui/EmptyState';
 
 export default function Dashboard() {
@@ -88,6 +89,79 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <UpcomingBillsCard snap={snap} />
         <GoalsCard snap={snap} />
+      </div>
+
+      <DebtSummaryCard />
+    </div>
+  );
+}
+
+function DebtSummaryCard() {
+  const [debts, setDebts] = useState<Debt[]>([]);
+
+  useEffect(() => {
+    window.api.debts.list().then((d) => setDebts(d as Debt[]));
+  }, []);
+
+  if (debts.length === 0) return null;
+
+  const totalOwed = debts.reduce((a, d) => a + d.current_balance, 0);
+  const monthlyInterest = debts.reduce((a, d) => a + interestPerMonth(d), 0);
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold">Payoff progress</h2>
+        <Link
+          to="/payoff"
+          className="text-xs text-brand hover:underline inline-flex items-center gap-1"
+        >
+          View payoff plan <ArrowUpRight size={12} />
+        </Link>
+      </div>
+      <div className="flex flex-col md:flex-row md:items-center gap-5">
+        <div className="flex gap-8">
+          <div>
+            <div className="text-xs text-content-muted uppercase tracking-wide">Total owed</div>
+            <div className="text-2xl font-bold num">{fmtMoney(totalOwed)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-content-muted uppercase tracking-wide">
+              Interest / month
+            </div>
+            <div className="text-2xl font-bold num text-danger">{fmtMoney(monthlyInterest)}</div>
+          </div>
+        </div>
+        <div className="flex-1 space-y-2 min-w-0">
+          {debts.slice(0, 3).map((d) => {
+            const pct =
+              d.original_amount > 0 && d.original_amount >= d.current_balance
+                ? ((d.original_amount - d.current_balance) / d.original_amount) * 100
+                : null;
+            return (
+              <div key={d.id} className="flex items-center gap-3 text-sm">
+                <span className="w-32 truncate font-medium">{d.name}</span>
+                {pct !== null ? (
+                  <>
+                    <div className="flex-1 h-2 rounded-full bg-surface-3 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-brand transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="num text-xs text-content-muted w-12 text-right">
+                      {pct.toFixed(0)}%
+                    </span>
+                  </>
+                ) : (
+                  <span className="num text-content-muted flex-1 text-right">
+                    {fmtMoney(d.current_balance)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

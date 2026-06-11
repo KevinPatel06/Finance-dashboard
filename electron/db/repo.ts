@@ -6,6 +6,8 @@ import type {
   BillMonthItem,
   Category,
   DashboardSnapshot,
+  Debt,
+  DebtInput,
   Expense,
   ExpenseCategory,
   ExpenseInput,
@@ -22,6 +24,7 @@ import {
   addYears,
   differenceInCalendarDays,
   formatISO,
+  getDaysInMonth,
   parseISO,
   startOfMonth,
   endOfMonth,
@@ -563,6 +566,7 @@ export function createPaycheck(input: {
     for (const a of input.allocations) {
       insertAlloc.run(pid, a.kind, a.ref_id, a.amount, a.note ?? null);
     }
+    applyDebtPayments(db, input.allocations);
     return pid;
   });
   const pid = tx() as number;
@@ -588,6 +592,7 @@ export function updatePaycheck(
       input.notes ?? null,
       id
     );
+    revertDebtPaymentsForPaycheck(db, id);
     db.prepare('DELETE FROM paycheck_allocations WHERE paycheck_id = ?').run(id);
     const insertAlloc = db.prepare(
       `INSERT INTO paycheck_allocations (paycheck_id, kind, ref_id, amount, note)
@@ -596,26 +601,57 @@ export function updatePaycheck(
     for (const a of input.allocations) {
       insertAlloc.run(id, a.kind, a.ref_id, a.amount, a.note ?? null);
     }
+    applyDebtPayments(db, input.allocations);
   });
   tx();
   return getPaycheck(id)!;
 }
 
 export function deletePaycheck(id: number): { ok: true } {
-  getDb().prepare('DELETE FROM paychecks WHERE id = ?').run(id);
+  const db = getDb();
+  const tx = db.transaction(() => {
+    revertDebtPaymentsForPaycheck(db, id);
+    db.prepare('DELETE FROM paychecks WHERE id = ?').run(id);
+  });
+  tx();
   return { ok: true };
 }
 
 function computeTotals(amount: number, allocs: { kind: string; amount: number }[]) {
-  const t = { bills: 0, goals: 0, fun: 0, other: 0 };
+  const t = { bills: 0, goals: 0, fun: 0, debt: 0, other: 0 };
   for (const a of allocs) {
     if (a.kind === 'bill') t.bills += a.amount;
     else if (a.kind === 'goal') t.goals += a.amount;
     else if (a.kind === 'fun') t.fun += a.amount;
+    else if (a.kind === 'debt') t.debt += a.amount;
     else t.other += a.amount;
   }
-  const allocated = t.bills + t.goals + t.fun + t.other;
+  const allocated = t.bills + t.goals + t.fun + t.debt + t.other;
   return { ...t, allocated, remainder: amount - allocated };
+}
+
+// ---------- Debt balance bookkeeping ----------
+// Paycheck 'debt' allocations pay a revolving debt DOWN; expenses charged to a
+// credit card push its balance UP. Reversals run on edit/delete so balances
+// stay consistent. MAX(0, …) honours the table's CHECK (current_balance >= 0).
+
+function applyDebtPayments(db: ReturnType<typeof getDb>, allocs: PaycheckAllocationInput[]) {
+  const pay = db.prepare(
+    'UPDATE debts SET current_balance = MAX(0, current_balance - ?) WHERE id = ?'
+  );
+  for (const a of allocs) {
+    if (a.kind === 'debt' && a.ref_id != null && a.amount > 0) pay.run(a.amount, a.ref_id);
+  }
+}
+
+function revertDebtPaymentsForPaycheck(db: ReturnType<typeof getDb>, paycheckId: number) {
+  const olds = db
+    .prepare(
+      "SELECT ref_id, amount FROM paycheck_allocations WHERE paycheck_id = ? AND kind = 'debt' AND ref_id IS NOT NULL"
+    )
+    .all(paycheckId) as { ref_id: number; amount: number }[];
+  const undo = db.prepare('UPDATE debts SET current_balance = current_balance + ? WHERE id = ?');
+  for (const o of olds) undo.run(o.amount, o.ref_id);
 }
 
 // ---------- Dashboard ----------
@@ -766,6 +802,134 @@ export function calendarEvents(fromIso: string, toIso: string) {
 }
 
 // ============================================================================
+// Debts — self-contained like expenses; never touches paycheck/bill math.
+// All payoff projections are computed in the renderer from these raw fields.
+// ============================================================================
+
+/** Interest date in the month of `base`, clamping day 29-31 to the month's last day. */
+function interestDateInMonth(base: Date, day: number): Date {
+  return new Date(base.getFullYear(), base.getMonth(), Math.min(day, getDaysInMonth(base)));
+}
+
+/** First interest date strictly after `after`. */
+function nextInterestDate(after: Date, day: number): Date {
+  const sameMonth = interestDateInMonth(after, day);
+  if (sameMonth > after) return sameMonth;
+  return interestDateInMonth(addMonths(startOfMonth(after), 1), day);
+}
+
+/**
+ * Auto-apply monthly interest to revolving debts whose interest day has
+ * passed. Idempotent: `last_interest_applied` records the last charged date,
+ * so reopening the app never double-charges. Compounds if multiple months
+ * elapsed since last launch.
+ */
+function applyPendingInterest(db = getDb()) {
+  const rows = db
+    .prepare(
+      `SELECT * FROM debts
+        WHERE archived = 0 AND interest_day IS NOT NULL
+          AND type IN ('credit_card','line_of_credit')`
+    )
+    .all() as Debt[];
+  const todayStr = today();
+  const update = db.prepare(
+    'UPDATE debts SET current_balance = ?, last_interest_applied = ? WHERE id = ?'
+  );
+  for (const d of rows) {
+    const day = d.interest_day!;
+    let cursor = parseISO(d.last_interest_applied ?? d.created_at.slice(0, 10));
+    let balance = d.current_balance;
+    let lastCharged: string | null = null;
+    let next = nextInterestDate(cursor, day);
+    let guard = 0;
+    while (formatISO(next, { representation: 'date' }) <= todayStr && guard++ < 600) {
+      balance = Math.round(balance * (1 + d.interest_rate / 100 / 12) * 100) / 100;
+      lastCharged = formatISO(next, { representation: 'date' });
+      next = nextInterestDate(next, day);
+    }
+    if (lastCharged) update.run(balance, lastCharged, d.id);
+  }
+}
+
+export function listDebts(): Debt[] {
+  const db = getDb();
+  applyPendingInterest(db);
+  return db
+    .prepare('SELECT * FROM debts WHERE archived = 0 ORDER BY current_balance DESC')
+    .all() as Debt[];
+}
+
+export function createDebt(input: DebtInput): Debt {
+  const db = getDb();
+  const interestDay = input.interest_day ?? null;
+  const info = db
+    .prepare(
+      `INSERT INTO debts (name, type, original_amount, current_balance, interest_rate,
+         payment_amount, payment_frequency, split_count, interest_day, last_interest_applied,
+         compounding, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      input.name,
+      input.type,
+      input.original_amount,
+      input.current_balance,
+      input.interest_rate,
+      input.payment_amount,
+      input.payment_frequency,
+      Math.max(1, input.split_count),
+      interestDay,
+      // Charging starts from today — never retro-charge months before the debt existed here.
+      interestDay != null ? today() : null,
+      input.compounding ?? (input.type === 'mortgage' ? 'semi_annual' : 'monthly'),
+      input.notes ?? null
+    );
+  return db.prepare('SELECT * FROM debts WHERE id = ?').get(info.lastInsertRowid) as Debt;
+}
+
+export function updateDebt(id: number, input: Partial<DebtInput>): Debt {
+  const db = getDb();
+  const cur = db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as Debt;
+  if (!cur) throw new Error('Debt not found');
+  const nextInterestDay = input.interest_day === undefined ? cur.interest_day : input.interest_day;
+  // (Re)setting the interest day restarts charging from today, so a newly set
+  // day can't retroactively bill months that predate the change.
+  const nextLastApplied =
+    nextInterestDay == null
+      ? null
+      : nextInterestDay !== cur.interest_day
+        ? today()
+        : cur.last_interest_applied ?? today();
+  db.prepare(
+    `UPDATE debts SET name = ?, type = ?, original_amount = ?, current_balance = ?,
+       interest_rate = ?, payment_amount = ?, payment_frequency = ?, split_count = ?,
+       interest_day = ?, last_interest_applied = ?, compounding = ?, notes = ?
+     WHERE id = ?`
+  ).run(
+    input.name ?? cur.name,
+    input.type ?? cur.type,
+    input.original_amount ?? cur.original_amount,
+    input.current_balance ?? cur.current_balance,
+    input.interest_rate ?? cur.interest_rate,
+    input.payment_amount ?? cur.payment_amount,
+    input.payment_frequency ?? cur.payment_frequency,
+    Math.max(1, input.split_count ?? cur.split_count),
+    nextInterestDay,
+    nextLastApplied,
+    input.compounding ?? cur.compounding,
+    input.notes === undefined ? cur.notes : input.notes,
+    id
+  );
+  return db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as Debt;
+}
+
+export function deleteDebt(id: number): { ok: true } {
+  getDb().prepare('DELETE FROM debts WHERE id = ?').run(id);
+  return { ok: true };
+}
+
+// ============================================================================
 // Expenses — fully self-contained. None of the functions below read from or
 // write to paychecks/bills/goals, so expenses never affect dashboard, paycheck,
 // or calendar numbers.
@@ -816,43 +980,75 @@ export function listExpenses(): Expense[] {
     .all() as Expense[];
 }
 
+// Charging an expense to a credit card raises that card's balance; un-linking
+// or deleting the expense lowers it back.
+const chargeDebt = (db: ReturnType<typeof getDb>, debtId: number, amount: number) =>
+  db
+    .prepare('UPDATE debts SET current_balance = current_balance + ? WHERE id = ?')
+    .run(amount, debtId);
+const unchargeDebt = (db: ReturnType<typeof getDb>, debtId: number, amount: number) =>
+  db
+    .prepare('UPDATE debts SET current_balance = MAX(0, current_balance - ?) WHERE id = ?')
+    .run(amount, debtId);
+
 export function createExpense(input: ExpenseInput): Expense {
   const db = getDb();
-  const info = db
-    .prepare(
-      `INSERT INTO expenses (description, amount, date, category_id, note)
-       VALUES (?, ?, ?, ?, ?)`
-    )
-    .run(
-      input.description,
-      input.amount,
-      input.date,
-      input.category_id ?? null,
-      input.note ?? null
-    );
-  return db.prepare('SELECT * FROM expenses WHERE id = ?').get(info.lastInsertRowid) as Expense;
+  const tx = db.transaction(() => {
+    const info = db
+      .prepare(
+        `INSERT INTO expenses (description, amount, date, category_id, note, debt_id)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        input.description,
+        input.amount,
+        input.date,
+        input.category_id ?? null,
+        input.note ?? null,
+        input.debt_id ?? null
+      );
+    if (input.debt_id != null && input.amount > 0) chargeDebt(db, input.debt_id, input.amount);
+    return info.lastInsertRowid as number;
+  });
+  const id = tx() as number;
+  return db.prepare('SELECT * FROM expenses WHERE id = ?').get(id) as Expense;
 }
 
 export function updateExpense(id: number, input: Partial<ExpenseInput>): Expense {
   const db = getDb();
-  const cur = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id) as Expense;
-  if (!cur) throw new Error('Expense not found');
-  db.prepare(
-    `UPDATE expenses SET description = ?, amount = ?, date = ?, category_id = ?, note = ?
-       WHERE id = ?`
-  ).run(
-    input.description ?? cur.description,
-    input.amount ?? cur.amount,
-    input.date ?? cur.date,
-    input.category_id === undefined ? cur.category_id : input.category_id,
-    input.note === undefined ? cur.note : input.note,
-    id
-  );
+  const tx = db.transaction(() => {
+    const cur = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id) as Expense;
+    if (!cur) throw new Error('Expense not found');
+    const nextDebtId = input.debt_id === undefined ? cur.debt_id : input.debt_id;
+    const nextAmount = input.amount ?? cur.amount;
+    // Reverse the old charge, apply the new one (covers amount and card changes).
+    if (cur.debt_id != null && cur.amount > 0) unchargeDebt(db, cur.debt_id, cur.amount);
+    if (nextDebtId != null && nextAmount > 0) chargeDebt(db, nextDebtId, nextAmount);
+    db.prepare(
+      `UPDATE expenses SET description = ?, amount = ?, date = ?, category_id = ?, note = ?, debt_id = ?
+         WHERE id = ?`
+    ).run(
+      input.description ?? cur.description,
+      nextAmount,
+      input.date ?? cur.date,
+      input.category_id === undefined ? cur.category_id : input.category_id,
+      input.note === undefined ? cur.note : input.note,
+      nextDebtId,
+      id
+    );
+  });
+  tx();
   return db.prepare('SELECT * FROM expenses WHERE id = ?').get(id) as Expense;
 }
 
 export function deleteExpense(id: number): { ok: true } {
-  getDb().prepare('DELETE FROM expenses WHERE id = ?').run(id);
+  const db = getDb();
+  const tx = db.transaction(() => {
+    const cur = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id) as Expense | undefined;
+    if (cur?.debt_id != null && cur.amount > 0) unchargeDebt(db, cur.debt_id, cur.amount);
+    db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
+  });
+  tx();
   return { ok: true };
 }
 

@@ -73,8 +73,9 @@ export default function Paychecks() {
                     <div className="text-sm text-content-muted">{fmtDate(p.date)}</div>
                   </div>
                   {p.notes && <div className="text-sm text-content-muted mt-1">{p.notes}</div>}
-                  <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                  <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-3 text-sm">
                     <Stat label="Bills" amount={p.totals.bills} />
+                    <Stat label="Debt" amount={p.totals.debt} />
                     <Stat label="Savings" amount={p.totals.goals} />
                     <Stat label="Fun" amount={p.totals.fun} />
                     <Stat label="Other" amount={p.totals.other} />

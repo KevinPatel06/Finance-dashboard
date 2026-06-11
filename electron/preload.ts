@@ -41,6 +41,12 @@ const api = {
     update: (id: number, input: unknown) => invoke(IPC.UPDATE_PAYCHECK, id, input),
     remove: (id: number) => invoke(IPC.DELETE_PAYCHECK, id),
   },
+  debts: {
+    list: () => invoke(IPC.LIST_DEBTS),
+    create: (input: unknown) => invoke(IPC.CREATE_DEBT, input),
+    update: (id: number, input: unknown) => invoke(IPC.UPDATE_DEBT, id, input),
+    remove: (id: number) => invoke(IPC.DELETE_DEBT, id),
+  },
   expenseCategories: {
     list: () => invoke(IPC.LIST_EXPENSE_CATEGORIES),
     create: (input: unknown) => invoke(IPC.CREATE_EXPENSE_CATEGORY, input),

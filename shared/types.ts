@@ -7,7 +7,7 @@ export type BillFrequency =
   | 'yearly'
   | 'custom_days';
 
-export type AllocationKind = 'bill' | 'goal' | 'fun' | 'other';
+export type AllocationKind = 'bill' | 'goal' | 'fun' | 'other' | 'debt';
 
 export interface Category {
   id: number;
@@ -90,6 +90,7 @@ export interface PaycheckWithAllocations extends Paycheck {
     bills: number;
     goals: number;
     fun: number;
+    debt: number;
     other: number;
     allocated: number;
     remainder: number;
@@ -157,6 +158,44 @@ export interface DashboardSnapshot {
   paycheckCount: number;
 }
 
+// ---------- Debts / Payoff (self-contained; does not affect other sections) ----------
+export type DebtType = 'credit_card' | 'mortgage' | 'car_loan' | 'line_of_credit' | 'loan';
+export type DebtFrequency = 'weekly' | 'biweekly' | 'semi_monthly' | 'monthly';
+/** 'semi_annual' = Canadian mortgage convention (compounded twice yearly, not in advance). */
+export type DebtCompounding = 'monthly' | 'semi_annual';
+
+export interface Debt {
+  id: number;
+  name: string;
+  type: DebtType;
+  original_amount: number; // what was borrowed/financed (0 = unknown/not applicable)
+  current_balance: number;
+  interest_rate: number; // annual %, e.g. 19.99
+  payment_amount: number; // full payment per cycle (before splitting)
+  payment_frequency: DebtFrequency;
+  split_count: number; // people splitting the payment (>=1)
+  interest_day: number | null; // day of month interest is charged (revolving debts)
+  last_interest_applied: string | null; // ISO date of the last auto-applied charge
+  compounding: DebtCompounding;
+  notes: string | null;
+  archived: 0 | 1;
+  created_at: string;
+}
+
+export interface DebtInput {
+  name: string;
+  type: DebtType;
+  original_amount: number;
+  current_balance: number;
+  interest_rate: number;
+  payment_amount: number;
+  payment_frequency: DebtFrequency;
+  split_count: number;
+  interest_day?: number | null;
+  compounding?: DebtCompounding;
+  notes?: string | null;
+}
+
 // ---------- Expenses (self-contained; does not affect other sections) ----------
 export interface ExpenseCategory {
   id: number;
@@ -171,6 +210,7 @@ export interface Expense {
   date: string; // ISO YYYY-MM-DD
   category_id: number | null;
   note: string | null;
+  debt_id: number | null; // credit card this purchase was charged to
   created_at: string;
 }
 
@@ -180,6 +220,7 @@ export interface ExpenseInput {
   date: string;
   category_id: number | null;
   note?: string | null;
+  debt_id?: number | null;
 }
 
 export interface ExpenseReport {

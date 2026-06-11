@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, ShoppingCart, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, ShoppingCart, Search, CreditCard } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, parseISO, isWithinInterval } from 'date-fns';
 import Modal from '@/components/ui/Modal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import { fmtMoney, fmtDate } from '@/lib/format';
-import type { Expense, ExpenseCategory } from '@shared/types';
+import type { Debt, Expense, ExpenseCategory } from '@shared/types';
 
 const CATEGORY_PALETTE = [
   '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b',
@@ -20,18 +20,22 @@ export default function Expenses() {
   const [manageCats, setManageCats] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
 
-  // Filters
+  // Filters — month defaults to the current month; pick "All months" to widen.
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<number | 'all'>('all');
-  const [filterMonth, setFilterMonth] = useState<string>('all'); // 'all' or 'YYYY-MM'
+  const [filterMonth, setFilterMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
+
+  const [creditCards, setCreditCards] = useState<Debt[]>([]);
 
   const load = async () => {
-    const [e, c] = await Promise.all([
+    const [e, c, d] = await Promise.all([
       window.api.expenses.list() as Promise<Expense[]>,
       window.api.expenseCategories.list() as Promise<ExpenseCategory[]>,
+      window.api.debts.list() as Promise<Debt[]>,
     ]);
     setExpenses(e);
     setCats(c);
+    setCreditCards(d.filter((x) => x.type === 'credit_card'));
   };
 
   useEffect(() => {
@@ -40,9 +44,10 @@ export default function Expenses() {
 
   const catById = useMemo(() => new Map(cats.map((c) => [c.id, c])), [cats]);
 
-  // Months present in the data, for the month filter dropdown
+  // Months present in the data (always including the current month so the
+  // default selection has an option to bind to), for the month filter dropdown.
   const monthsAvailable = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>([format(new Date(), 'yyyy-MM')]);
     for (const e of expenses) set.add(e.date.slice(0, 7));
     return Array.from(set).sort().reverse();
   }, [expenses]);
@@ -221,7 +226,15 @@ export default function Expenses() {
                           {fmtDate(e.date)}
                         </td>
                         <td className="px-5 py-3">
-                          <div className="font-medium">{e.description}</div>
+                          <div className="font-medium flex items-center gap-2">
+                            {e.description}
+                            {e.debt_id != null && (
+                              <span className="pill bg-danger/10 text-danger shrink-0">
+                                <CreditCard size={10} />
+                                {creditCards.find((cc) => cc.id === e.debt_id)?.name ?? 'Card'}
+                              </span>
+                            )}
+                          </div>
                           {e.note && (
                             <div className="text-xs text-content-subtle truncate max-w-md">
                               {e.note}
@@ -290,6 +303,7 @@ export default function Expenses() {
         open={showNew || !!editing}
         expense={editing}
         categories={cats}
+        creditCards={creditCards}
         onClose={() => {
           setEditing(null);
           setShowNew(false);
@@ -333,12 +347,14 @@ function ExpenseEditor({
   open,
   expense,
   categories,
+  creditCards,
   onClose,
   onSaved,
 }: {
   open: boolean;
   expense: Expense | null;
   categories: ExpenseCategory[];
+  creditCards: Debt[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -347,6 +363,8 @@ function ExpenseEditor({
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [note, setNote] = useState('');
+  const [onCard, setOnCard] = useState(false);
+  const [cardId, setCardId] = useState<number | ''>('');
 
   useEffect(() => {
     if (expense) {
@@ -355,14 +373,18 @@ function ExpenseEditor({
       setDate(expense.date);
       setCategoryId(expense.category_id ?? '');
       setNote(expense.note ?? '');
+      setOnCard(expense.debt_id != null);
+      setCardId(expense.debt_id ?? creditCards[0]?.id ?? '');
     } else {
       setDescription('');
       setAmount('');
       setDate(format(new Date(), 'yyyy-MM-dd'));
       setCategoryId('');
       setNote('');
+      setOnCard(false);
+      setCardId(creditCards[0]?.id ?? '');
     }
-  }, [expense, open]);
+  }, [expense, open, creditCards]);
 
   const save = async () => {
     if (!description.trim() || !amount) return;
@@ -372,6 +394,7 @@ function ExpenseEditor({
       date,
       category_id: categoryId === '' ? null : Number(categoryId),
       note: note.trim() || null,
+      debt_id: onCard && cardId !== '' ? Number(cardId) : null,
     };
     if (expense) await window.api.expenses.update(expense.id, payload);
     else await window.api.expenses.create(payload);
@@ -444,6 +467,39 @@ function ExpenseEditor({
             placeholder="e.g. birthday gift for mom"
           />
         </div>
+        {creditCards.length > 0 && (
+          <div className="col-span-2 rounded-lg border border-border p-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={onCard}
+                onChange={(e) => setOnCard(e.target.checked)}
+                className="w-4 h-4 accent-current text-brand"
+              />
+              <CreditCard size={15} className="text-danger" />
+              Charged to a credit card — add it to that card's payoff balance
+            </label>
+            {onCard && creditCards.length > 1 && (
+              <select
+                className="input"
+                value={cardId}
+                onChange={(e) => setCardId(e.target.value === '' ? '' : Number(e.target.value))}
+              >
+                {creditCards.map((cc) => (
+                  <option key={cc.id} value={cc.id}>
+                    {cc.name} ({fmtMoney(cc.current_balance)} owing)
+                  </option>
+                ))}
+              </select>
+            )}
+            {onCard && creditCards.length === 1 && (
+              <p className="text-xs text-content-subtle">
+                Will be added to <span className="text-content">{creditCards[0].name}</span>'s
+                balance.
+              </p>
+            )}
+          </div>
+        )}
       </div>
       <div className="px-6 py-4 border-t border-border flex justify-end gap-2 bg-surface-3/40">
         <button className="btn-ghost" onClick={onClose}>

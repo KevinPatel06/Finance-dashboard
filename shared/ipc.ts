@@ -39,6 +39,12 @@ export const IPC = {
   // Dashboard
   DASHBOARD: 'dashboard:get',
 
+  // Debts
+  LIST_DEBTS: 'debts:list',
+  CREATE_DEBT: 'debts:create',
+  UPDATE_DEBT: 'debts:update',
+  DELETE_DEBT: 'debts:delete',
+
   // Expense categories
   LIST_EXPENSE_CATEGORIES: 'expenseCategories:list',
   CREATE_EXPENSE_CATEGORY: 'expenseCategories:create',

@@ -43,6 +43,12 @@ export function registerIpcHandlers() {
   ipcMain.handle(IPC.UPDATE_PAYCHECK, (_e, id, input) => repo.updatePaycheck(id, input));
   ipcMain.handle(IPC.DELETE_PAYCHECK, (_e, id) => repo.deletePaycheck(id));
 
+  // ---------- Debts ----------
+  ipcMain.handle(IPC.LIST_DEBTS, () => repo.listDebts());
+  ipcMain.handle(IPC.CREATE_DEBT, (_e, input) => repo.createDebt(input));
+  ipcMain.handle(IPC.UPDATE_DEBT, (_e, id, input) => repo.updateDebt(id, input));
+  ipcMain.handle(IPC.DELETE_DEBT, (_e, id) => repo.deleteDebt(id));
+
   // ---------- Expense categories ----------
   ipcMain.handle(IPC.LIST_EXPENSE_CATEGORIES, () => repo.listExpenseCategories());
   ipcMain.handle(IPC.CREATE_EXPENSE_CATEGORY, (_e, input) => repo.createExpenseCategory(input));

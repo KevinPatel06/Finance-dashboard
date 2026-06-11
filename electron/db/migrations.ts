@@ -8,6 +8,87 @@ interface Migration {
 
 const migrations: Migration[] = [
   {
+    version: 7,
+    name: 'debt_compounding',
+    up: (db) => {
+      const cols = db.prepare(`PRAGMA table_info(debts)`).all() as { name: string }[];
+      if (!cols.find((c) => c.name === 'compounding')) {
+        db.exec(
+          `ALTER TABLE debts ADD COLUMN compounding TEXT NOT NULL DEFAULT 'monthly'
+             CHECK (compounding IN ('monthly','semi_annual'))`
+        );
+        // Canadian convention: fixed mortgages compound semi-annually.
+        db.exec(`UPDATE debts SET compounding = 'semi_annual' WHERE type = 'mortgage'`);
+      }
+    },
+  },
+  {
+    version: 6,
+    name: 'debt_interest_day',
+    up: (db) => {
+      const cols = db.prepare(`PRAGMA table_info(debts)`).all() as { name: string }[];
+      if (!cols.find((c) => c.name === 'interest_day')) {
+        db.exec(`ALTER TABLE debts ADD COLUMN interest_day INTEGER`);
+      }
+      if (!cols.find((c) => c.name === 'last_interest_applied')) {
+        db.exec(`ALTER TABLE debts ADD COLUMN last_interest_applied TEXT`);
+      }
+    },
+  },
+  {
+    version: 5,
+    name: 'expense_debt_link_and_debt_allocations',
+    up: (db) => {
+      // Expenses can be charged to a credit card (revolving debt).
+      const cols = db.prepare(`PRAGMA table_info(expenses)`).all() as { name: string }[];
+      if (!cols.find((c) => c.name === 'debt_id')) {
+        db.exec(
+          `ALTER TABLE expenses ADD COLUMN debt_id INTEGER REFERENCES debts(id) ON DELETE SET NULL`
+        );
+      }
+      // Paychecks can pay down revolving debts: extend the allocation kind
+      // CHECK with 'debt'. SQLite can't alter a CHECK, so rebuild the table.
+      db.exec(`
+        CREATE TABLE paycheck_allocations_new (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          paycheck_id  INTEGER NOT NULL REFERENCES paychecks(id) ON DELETE CASCADE,
+          kind         TEXT NOT NULL CHECK (kind IN ('bill','goal','fun','other','debt')),
+          ref_id       INTEGER,
+          amount       REAL NOT NULL CHECK (amount >= 0),
+          note         TEXT
+        );
+        INSERT INTO paycheck_allocations_new (id, paycheck_id, kind, ref_id, amount, note)
+          SELECT id, paycheck_id, kind, ref_id, amount, note FROM paycheck_allocations;
+        DROP TABLE paycheck_allocations;
+        ALTER TABLE paycheck_allocations_new RENAME TO paycheck_allocations;
+        CREATE INDEX IF NOT EXISTS idx_alloc_paycheck ON paycheck_allocations(paycheck_id);
+        CREATE INDEX IF NOT EXISTS idx_alloc_kind_ref ON paycheck_allocations(kind, ref_id);
+      `);
+    },
+  },
+  {
+    version: 4,
+    name: 'debts',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS debts (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          name            TEXT NOT NULL,
+          type            TEXT NOT NULL CHECK (type IN ('credit_card','mortgage','car_loan','line_of_credit','loan')),
+          original_amount REAL NOT NULL DEFAULT 0 CHECK (original_amount >= 0),
+          current_balance REAL NOT NULL CHECK (current_balance >= 0),
+          interest_rate   REAL NOT NULL DEFAULT 0 CHECK (interest_rate >= 0),
+          payment_amount  REAL NOT NULL DEFAULT 0 CHECK (payment_amount >= 0),
+          payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly','biweekly','semi_monthly','monthly')),
+          split_count     INTEGER NOT NULL DEFAULT 1 CHECK (split_count >= 1),
+          notes           TEXT,
+          archived        INTEGER NOT NULL DEFAULT 0,
+          created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+    },
+  },
+  {
     version: 3,
     name: 'expenses',
     up: (db) => {

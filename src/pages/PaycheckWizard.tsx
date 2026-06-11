@@ -9,6 +9,7 @@ import {
   Sparkles,
   FilePlus2,
   AlertTriangle,
+  CreditCard,
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { fmtMoney, fmtDate } from '@/lib/format';
@@ -17,6 +18,7 @@ import { useCelebration } from '@/lib/celebration';
 import type {
   Bill,
   Category,
+  Debt,
   PaycheckAllocationInput,
   PaycheckWithAllocations,
   SavingsGoal,
@@ -29,11 +31,12 @@ type UpcomingBill = {
   overdue?: boolean;
 };
 
-type Step = 'amount' | 'bills' | 'savings' | 'fun' | 'review';
+type Step = 'amount' | 'bills' | 'debt' | 'savings' | 'fun' | 'review';
 
-const STEPS: { id: Step; label: string; icon: any }[] = [
+const ALL_STEPS: { id: Step; label: string; icon: any }[] = [
   { id: 'amount', label: 'Paycheck', icon: FilePlus2 },
   { id: 'bills', label: 'Bills', icon: Receipt },
+  { id: 'debt', label: 'Debt', icon: CreditCard },
   { id: 'savings', label: 'Savings', icon: PiggyBank },
   { id: 'fun', label: 'Fun money', icon: Sparkles },
   { id: 'review', label: 'Review', icon: Check },
@@ -61,6 +64,10 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [goalAmounts, setGoalAmounts] = useState<Record<number, string>>({});
 
+  // Revolving debts (credit cards + lines of credit) payable from a paycheck.
+  const [revolvingDebts, setRevolvingDebts] = useState<Debt[]>([]);
+  const [debtAmounts, setDebtAmounts] = useState<Record<number, string>>({});
+
   const [funAmount, setFunAmount] = useState('');
   const [otherAmount, setOtherAmount] = useState('');
 
@@ -73,16 +80,19 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
       setDate(editing.date);
       setAmount(String(editing.amount));
       setNotes(editing.notes ?? '');
-      // Pre-fill goal amounts
+      // Pre-fill goal + debt amounts
       const ga: Record<number, string> = {};
+      const da: Record<number, string> = {};
       let fun = 0;
       let other = 0;
       for (const a of editing.allocations) {
         if (a.kind === 'goal' && a.ref_id != null) ga[a.ref_id] = String(a.amount);
+        else if (a.kind === 'debt' && a.ref_id != null) da[a.ref_id] = String(a.amount);
         else if (a.kind === 'fun') fun += a.amount;
         else if (a.kind === 'other') other += a.amount;
       }
       setGoalAmounts(ga);
+      setDebtAmounts(da);
       setFunAmount(fun > 0 ? String(fun) : '');
       setOtherAmount(other > 0 ? String(other) : '');
     } else {
@@ -90,6 +100,7 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
       setAmount('');
       setNotes('');
       setGoalAmounts({});
+      setDebtAmounts({});
       setFunAmount('');
       setOtherAmount('');
     }
@@ -104,10 +115,14 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
     if (!open) return;
     (async () => {
       const to = format(addDays(parseISO(date), 14), 'yyyy-MM-dd');
-      const [u, g] = await Promise.all([
+      const [u, g, allDebts] = await Promise.all([
         window.api.bills.toPay(to) as Promise<UpcomingBill[]>,
         window.api.goals.list() as Promise<SavingsGoal[]>,
+        window.api.debts.list() as Promise<Debt[]>,
       ]);
+      setRevolvingDebts(
+        allDebts.filter((d) => d.type === 'credit_card' || d.type === 'line_of_credit')
+      );
 
       let merged = u;
       const checked: Record<string, boolean> = {};
@@ -184,10 +199,21 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
     () => Object.values(goalAmounts).reduce((a, v) => a + (Number(v) || 0), 0),
     [goalAmounts]
   );
+  const debtsTotal = useMemo(
+    () => Object.values(debtAmounts).reduce((a, v) => a + (Number(v) || 0), 0),
+    [debtAmounts]
+  );
   const fun = Number(funAmount) || 0;
   const other = Number(otherAmount) || 0;
-  const allocated = billsTotal + goalsTotal + fun + other;
+  const allocated = billsTotal + goalsTotal + debtsTotal + fun + other;
   const remainder = paycheck - allocated;
+
+  // The Debt step only appears when there's a revolving debt to pay.
+  const STEPS = useMemo(
+    () =>
+      revolvingDebts.length > 0 ? ALL_STEPS : ALL_STEPS.filter((s) => s.id !== 'debt'),
+    [revolvingDebts]
+  );
 
   const stepIdx = STEPS.findIndex((s) => s.id === step);
   const next = () => setStep(STEPS[Math.min(STEPS.length - 1, stepIdx + 1)].id);
@@ -219,6 +245,12 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
       const n = Number(v);
       if (n > 0) {
         allocations.push({ kind: 'goal', ref_id: Number(gid), amount: n, note: null });
+      }
+    }
+    for (const [did, v] of Object.entries(debtAmounts)) {
+      const n = Number(v);
+      if (n > 0) {
+        allocations.push({ kind: 'debt', ref_id: Number(did), amount: n, note: null });
       }
     }
     if (fun > 0) allocations.push({ kind: 'fun', ref_id: null, amount: fun, note: null });
@@ -425,6 +457,53 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
           </div>
         )}
 
+        {step === 'debt' && (
+          <div className="space-y-3">
+            <div className="text-sm text-content-muted mb-1">
+              Pay down your credit cards and lines of credit. Whatever you enter comes off the
+              balance when you save.
+            </div>
+            {revolvingDebts.length === 0 ? (
+              <div className="text-sm text-content-muted py-6 text-center">
+                No credit cards or lines of credit to pay.
+              </div>
+            ) : (
+              revolvingDebts.map((d) => (
+                <div
+                  key={d.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-border"
+                >
+                  <div
+                    className={cn(
+                      'w-9 h-9 rounded-lg grid place-items-center text-white shrink-0',
+                      d.type === 'credit_card' ? 'bg-danger' : 'bg-info'
+                    )}
+                  >
+                    <CreditCard size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{d.name}</div>
+                    <div className="text-xs text-content-muted num whitespace-nowrap">
+                      {fmtMoney(d.current_balance)} owing · {d.interest_rate}% APR
+                    </div>
+                  </div>
+                  <input
+                    className="input w-32 text-right num shrink-0"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={debtAmounts[d.id] ?? ''}
+                    onChange={(e) =>
+                      setDebtAmounts((s) => ({ ...s, [d.id]: e.target.value }))
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
         {step === 'savings' && (
           <div className="space-y-3">
             <div className="text-sm text-content-muted mb-1">
@@ -509,6 +588,7 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
             <div className="card p-5 bg-surface-3/40">
               <Row label="Paycheck" amount={paycheck} />
               <Row label="− Bills" amount={-billsTotal} />
+              {debtsTotal > 0 && <Row label="− Debt payments" amount={-debtsTotal} />}
               <Row label="− Savings" amount={-goalsTotal} />
               <Row label="− Fun money" amount={-fun} />
               {other > 0 && <Row label="− Other" amount={-other} />}
