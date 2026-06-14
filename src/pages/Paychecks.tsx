@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, Wallet } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import { fmtMoney, fmtDate } from '@/lib/format';
+import { useConfirm } from '@/lib/ui';
 import type { PaycheckWithAllocations } from '@shared/types';
 import PaycheckWizard from './PaycheckWizard';
 
@@ -9,6 +10,7 @@ export default function Paychecks() {
   const [list, setList] = useState<PaycheckWithAllocations[]>([]);
   const [showWizard, setShowWizard] = useState(false);
   const [editing, setEditing] = useState<PaycheckWithAllocations | null>(null);
+  const confirm = useConfirm();
 
   const load = async () => {
     setList((await window.api.paychecks.list()) as PaycheckWithAllocations[]);
@@ -18,10 +20,21 @@ export default function Paychecks() {
     load();
   }, []);
 
-  const onDelete = async (id: number) => {
-    if (!confirm('Delete this paycheck record? Goal contributions linked to it will also be removed.'))
-      return;
-    await window.api.paychecks.remove(id);
+  const onDelete = async (p: PaycheckWithAllocations) => {
+    const ok = await confirm({
+      title: 'Delete this paycheck?',
+      description: (
+        <>
+          The <span className="text-content font-medium">{fmtMoney(p.amount)}</span> paycheck from{' '}
+          {fmtDate(p.date)} will be removed, along with its goal contributions. Any debt payments on
+          it are reverted.
+        </>
+      ),
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await window.api.paychecks.remove(p.id);
     load();
   };
 
@@ -69,7 +82,7 @@ export default function Paychecks() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-baseline gap-3">
-                    <div className="text-2xl font-bold num">{fmtMoney(p.amount)}</div>
+                    <div className="text-2xl font-display font-semibold num-display">{fmtMoney(p.amount)}</div>
                     <div className="text-sm text-content-muted">{fmtDate(p.date)}</div>
                   </div>
                   {p.notes && <div className="text-sm text-content-muted mt-1">{p.notes}</div>}
@@ -92,7 +105,7 @@ export default function Paychecks() {
                     <Pencil size={16} />
                   </button>
                   <button
-                    onClick={() => onDelete(p.id)}
+                    onClick={() => onDelete(p)}
                     className="btn-ghost p-1.5 hover:text-danger"
                     aria-label="Delete paycheck"
                     title="Delete"

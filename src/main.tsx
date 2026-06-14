@@ -5,14 +5,17 @@ import App from './App';
 import './index.css';
 import { ThemeProvider } from './lib/theme';
 import { CelebrationProvider } from './lib/celebration';
+import { UIProvider } from './lib/ui';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
       <HashRouter>
-        <CelebrationProvider>
-          <App />
-        </CelebrationProvider>
+        <UIProvider>
+          <CelebrationProvider>
+            <App />
+          </CelebrationProvider>
+        </UIProvider>
       </HashRouter>
     </ThemeProvider>
   </React.StrictMode>

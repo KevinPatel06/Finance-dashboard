@@ -40,11 +40,14 @@ export default function Sidebar() {
     <aside className="w-64 shrink-0 border-r border-border bg-surface-2 flex flex-col">
       <div className="px-5 pt-6 pb-7">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand to-emerald-600 grid place-items-center text-white font-bold shadow-soft shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand to-brand-hover grid place-items-center text-white font-bold shadow-soft shrink-0 dark:text-slate-950">
             {avatarLetter(userName)}
           </div>
           <div className="leading-tight min-w-0">
-            <div className="text-sm font-semibold text-content truncate" title={heading}>
+            <div
+              className="text-[15px] font-display font-semibold text-content truncate"
+              title={heading}
+            >
               {heading}
             </div>
             <div className="text-xs text-content-subtle">Personal dashboard</div>

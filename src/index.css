@@ -55,6 +55,37 @@ body {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
 
+/* Display face for hero figures + section headings — Hanken Grotesk: a soft,
+   easy-on-the-eyes grotesque, with lining tabular numerals so money columns
+   stay aligned. */
+.font-display {
+  font-family: 'Hanken Grotesk', 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+.num-display {
+  font-family: 'Hanken Grotesk', 'Inter', system-ui, sans-serif;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  letter-spacing: -0.015em;
+}
+
+/* Staggered entrance: parent gets .stagger, children animate in sequence. */
+.stagger > * {
+  animation: fade-in-up 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 40ms; }
+.stagger > *:nth-child(2) { animation-delay: 100ms; }
+.stagger > *:nth-child(3) { animation-delay: 160ms; }
+.stagger > *:nth-child(4) { animation-delay: 220ms; }
+.stagger > *:nth-child(5) { animation-delay: 280ms; }
+.stagger > *:nth-child(6) { animation-delay: 340ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, .stagger > * {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
@@ -87,6 +118,10 @@ body {
 
   .card {
     @apply bg-surface-2 border border-border rounded-2xl shadow-card;
+  }
+  /* Opt-in interactive lift for clickable / navigational cards. */
+  .card-hover {
+    @apply transition duration-200 hover:shadow-lift hover:border-border-strong hover:-translate-y-0.5;
   }
 
   .btn {

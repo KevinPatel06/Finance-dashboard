@@ -27,7 +27,7 @@ export default function TopBar() {
   return (
     <header className="h-16 px-8 border-b border-border bg-surface flex items-center justify-between">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-xl font-display font-semibold tracking-tight">{title}</h1>
         <div className="text-xs text-content-subtle">{today}</div>
       </div>
       <ThemeToggle />

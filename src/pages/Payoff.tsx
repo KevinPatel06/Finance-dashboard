@@ -176,7 +176,7 @@ function TotalCard({ label, value, sub }: { label: string; value: string; sub?: 
   return (
     <div className="card p-5">
       <div className="text-xs text-content-muted uppercase tracking-wide font-medium">{label}</div>
-      <div className="text-2xl font-bold num mt-1">{value}</div>
+      <div className="text-2xl font-display font-semibold num-display mt-1">{value}</div>
       {sub && <div className="text-xs text-content-subtle mt-0.5">{sub}</div>}
     </div>
   );

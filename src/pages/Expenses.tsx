@@ -5,6 +5,7 @@ import Modal from '@/components/ui/Modal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import { fmtMoney, fmtDate } from '@/lib/format';
+import { useConfirm } from '@/lib/ui';
 import type { Debt, Expense, ExpenseCategory } from '@shared/types';
 
 const CATEGORY_PALETTE = [
@@ -110,7 +111,7 @@ export default function Expenses() {
             <div className="text-xs uppercase tracking-wide text-content-muted font-medium">
               Spent this month
             </div>
-            <div className="text-2xl font-bold num leading-tight">
+            <div className="text-2xl font-display font-semibold num-display leading-tight">
               {fmtMoney(thisMonth.total)}
             </div>
             <div className="text-xs text-content-subtle">
@@ -526,6 +527,7 @@ function ExpenseCategoryManager({
 }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState(CATEGORY_PALETTE[0]);
+  const confirm = useConfirm();
 
   const canAdd = name.trim().length > 0;
 
@@ -536,9 +538,20 @@ function ExpenseCategoryManager({
     onChanged();
   };
 
-  const remove = async (id: number) => {
-    if (!confirm('Delete this category? Expenses in it will become uncategorized.')) return;
-    await window.api.expenseCategories.remove(id);
+  const remove = async (cat: ExpenseCategory) => {
+    const ok = await confirm({
+      title: 'Delete this category?',
+      description: (
+        <>
+          Expenses in <span className="text-content font-medium">{cat.name}</span> will become
+          uncategorized.
+        </>
+      ),
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await window.api.expenseCategories.remove(cat.id);
     onChanged();
   };
 
@@ -595,7 +608,7 @@ function ExpenseCategoryManager({
                   <span className="w-3 h-3 rounded-full" style={{ backgroundColor: c.color }} />
                   <span className="flex-1">{c.name}</span>
                   <button
-                    onClick={() => remove(c.id)}
+                    onClick={() => remove(c)}
                     className="btn-ghost p-1.5 hover:text-danger"
                     aria-label="Delete"
                   >

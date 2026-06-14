@@ -4,6 +4,7 @@ import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import { fmtMoney, fmtDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useConfirm } from '@/lib/ui';
 import type { Bill, BillFrequency, BillStatus, Category } from '@shared/types';
 import { format } from 'date-fns';
 
@@ -27,6 +28,7 @@ export default function Bills() {
   const [editing, setEditing] = useState<Bill | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [manageCats, setManageCats] = useState(false);
+  const confirm = useConfirm();
 
   const load = async () => {
     const [b, c, s] = await Promise.all([
@@ -43,9 +45,20 @@ export default function Bills() {
     load();
   }, []);
 
-  const onDelete = async (id: number) => {
-    if (!confirm('Delete this bill? It will be archived.')) return;
-    await window.api.bills.remove(id);
+  const onDelete = async (bill: Bill) => {
+    const ok = await confirm({
+      title: 'Delete this bill?',
+      description: (
+        <>
+          <span className="text-content font-medium">{bill.name}</span> will be archived and removed
+          from your active bills. Past paycheck history stays intact.
+        </>
+      ),
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await window.api.bills.remove(bill.id);
     load();
   };
 
@@ -216,7 +229,7 @@ export default function Bills() {
                           <Pencil size={15} />
                         </button>
                         <button
-                          onClick={() => onDelete(b.id)}
+                          onClick={() => onDelete(b)}
                           className="btn-ghost p-1.5 hover:text-danger"
                           aria-label="Delete"
                         >
@@ -470,6 +483,7 @@ function CategoryManager({
 }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState(CATEGORY_PALETTE[0]);
+  const confirm = useConfirm();
 
   const add = async () => {
     if (!name) return;
@@ -478,9 +492,20 @@ function CategoryManager({
     onChanged();
   };
 
-  const remove = async (id: number) => {
-    if (!confirm('Delete this category? Bills will become uncategorized.')) return;
-    await window.api.categories.remove(id);
+  const remove = async (cat: Category) => {
+    const ok = await confirm({
+      title: 'Delete this category?',
+      description: (
+        <>
+          Bills in <span className="text-content font-medium">{cat.name}</span> will become
+          uncategorized.
+        </>
+      ),
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await window.api.categories.remove(cat.id);
     onChanged();
   };
 
@@ -550,7 +575,7 @@ function CategoryManager({
                   />
                   <span className="flex-1">{c.name}</span>
                   <button
-                    onClick={() => remove(c.id)}
+                    onClick={() => remove(c)}
                     className="btn-ghost p-1.5 hover:text-danger"
                     aria-label="Delete"
                   >

@@ -1,0 +1,49 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="0.55" stop-color="#10B981"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.3" cy="0.24" r="0.9">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bill" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EAFBF3"/>
+    </linearGradient>
+    <filter id="ds" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="26" flood-color="#003B2B" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+
+  <!-- App tile -->
+  <rect width="1024" height="1024" rx="232" fill="url(#tile)"/>
+  <rect width="1024" height="1024" rx="232" fill="url(#glow)"/>
+
+  <!-- Stack of bills -->
+  <g filter="url(#ds)">
+    <!-- back bill -->
+    <rect x="246" y="378" width="532" height="196" rx="40" fill="#FFFFFF" opacity="0.42"
+          transform="rotate(-9 512 476)"/>
+    <!-- middle bill -->
+    <rect x="252" y="430" width="520" height="200" rx="42" fill="#FFFFFF" opacity="0.72"
+          transform="rotate(-3.5 512 530)"/>
+    <!-- front bill -->
+    <rect x="258" y="496" width="508" height="206" rx="44" fill="url(#bill)"/>
+    <!-- front bill inner frame -->
+    <rect x="288" y="526" width="448" height="146" rx="26" fill="none"
+          stroke="#10B981" stroke-opacity="0.22" stroke-width="6"/>
+  </g>
+
+  <!-- Coin with $ -->
+  <g filter="url(#ds)">
+    <circle cx="512" cy="599" r="96" fill="#10B981"/>
+    <circle cx="512" cy="599" r="96" fill="url(#glow)"/>
+    <circle cx="512" cy="599" r="78" fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="6"/>
+    <text x="512" y="600" text-anchor="middle" dominant-baseline="central"
+          font-family="Georgia, 'Times New Roman', serif" font-weight="700"
+          font-size="118" fill="#FFFFFF">$</text>
+  </g>
+</svg>

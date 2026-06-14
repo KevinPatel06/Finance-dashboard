@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Download, Upload, Sun, Moon, CalendarClock, Check, User } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { ACCENT_LABELS, ACCENT_SWATCH } from '@/lib/accents';
+import { useConfirm, useToast } from '@/lib/ui';
 import type { AccentColor, AppSettings } from '@shared/types';
 
 export default function Settings() {
@@ -10,6 +11,8 @@ export default function Settings() {
   const [nextDate, setNextDate] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [nameSavedAt, setNameSavedAt] = useState<number | null>(null);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   useEffect(() => {
     window.api.settings.get().then((s) => {
@@ -34,20 +37,23 @@ export default function Settings() {
     await window.api.settings.update({ next_paycheck_date: nextDate || null });
     const s = (await window.api.settings.get()) as AppSettings;
     setSettings(s);
+    toast.success('Pay schedule updated.');
   };
 
   const backup = async () => {
     const res = (await window.api.db.backup()) as { ok: boolean; path?: string };
-    if (res.ok) alert(`Backup saved to:\n${res.path}`);
+    if (res.ok) toast.success('Database backed up successfully.');
   };
 
   const restore = async () => {
-    if (
-      !confirm(
-        'Restore from a backup? This will replace your current data and restart the app.'
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: 'Restore from a backup?',
+      description:
+        'This replaces all of your current data with the contents of the backup file, then restarts the app. This cannot be undone.',
+      confirmLabel: 'Restore & restart',
+      destructive: true,
+    });
+    if (!ok) return;
     await window.api.db.restore();
   };
 

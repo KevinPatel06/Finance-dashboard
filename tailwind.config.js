@@ -32,12 +32,14 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        display: ['Hanken Grotesk', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Consolas', 'monospace'],
       },
       boxShadow: {
         soft: '0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06)',
         card: '0 1px 3px 0 rgb(0 0 0 / 0.05), 0 4px 12px -2px rgb(0 0 0 / 0.05)',
         pop: '0 10px 30px -10px rgb(0 0 0 / 0.25)',
+        lift: '0 2px 4px -1px rgb(0 0 0 / 0.06), 0 12px 28px -8px rgb(0 0 0 / 0.12)',
       },
       borderRadius: {
         xl: '0.875rem',
@@ -48,9 +50,19 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(4px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        'fade-in-up': {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'toast-in': {
+          '0%': { opacity: '0', transform: 'translateY(10px) scale(0.97)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 200ms ease-out',
+        'fade-in-up': 'fade-in-up 500ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        'toast-in': 'toast-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both',
       },
     },
   },

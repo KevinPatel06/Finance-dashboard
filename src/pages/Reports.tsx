@@ -430,7 +430,7 @@ function ExpenseReports() {
                 <div className="text-xs uppercase tracking-wider text-content-muted font-medium mb-1">
                   Total spent · {RANGE_LABELS[range]}
                 </div>
-                <div className="text-4xl font-bold tracking-tight num">
+                <div className="text-4xl font-display font-semibold tracking-tight num-display text-content">
                   {fmtMoney(report.totalSpent)}
                 </div>
                 <div className="text-sm text-content-muted mt-1">

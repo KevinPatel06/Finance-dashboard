@@ -62,7 +62,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <Hero snap={snap} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 stagger">
         <StatCard
           label="This month income"
           value={fmtMoney(snap.thisMonth.income)}
@@ -123,13 +123,13 @@ function DebtSummaryCard() {
         <div className="flex gap-8">
           <div>
             <div className="text-xs text-content-muted uppercase tracking-wide">Total owed</div>
-            <div className="text-2xl font-bold num">{fmtMoney(totalOwed)}</div>
+            <div className="text-2xl font-display font-semibold num-display">{fmtMoney(totalOwed)}</div>
           </div>
           <div>
             <div className="text-xs text-content-muted uppercase tracking-wide">
               Interest / month
             </div>
-            <div className="text-2xl font-bold num text-danger">{fmtMoney(monthlyInterest)}</div>
+            <div className="text-2xl font-display font-semibold num-display text-danger">{fmtMoney(monthlyInterest)}</div>
           </div>
         </div>
         <div className="flex-1 space-y-2 min-w-0">
@@ -177,7 +177,7 @@ function Hero({ snap }: { snap: DashboardSnapshot }) {
           <div className="text-xs uppercase tracking-wider text-content-muted font-medium mb-2">
             Average savings per paycheck
           </div>
-          <div className="text-4xl font-bold tracking-tight num">
+          <div className="text-5xl font-display font-semibold tracking-tight num-display text-content">
             {fmtMoney(snap.averageSavingsPerPaycheck)}
           </div>
           <div className="text-sm text-content-muted mt-1">
@@ -234,7 +234,7 @@ function StatCard({
   tone?: 'brand';
 }) {
   return (
-    <div className="card p-5">
+    <div className="card card-hover p-5">
       <div className="flex items-center justify-between">
         <div className="text-xs text-content-muted uppercase tracking-wide font-medium">
           {label}
@@ -249,7 +249,7 @@ function StatCard({
           {icon}
         </div>
       </div>
-      <div className="text-2xl font-bold mt-3 num">{value}</div>
+      <div className="text-2xl font-display font-semibold mt-3 num-display">{value}</div>
     </div>
   );
 }

@@ -45,8 +45,13 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist');
 let win: BrowserWindow | null = null;
 
 function createWindow() {
+  // In dev the packaged exe icon isn't present, so point the window at the
+  // source PNG when it exists (packaged builds inherit the embedded exe icon).
+  const devIcon = path.join(process.env.APP_ROOT!, 'build', 'icon.png');
+
   win = new BrowserWindow({
     title: 'Finance Dashboard',
+    icon: fs.existsSync(devIcon) ? devIcon : undefined,
     width: 1400,
     height: 900,
     minWidth: 1100,
