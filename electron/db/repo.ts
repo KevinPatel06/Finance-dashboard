@@ -29,6 +29,7 @@ import {
   startOfMonth,
   endOfMonth,
 } from 'date-fns';
+import { periodRate } from '../../shared/debtMath';
 
 // ---------- helpers ----------
 const today = () => formatISO(new Date(), { representation: 'date' });
@@ -843,8 +844,11 @@ function applyPendingInterest(db = getDb()) {
     let lastCharged: string | null = null;
     let next = nextInterestDate(cursor, day);
     let guard = 0;
+    // Interest hits monthly (on interest_day), but the per-month rate must
+    // honour the debt's compounding convention — mirror periodRate('monthly').
+    const monthlyRate = periodRate(d.interest_rate, 'monthly', d.compounding);
     while (formatISO(next, { representation: 'date' }) <= todayStr && guard++ < 600) {
-      balance = Math.round(balance * (1 + d.interest_rate / 100 / 12) * 100) / 100;
+      balance = Math.round(balance * (1 + monthlyRate) * 100) / 100;
       lastCharged = formatISO(next, { representation: 'date' });
       next = nextInterestDate(next, day);
     }

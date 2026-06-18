@@ -1,12 +1,9 @@
 import { addDays, addMonths } from 'date-fns';
 import type { Debt, DebtCompounding, DebtFrequency } from '@shared/types';
+import { PERIODS_PER_YEAR, periodRate } from '@shared/debtMath';
 
-export const PERIODS_PER_YEAR: Record<DebtFrequency, number> = {
-  weekly: 52,
-  biweekly: 26,
-  semi_monthly: 24,
-  monthly: 12,
-};
+// Re-exported so existing renderer call-sites keep their `@/lib/debtMath` imports.
+export { PERIODS_PER_YEAR, periodRate };
 
 export const FREQ_LABEL: Record<DebtFrequency, string> = {
   weekly: 'Weekly',
@@ -14,23 +11,6 @@ export const FREQ_LABEL: Record<DebtFrequency, string> = {
   semi_monthly: 'Semi-monthly',
   monthly: 'Monthly',
 };
-
-/**
- * Effective interest rate per payment period.
- * - 'monthly': US-style nominal rate — APR divided across the year's periods.
- * - 'semi_annual': Canadian fixed-mortgage convention — APR compounded
- *   semi-annually, not in advance: (1 + APR/2)^(2/periodsPerYear) − 1.
- */
-export function periodRate(
-  annualRatePct: number,
-  frequency: DebtFrequency,
-  compounding: DebtCompounding
-): number {
-  const ppy = PERIODS_PER_YEAR[frequency];
-  const apr = annualRatePct / 100;
-  if (compounding === 'semi_annual') return Math.pow(1 + apr / 2, 2 / ppy) - 1;
-  return apr / ppy;
-}
 
 export interface PayoffEstimate {
   /** Payment never covers interest — balance grows forever. */

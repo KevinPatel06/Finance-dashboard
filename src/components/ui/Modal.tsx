@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface Props {
@@ -17,15 +17,53 @@ const sizes = {
   xl: 'max-w-4xl',
 };
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export default function Modal({ open, onClose, title, description, children, size = 'md' }: Props) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      // Trap focus inside the dialog so Tab can't reach the page behind it.
+      if (e.key === 'Tab' && panelRef.current) {
+        const items = panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
+
+  // Move focus to the first field when the dialog opens.
+  useEffect(() => {
+    if (!open) return;
+    const id = window.requestAnimationFrame(() => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      // Prefer the first real field over the leading Close button.
+      const field = panel.querySelector<HTMLElement>(
+        'input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+      );
+      (field ?? panel.querySelector<HTMLElement>(FOCUSABLE))?.focus();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [open]);
 
   if (!open) return null;
 
@@ -33,6 +71,10 @@ export default function Modal({ open, onClose, title, description, children, siz
     <div className="fixed inset-0 z-50 grid place-items-center p-4 animate-fade-in">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className={`relative card w-full ${sizes[size]} shadow-pop max-h-[90vh] overflow-hidden flex flex-col`}
       >
         {(title || description) && (
