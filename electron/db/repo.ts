@@ -4,6 +4,7 @@ import type {
   Bill,
   BillInput,
   BillMonthItem,
+  BudgetStatus,
   Category,
   DashboardSnapshot,
   Debt,
@@ -15,12 +16,20 @@ import type {
   Paycheck,
   PaycheckAllocationInput,
   PaycheckWithAllocations,
+  RecurringExpense,
+  RecurringExpenseInput,
+  RecurringFrequency,
+  RegisteredAccount,
+  RegisteredAccountInput,
+  RegisteredContribution,
+  RegisteredContributionInput,
   SavingsGoal,
   SavingsGoalInput,
 } from '../../shared/types';
 import {
   addDays,
   addMonths,
+  addWeeks,
   addYears,
   differenceInCalendarDays,
   formatISO,
@@ -136,6 +145,11 @@ export function getSettings(): AppSettings {
     next_paycheck_date: map.next_paycheck_date || null,
     accent_color: accent,
     user_name: map.user_name?.trim() || 'Kevin',
+    // Notification prefs default ON when unset; lead time defaults to 3 days.
+    notify_enabled: map.notify_enabled !== 'false',
+    notify_bill_lead_days: Number(map.notify_bill_lead_days) || 3,
+    notify_paycheck: map.notify_paycheck !== 'false',
+    notify_budget: map.notify_budget !== 'false',
   };
 }
 
@@ -151,6 +165,21 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   });
   tx();
   return getSettings();
+}
+
+/** Raw settings access for internal bookkeeping keys (not part of AppSettings). */
+export function getMeta(key: string): string | null {
+  const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as
+    | { value: string }
+    | undefined;
+  return row ? row.value : null;
+}
+export function setMeta(key: string, value: string): void {
+  getDb()
+    .prepare(
+      'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+    )
+    .run(key, value);
 }
 
 // ---------- Categories ----------
@@ -977,8 +1006,43 @@ export function deleteExpenseCategory(id: number): { ok: true } {
   return { ok: true };
 }
 
+// ---------- Budgets ----------
+export function listExpenseBudgets(): BudgetStatus[] {
+  const db = getDb();
+  const now = new Date();
+  const from = formatISO(startOfMonth(now), { representation: 'date' });
+  const to = formatISO(endOfMonth(now), { representation: 'date' });
+  return db
+    .prepare(
+      `SELECT c.id AS category_id, c.name, c.color, b.monthly_limit,
+              COALESCE((
+                SELECT SUM(e.amount) FROM expenses e
+                 WHERE e.category_id = c.id AND e.date BETWEEN ? AND ?
+              ), 0) AS spent
+         FROM expense_budgets b
+         JOIN expense_categories c ON c.id = b.category_id
+        ORDER BY c.name`
+    )
+    .all(from, to) as BudgetStatus[];
+}
+
+export function setExpenseBudget(categoryId: number, monthlyLimit: number): { ok: true } {
+  const db = getDb();
+  if (monthlyLimit > 0) {
+    db.prepare(
+      `INSERT INTO expense_budgets (category_id, monthly_limit) VALUES (?, ?)
+         ON CONFLICT(category_id) DO UPDATE SET monthly_limit = excluded.monthly_limit`
+    ).run(categoryId, monthlyLimit);
+  } else {
+    // A zero/blank limit clears the budget.
+    db.prepare('DELETE FROM expense_budgets WHERE category_id = ?').run(categoryId);
+  }
+  return { ok: true };
+}
+
 // ---------- Expenses ----------
 export function listExpenses(): Expense[] {
+  materializeRecurringExpenses();
   return getDb()
     .prepare('SELECT * FROM expenses ORDER BY date DESC, id DESC')
     .all() as Expense[];
@@ -1054,6 +1118,199 @@ export function deleteExpense(id: number): { ok: true } {
   });
   tx();
   return { ok: true };
+}
+
+// ---------- Recurring expenses ----------
+function stepRecurring(d: Date, freq: RecurringFrequency): Date {
+  switch (freq) {
+    case 'weekly':
+      return addWeeks(d, 1);
+    case 'biweekly':
+      return addDays(d, 14);
+    case 'monthly':
+      return addMonths(d, 1);
+    case 'yearly':
+      return addYears(d, 1);
+  }
+}
+
+export function listRecurringExpenses(): RecurringExpense[] {
+  return getDb()
+    .prepare('SELECT * FROM recurring_expenses WHERE archived = 0 ORDER BY created_at DESC')
+    .all() as RecurringExpense[];
+}
+
+export function createRecurringExpense(input: RecurringExpenseInput): RecurringExpense {
+  const db = getDb();
+  const info = db
+    .prepare(
+      `INSERT INTO recurring_expenses (description, amount, category_id, debt_id, frequency, anchor_date)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      input.description,
+      input.amount,
+      input.category_id ?? null,
+      input.debt_id ?? null,
+      input.frequency,
+      input.anchor_date
+    );
+  materializeRecurringExpenses();
+  return db
+    .prepare('SELECT * FROM recurring_expenses WHERE id = ?')
+    .get(info.lastInsertRowid) as RecurringExpense;
+}
+
+export function updateRecurringExpense(
+  id: number,
+  input: Partial<RecurringExpenseInput>
+): RecurringExpense {
+  const db = getDb();
+  const cur = db.prepare('SELECT * FROM recurring_expenses WHERE id = ?').get(id) as
+    | RecurringExpense
+    | undefined;
+  if (!cur) throw new Error('Recurring expense not found');
+  db.prepare(
+    `UPDATE recurring_expenses SET description = ?, amount = ?, category_id = ?, debt_id = ?,
+        frequency = ?, anchor_date = ? WHERE id = ?`
+  ).run(
+    input.description ?? cur.description,
+    input.amount ?? cur.amount,
+    input.category_id === undefined ? cur.category_id : input.category_id,
+    input.debt_id === undefined ? cur.debt_id : input.debt_id,
+    input.frequency ?? cur.frequency,
+    input.anchor_date ?? cur.anchor_date,
+    id
+  );
+  return db.prepare('SELECT * FROM recurring_expenses WHERE id = ?').get(id) as RecurringExpense;
+}
+
+export function deleteRecurringExpense(id: number): { ok: true } {
+  // Stops future generation; already-generated expenses stay in the ledger.
+  getDb().prepare('DELETE FROM recurring_expenses WHERE id = ?').run(id);
+  return { ok: true };
+}
+
+/**
+ * Generate any due expense occurrences for active templates, advancing each
+ * template's `last_generated`. Idempotent — runs cheaply on every expense read.
+ * The anchor date is the first occurrence; thereafter we step by frequency.
+ */
+export function materializeRecurringExpenses(): void {
+  const db = getDb();
+  const rows = db
+    .prepare('SELECT * FROM recurring_expenses WHERE archived = 0')
+    .all() as RecurringExpense[];
+  const todayStr = today();
+  const updateGen = db.prepare('UPDATE recurring_expenses SET last_generated = ? WHERE id = ?');
+
+  for (const r of rows) {
+    // First pending occurrence: the anchor itself if never generated, else one
+    // step past the last generated date.
+    let occ = r.last_generated
+      ? stepRecurring(parseISO(r.last_generated), r.frequency)
+      : parseISO(r.anchor_date);
+    let lastGen: string | null = null;
+    let guard = 0;
+    while (formatISO(occ, { representation: 'date' }) <= todayStr && guard++ < 1000) {
+      const dateStr = formatISO(occ, { representation: 'date' });
+      // Reuse createExpense so the credit-card bridge (balance increase) and
+      // its own transaction are honoured.
+      createExpense({
+        description: r.description,
+        amount: r.amount,
+        date: dateStr,
+        category_id: r.category_id,
+        note: 'Recurring',
+        debt_id: r.debt_id,
+      });
+      lastGen = dateStr;
+      occ = stepRecurring(occ, r.frequency);
+    }
+    if (lastGen) updateGen.run(lastGen, r.id);
+  }
+}
+
+// ---------- Registered accounts (RRSP / TFSA / FHSA) ----------
+export function listRegisteredAccounts(): RegisteredAccount[] {
+  const db = getDb();
+  const accounts = db
+    .prepare('SELECT * FROM registered_accounts WHERE archived = 0 ORDER BY created_at')
+    .all() as Omit<RegisteredAccount, 'contributed' | 'remaining' | 'contributions'>[];
+  const contribStmt = db.prepare(
+    'SELECT * FROM registered_contributions WHERE account_id = ? ORDER BY date DESC, id DESC'
+  );
+  return accounts.map((a) => {
+    const contributions = contribStmt.all(a.id) as RegisteredContribution[];
+    const contributed = contributions.reduce((sum, c) => sum + c.amount, 0);
+    return {
+      ...a,
+      contributions,
+      contributed,
+      remaining: a.contribution_room - contributed,
+    };
+  });
+}
+
+export function createRegisteredAccount(input: RegisteredAccountInput): RegisteredAccount {
+  const db = getDb();
+  const info = db
+    .prepare(
+      `INSERT INTO registered_accounts (kind, label, contribution_room, notes)
+       VALUES (?, ?, ?, ?)`
+    )
+    .run(input.kind, input.label, input.contribution_room, input.notes ?? null);
+  return getRegisteredAccount(info.lastInsertRowid as number);
+}
+
+export function updateRegisteredAccount(
+  id: number,
+  input: Partial<RegisteredAccountInput>
+): RegisteredAccount {
+  const db = getDb();
+  const cur = db.prepare('SELECT * FROM registered_accounts WHERE id = ?').get(id) as
+    | RegisteredAccount
+    | undefined;
+  if (!cur) throw new Error('Registered account not found');
+  db.prepare(
+    `UPDATE registered_accounts SET kind = ?, label = ?, contribution_room = ?, notes = ?
+       WHERE id = ?`
+  ).run(
+    input.kind ?? cur.kind,
+    input.label ?? cur.label,
+    input.contribution_room ?? cur.contribution_room,
+    input.notes === undefined ? cur.notes : input.notes,
+    id
+  );
+  return getRegisteredAccount(id);
+}
+
+export function deleteRegisteredAccount(id: number): { ok: true } {
+  // Contributions cascade-delete via the FK.
+  getDb().prepare('DELETE FROM registered_accounts WHERE id = ?').run(id);
+  return { ok: true };
+}
+
+export function addRegisteredContribution(
+  input: RegisteredContributionInput
+): RegisteredAccount {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO registered_contributions (account_id, amount, date, note)
+     VALUES (?, ?, ?, ?)`
+  ).run(input.account_id, input.amount, input.date, input.note ?? null);
+  return getRegisteredAccount(input.account_id);
+}
+
+export function deleteRegisteredContribution(id: number): { ok: true } {
+  getDb().prepare('DELETE FROM registered_contributions WHERE id = ?').run(id);
+  return { ok: true };
+}
+
+function getRegisteredAccount(id: number): RegisteredAccount {
+  const acc = listRegisteredAccounts().find((a) => a.id === id);
+  if (!acc) throw new Error('Registered account not found');
+  return acc;
 }
 
 // ---------- Expense reports ----------

@@ -63,6 +63,32 @@ export function registerIpcHandlers() {
   ipcMain.handle(IPC.UPDATE_EXPENSE, (_e, id, input) => repo.updateExpense(id, input));
   ipcMain.handle(IPC.DELETE_EXPENSE, (_e, id) => repo.deleteExpense(id));
 
+  // ---------- Recurring expenses ----------
+  ipcMain.handle(IPC.LIST_RECURRING, () => repo.listRecurringExpenses());
+  ipcMain.handle(IPC.CREATE_RECURRING, (_e, input) => repo.createRecurringExpense(input));
+  ipcMain.handle(IPC.UPDATE_RECURRING, (_e, id, input) => repo.updateRecurringExpense(id, input));
+  ipcMain.handle(IPC.DELETE_RECURRING, (_e, id) => repo.deleteRecurringExpense(id));
+
+  // ---------- Registered accounts ----------
+  ipcMain.handle(IPC.LIST_REGISTERED, () => repo.listRegisteredAccounts());
+  ipcMain.handle(IPC.CREATE_REGISTERED, (_e, input) => repo.createRegisteredAccount(input));
+  ipcMain.handle(IPC.UPDATE_REGISTERED, (_e, id, input) =>
+    repo.updateRegisteredAccount(id, input)
+  );
+  ipcMain.handle(IPC.DELETE_REGISTERED, (_e, id) => repo.deleteRegisteredAccount(id));
+  ipcMain.handle(IPC.ADD_REGISTERED_CONTRIBUTION, (_e, input) =>
+    repo.addRegisteredContribution(input)
+  );
+  ipcMain.handle(IPC.DELETE_REGISTERED_CONTRIBUTION, (_e, id) =>
+    repo.deleteRegisteredContribution(id)
+  );
+
+  // ---------- Budgets ----------
+  ipcMain.handle(IPC.LIST_BUDGETS, () => repo.listExpenseBudgets());
+  ipcMain.handle(IPC.SET_BUDGET, (_e, categoryId, monthlyLimit) =>
+    repo.setExpenseBudget(categoryId, monthlyLimit)
+  );
+
   // ---------- Dashboard / Reports / Calendar ----------
   ipcMain.handle(IPC.DASHBOARD, () => repo.dashboardSnapshot());
   ipcMain.handle(IPC.REPORT_CATEGORIES, (_e, fromDate, toDate) =>
@@ -103,5 +129,18 @@ export function registerIpcHandlers() {
     app.relaunch();
     app.exit(0);
     return { ok: true };
+  });
+
+  // ---------- File export ----------
+  ipcMain.handle(IPC.EXPORT_CSV, async (_e, defaultName: string, content: string) => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export CSV',
+      defaultPath: defaultName,
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    if (canceled || !filePath) return { ok: false };
+    // Prepend a UTF-8 BOM so Excel reads accented characters correctly.
+    fs.writeFileSync(filePath, '﻿' + content, 'utf8');
+    return { ok: true, path: filePath };
   });
 }

@@ -35,20 +35,24 @@ npm run build:unpacked # same but --dir (skips installer; avoids Windows symlink
   `Kevin's Finance Application` DB if present.
 - `electron/preload.ts` — exposes `window.api.*` (contextBridge). Namespaces:
   `settings, categories, bills, goals, paychecks, debts, expenseCategories, expenses,
-  dashboard, reports, calendar, db`.
+  recurringExpenses, registered, budgets, dashboard, reports, calendar, db, files`.
+- `electron/notifications.ts` — desktop-reminder scheduler (native `Notification`); started
+  in `main.ts`, checks once a day for overdue/soon bills, paycheck day, over-budget categories.
 - `electron/ipc/handlers.ts` — registers `ipcMain.handle` for every channel.
 - `electron/db/index.ts` — opens SQLite (WAL, FK on), runs migrations.
 - `electron/db/migrations.ts` — versioned migrations, applied ascending, recorded in
   `_migrations`. Settings seeded each launch (`INSERT OR IGNORE`).
 - `electron/db/repo.ts` — ALL data logic + computed projections.
 - `shared/types.ts` + `shared/ipc.ts` — types & channel-name constants shared by main+renderer.
+  `shared/debtMath.ts` — `periodRate`/`PERIODS_PER_YEAR` (dependency-free so BOTH the main
+  process and renderer import it; renderer's `src/lib/debtMath.ts` re-exports them).
 - `src/` — renderer. `pages/` = one file per screen; `components/` (Layout, Sidebar, TopBar,
   ThemeToggle, ui/{Modal,ConfirmDialog,EmptyState}); `lib/` (theme, accents, format, utils,
-  debtMath, celebration).
+  debtMath, celebration, csv). `Modal` traps focus + autofocuses first field (`role="dialog"`).
 - IPC pattern: add channel to `shared/ipc.ts` → repo fn → `handlers.ts` → `preload.ts` → use
   `window.api.x.y()` in a page. Keep this 4-file rhythm.
 
-## Data model (migrations v1–v7)
+## Data model (migrations v1–v10)
 - **v1**: `settings(key,value)`, `categories`, `bills`, `savings_goals`, `paychecks`,
   `paycheck_allocations`.
 - **v2**: `savings_goals.archived_at`.
@@ -58,6 +62,13 @@ npm run build:unpacked # same but --dir (skips installer; avoids Windows symlink
   `kind='debt'`.
 - **v6**: `debts.interest_day` + `debts.last_interest_applied` (auto-charge bookkeeping).
 - **v7**: `debts.compounding` ('monthly'|'semi_annual'); existing mortgages set to semi_annual.
+- **v8**: `expense_budgets(category_id PK, monthly_limit)` — optional monthly cap per category.
+- **v9**: `recurring_expenses` — templates that auto-generate expenses on a schedule.
+- **v10**: `registered_accounts` + `registered_contributions` (RRSP/TFSA/FHSA room tracking).
+
+Notification prefs are seeded each launch (`INSERT OR IGNORE`): `notify_enabled`,
+`notify_bill_lead_days`, `notify_paycheck`, `notify_budget`. `last_notified_date` is a
+bookkeeping key (once-per-day dedup) read/written via `repo.getMeta`/`setMeta`.
 
 Key tables:
 - `bills(name,amount,frequency[biweekly|monthly|semi_annual|yearly|custom_days],custom_days,
@@ -67,6 +78,11 @@ Key tables:
   current_balance,interest_rate,payment_amount,payment_frequency[weekly|biweekly|semi_monthly|
   monthly],split_count,interest_day,last_interest_applied,compounding,notes,archived,created_at)`
 - `expenses(description,amount,date,category_id,note,debt_id,created_at)`
+- `expense_budgets(category_id,monthly_limit)`
+- `recurring_expenses(description,amount,category_id,debt_id,frequency[weekly|biweekly|monthly|
+  yearly],anchor_date,last_generated,archived,created_at)`
+- `registered_accounts(kind[rrsp|tfsa|fhsa],label,contribution_room,notes,archived,created_at)`
+- `registered_contributions(account_id,amount,date,note,created_at)`
 
 ## Features
 - **Dashboard** — hero "average savings per paycheck" (historical: goal allocations ÷ paychecks)
@@ -80,16 +96,25 @@ Key tables:
   Status column (Overdue/Due soon/Up to date), sorted by status then due date.
 - **Goals** — targets, progress bars, confetti celebration at 100% (once, tracked in
   localStorage), Mark-complete (archive→Accomplished section), restore, hard-delete.
+- **Registered** (nav between Goals & Payoff) — RRSP/TFSA/FHSA cards with MANUAL contribution
+  room (user enters their CRA room — no tax math), contributed/remaining bars, over-contribution
+  warning, inline contribution ledger. Standalone — doesn't touch paycheck/dashboard math.
 - **Payoff** (nav label deliberately NOT "Debt") — typed debt cards, payoff date/interest
   projections, progress bars, expandable "what if I paid more?" line chart (base vs +extra).
 - **Expenses** — purchases ledger, own categories, filter/search, "spent this month" header,
-  optional note. Defaults filter to current month.
+  optional note, CSV export (respects filters). Defaults filter to current month. Per-category
+  monthly **budget** bars (amber ≥80%, red ≥100%); caps edited in the category manager.
+  **Recurring** manager: templates auto-materialize occurrences up to today on each expenses
+  read (reuses `createExpense`, so the CC charge bridge stays intact).
 - **Calendar** — month grid of bills due / paid / paychecks. Expenses NEVER appear here.
 - **Reports** — toggle Overview (bills/savings charts) ↔ Expenses (Month/6mo/1yr/All-time:
-  total, pie by category, over-time bar, top purchases; month views show a praise/reality-check
-  comparison vs prior month).
+  total, pie by category, over-time bar, top purchases, CSV export; month views show a
+  praise/reality-check comparison vs prior month).
 - **Settings** — user name (→ sidebar + window title), theme (light/dark), accent color
-  (7 options), next-paycheck date, DB backup/restore.
+  (7 options), next-paycheck date, **notifications** (master toggle, bill lead days, paycheck &
+  budget switches), DB backup/restore.
+- **Forms** — editors validate inline (error under the field once touched) + disable Save until
+  valid. Reusable `.input-error`/`.field-error` classes.
 
 ## Payment / debt logic (important)
 - **Bill "paid" tracking** is derived, not stored: a paycheck's bill allocation stores the
@@ -101,11 +126,12 @@ Key tables:
   credit card (`expenses.debt_id`) which INCREASES its balance. All reversible: paycheck/expense
   edit & delete revert balance changes. Balance writes clamp `MAX(0, …)`.
 - **Interest day**: revolving debts can set day-of-month interest hits. `applyPendingInterest()`
-  (inside `listDebts()`) adds balance×APR/12 on/after that day, compounding per elapsed month,
-  idempotent via `last_interest_applied`; never retro-charges.
-- **Compounding** (`src/lib/debtMath.ts` `periodRate()`): semi_annual = Canadian fixed-mortgage
+  (inside `listDebts()`) adds balance × `periodRate(rate,'monthly',compounding)` on/after that
+  day, compounding per elapsed month, idempotent via `last_interest_applied`; never retro-charges.
+  (It routes through the SHARED `periodRate`, so it honours the debt's compounding convention.)
+- **Compounding** (`shared/debtMath.ts` `periodRate()`): semi_annual = Canadian fixed-mortgage
   convention `(1+APR/2)^(2/ppy)−1`; monthly = US/everything-else. Mortgages default semi_annual.
-  All payoff math routes through `periodRate`.
+  All payoff AND auto-interest math routes through `periodRate`.
 
 ## Conventions / gotchas
 - **Currency is CAD**, `en-CA` locale (`src/lib/format.ts`). Dates `en-CA`.
@@ -120,7 +146,9 @@ Key tables:
   accent picker overrides `--brand*` at runtime per light/dark.
 - **Isolation note**: expenses/debts were originally fully isolated from paycheck math; that's
   now intentionally relaxed for exactly two bridges — CC expense charges and paycheck debt
-  payments. Nothing else touches dashboard/paycheck/bill calc paths. Backup/restore copies the
-  whole `finance.db`, so all sections ride along.
+  payments. Budgets, recurring expenses, and registered accounts are ALSO isolated (they read/
+  write only their own tables + the expenses ledger via `createExpense`); nothing else touches
+  dashboard/paycheck/bill calc paths. Backup/restore copies the whole `finance.db`, so all
+  sections ride along.
 - **Kevin's working style**: design-first then iterate; prefers polished UI. Present the result,
   then take change requests.

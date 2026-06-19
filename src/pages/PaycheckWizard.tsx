@@ -342,8 +342,11 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
         {step === 'amount' && (
           <div className="max-w-md mx-auto space-y-4">
             <div>
-              <label className="label">Paycheck amount</label>
+              <label className="label" htmlFor="wizard-amount">
+                Paycheck amount
+              </label>
               <input
+                id="wizard-amount"
                 className="input text-xl font-semibold num"
                 type="number"
                 step="0.01"

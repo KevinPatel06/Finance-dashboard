@@ -8,6 +8,66 @@ interface Migration {
 
 const migrations: Migration[] = [
   {
+    version: 10,
+    name: 'registered_accounts',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS registered_accounts (
+          id                INTEGER PRIMARY KEY AUTOINCREMENT,
+          kind              TEXT NOT NULL CHECK (kind IN ('rrsp','tfsa','fhsa')),
+          label             TEXT NOT NULL,
+          contribution_room REAL NOT NULL DEFAULT 0 CHECK (contribution_room >= 0),
+          notes             TEXT,
+          archived          INTEGER NOT NULL DEFAULT 0,
+          created_at        TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS registered_contributions (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          account_id  INTEGER NOT NULL REFERENCES registered_accounts(id) ON DELETE CASCADE,
+          amount      REAL NOT NULL CHECK (amount >= 0),
+          date        TEXT NOT NULL,
+          note        TEXT,
+          created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_reg_contrib_account ON registered_contributions(account_id);
+      `);
+    },
+  },
+  {
+    version: 9,
+    name: 'recurring_expenses',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS recurring_expenses (
+          id             INTEGER PRIMARY KEY AUTOINCREMENT,
+          description    TEXT NOT NULL,
+          amount         REAL NOT NULL CHECK (amount >= 0),
+          category_id    INTEGER REFERENCES expense_categories(id) ON DELETE SET NULL,
+          debt_id        INTEGER REFERENCES debts(id) ON DELETE SET NULL,
+          frequency      TEXT NOT NULL CHECK (frequency IN ('weekly','biweekly','monthly','yearly')),
+          anchor_date    TEXT NOT NULL,
+          last_generated TEXT,
+          archived       INTEGER NOT NULL DEFAULT 0,
+          created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+    },
+  },
+  {
+    version: 8,
+    name: 'expense_budgets',
+    up: (db) => {
+      // Optional monthly spending cap per expense category.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS expense_budgets (
+          category_id   INTEGER PRIMARY KEY REFERENCES expense_categories(id) ON DELETE CASCADE,
+          monthly_limit REAL NOT NULL CHECK (monthly_limit >= 0)
+        );
+      `);
+    },
+  },
+  {
     version: 7,
     name: 'debt_compounding',
     up: (db) => {
@@ -242,4 +302,8 @@ export function runMigrations(db: Database.Database) {
   ensureSetting.run('next_paycheck_date', '');
   ensureSetting.run('accent_color', 'emerald');
   ensureSetting.run('user_name', 'Kevin');
+  ensureSetting.run('notify_enabled', 'true');
+  ensureSetting.run('notify_bill_lead_days', '3');
+  ensureSetting.run('notify_paycheck', 'true');
+  ensureSetting.run('notify_budget', 'true');
 }

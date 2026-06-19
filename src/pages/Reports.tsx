@@ -18,7 +18,8 @@ import { format, parseISO, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { fmtMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import EmptyState from '@/components/ui/EmptyState';
-import { BarChart3, ShoppingCart, TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { BarChart3, ShoppingCart, TrendingDown, TrendingUp, Minus, Download } from 'lucide-react';
+import { exportCsv } from '@/lib/csv';
 import type { ExpenseReport } from '@shared/types';
 
 type Tab = 'overview' | 'expenses';
@@ -388,6 +389,19 @@ function ExpenseReports() {
       total: r.total,
     })) ?? [];
 
+  const exportReport = async () => {
+    if (!report) return;
+    const rows = report.byCategory
+      .filter((c) => c.total > 0)
+      .map((c) => [c.name, c.total.toFixed(2)]);
+    rows.push(['Total', report.totalSpent.toFixed(2)]);
+    await exportCsv(
+      `expense-report-${range}-${format(new Date(), 'yyyy-MM-dd')}.csv`,
+      ['Category', 'Spent (CAD)'],
+      rows
+    );
+  };
+
   return (
     <div className="space-y-4">
       {/* Range selector */}
@@ -396,21 +410,32 @@ function ExpenseReports() {
           Showing expenses for{' '}
           <span className="text-content font-medium">{RANGE_LABELS[range]}</span>
         </div>
-        <div className="inline-flex rounded-lg border border-border bg-surface-3 p-1">
-          {(Object.keys(RANGE_LABELS) as Range[]).map((r) => (
+        <div className="flex items-center gap-2">
+          {hasData && (
             <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition',
-                range === r
-                  ? 'bg-surface-2 text-content shadow-soft'
-                  : 'text-content-muted hover:text-content'
-              )}
+              onClick={exportReport}
+              className="btn-outline"
+              title="Export this breakdown to CSV"
             >
-              {RANGE_LABELS[r]}
+              <Download size={16} /> Export CSV
             </button>
-          ))}
+          )}
+          <div className="inline-flex rounded-lg border border-border bg-surface-3 p-1">
+            {(Object.keys(RANGE_LABELS) as Range[]).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition',
+                  range === r
+                    ? 'bg-surface-2 text-content shadow-soft'
+                    : 'text-content-muted hover:text-content'
+                )}
+              >
+                {RANGE_LABELS[r]}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

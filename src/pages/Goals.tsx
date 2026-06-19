@@ -361,6 +361,7 @@ function GoalEditor({
   const [target, setTarget] = useState('');
   const [date, setDate] = useState('');
   const [color, setColor] = useState(PALETTE[0]);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (goal) {
@@ -374,10 +375,27 @@ function GoalEditor({
       setDate('');
       setColor(PALETTE[0]);
     }
+    setTouched({});
   }, [goal, open]);
 
+  const targetNum = Number(target);
+  const errors = {
+    name: !name.trim() ? 'Name is required.' : '',
+    target:
+      target === ''
+        ? 'Target amount is required.'
+        : !Number.isFinite(targetNum) || targetNum <= 0
+          ? 'Enter an amount greater than 0.'
+          : '',
+  };
+  const valid = !errors.name && !errors.target;
+  const markTouched = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
+
   const save = async () => {
-    if (!name || !target) return;
+    if (!valid) {
+      setTouched({ name: true, target: true });
+      return;
+    }
     const payload = {
       name,
       target_amount: Number(target),
@@ -398,27 +416,37 @@ function GoalEditor({
     >
       <div className="px-6 py-5 space-y-4">
         <div>
-          <label className="label">Name</label>
+          <label className="label" htmlFor="goal-name">
+            Name
+          </label>
           <input
-            className="input"
+            id="goal-name"
+            className={`input ${touched.name && errors.name ? 'input-error' : ''}`}
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onBlur={() => markTouched('name')}
             placeholder="Emergency fund, Vacation, New car…"
             autoFocus
           />
+          {touched.name && errors.name && <p className="field-error">{errors.name}</p>}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="label">Target amount</label>
+            <label className="label" htmlFor="goal-target">
+              Target amount
+            </label>
             <input
-              className="input"
+              id="goal-target"
+              className={`input ${touched.target && errors.target ? 'input-error' : ''}`}
               type="number"
               step="0.01"
               min="0"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
+              onBlur={() => markTouched('target')}
               placeholder="5000"
             />
+            {touched.target && errors.target && <p className="field-error">{errors.target}</p>}
           </div>
           <div>
             <label className="label">Target date (optional)</label>
@@ -451,7 +479,7 @@ function GoalEditor({
         <button className="btn-ghost" onClick={onClose}>
           Cancel
         </button>
-        <button className="btn-primary" onClick={save}>
+        <button className="btn-primary" onClick={save} disabled={!valid}>
           {goal ? 'Save changes' : 'Add goal'}
         </button>
       </div>

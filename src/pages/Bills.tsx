@@ -317,6 +317,7 @@ function BillEditor({
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [autopay, setAutopay] = useState(false);
   const [notes, setNotes] = useState('');
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (bill) {
@@ -338,10 +339,32 @@ function BillEditor({
       setAutopay(false);
       setNotes('');
     }
+    setTouched({});
   }, [bill, open]);
 
+  const amountNum = Number(amount);
+  const customNum = Number(customDays);
+  const errors = {
+    name: !name.trim() ? 'Name is required.' : '',
+    amount:
+      amount === ''
+        ? 'Amount is required.'
+        : !Number.isFinite(amountNum) || amountNum <= 0
+          ? 'Enter an amount greater than 0.'
+          : '',
+    customDays:
+      frequency === 'custom_days' && (!Number.isInteger(customNum) || customNum < 1)
+        ? 'Must be at least 1 day.'
+        : '',
+  };
+  const valid = !errors.name && !errors.amount && !errors.customDays;
+  const markTouched = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
+
   const save = async () => {
-    if (!name || !amount) return;
+    if (!valid) {
+      setTouched({ name: true, amount: true, customDays: true });
+      return;
+    }
     const payload = {
       name,
       amount: Number(amount),
@@ -367,26 +390,36 @@ function BillEditor({
     >
       <div className="px-6 py-5 grid grid-cols-2 gap-4">
         <div className="col-span-2">
-          <label className="label">Name</label>
+          <label className="label" htmlFor="bill-name">
+            Name
+          </label>
           <input
-            className="input"
+            id="bill-name"
+            className={`input ${touched.name && errors.name ? 'input-error' : ''}`}
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onBlur={() => markTouched('name')}
             placeholder="Netflix, Rent, Electric…"
             autoFocus
           />
+          {touched.name && errors.name && <p className="field-error">{errors.name}</p>}
         </div>
         <div>
-          <label className="label">Amount (CAD)</label>
+          <label className="label" htmlFor="bill-amount">
+            Amount (CAD)
+          </label>
           <input
-            className="input"
+            id="bill-amount"
+            className={`input ${touched.amount && errors.amount ? 'input-error' : ''}`}
             type="number"
             step="0.01"
             min="0"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            onBlur={() => markTouched('amount')}
             placeholder="0.00"
           />
+          {touched.amount && errors.amount && <p className="field-error">{errors.amount}</p>}
         </div>
         <div>
           <label className="label">Frequency</label>
@@ -406,12 +439,16 @@ function BillEditor({
           <div>
             <label className="label">Every N days</label>
             <input
-              className="input"
+              className={`input ${touched.customDays && errors.customDays ? 'input-error' : ''}`}
               type="number"
               min="1"
               value={customDays}
               onChange={(e) => setCustomDays(e.target.value)}
+              onBlur={() => markTouched('customDays')}
             />
+            {touched.customDays && errors.customDays && (
+              <p className="field-error">{errors.customDays}</p>
+            )}
           </div>
         )}
         <div>
@@ -462,7 +499,7 @@ function BillEditor({
         <button className="btn-ghost" onClick={onClose}>
           Cancel
         </button>
-        <button className="btn-primary" onClick={save}>
+        <button className="btn-primary" onClick={save} disabled={!valid}>
           {bill ? 'Save changes' : 'Add bill'}
         </button>
       </div>

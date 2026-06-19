@@ -112,6 +112,11 @@ export interface AppSettings {
   next_paycheck_date: string | null; // ISO YYYY-MM-DD
   accent_color: AccentColor;
   user_name: string;
+  // Desktop notification preferences (Phase 2 reminders).
+  notify_enabled: boolean;
+  notify_bill_lead_days: number; // warn this many days before a bill is due
+  notify_paycheck: boolean;
+  notify_budget: boolean;
 }
 
 export interface BillToPay {
@@ -203,6 +208,14 @@ export interface ExpenseCategory {
   color: string;
 }
 
+export interface BudgetStatus {
+  category_id: number;
+  name: string;
+  color: string;
+  monthly_limit: number;
+  spent: number; // current calendar month
+}
+
 export interface Expense {
   id: number;
   description: string;
@@ -221,6 +234,69 @@ export interface ExpenseInput {
   category_id: number | null;
   note?: string | null;
   debt_id?: number | null;
+}
+
+export type RecurringFrequency = 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+
+export interface RecurringExpense {
+  id: number;
+  description: string;
+  amount: number;
+  category_id: number | null;
+  debt_id: number | null;
+  frequency: RecurringFrequency;
+  anchor_date: string; // ISO YYYY-MM-DD — first occurrence
+  last_generated: string | null;
+  archived: number;
+  created_at: string;
+}
+
+export interface RecurringExpenseInput {
+  description: string;
+  amount: number;
+  category_id: number | null;
+  debt_id?: number | null;
+  frequency: RecurringFrequency;
+  anchor_date: string;
+}
+
+export type RegisteredKind = 'rrsp' | 'tfsa' | 'fhsa';
+
+export interface RegisteredContribution {
+  id: number;
+  account_id: number;
+  amount: number;
+  date: string; // ISO YYYY-MM-DD
+  note: string | null;
+  created_at: string;
+}
+
+export interface RegisteredAccount {
+  id: number;
+  kind: RegisteredKind;
+  label: string;
+  contribution_room: number;
+  notes: string | null;
+  archived: number;
+  created_at: string;
+  // Computed
+  contributed: number;
+  remaining: number;
+  contributions: RegisteredContribution[];
+}
+
+export interface RegisteredAccountInput {
+  kind: RegisteredKind;
+  label: string;
+  contribution_room: number;
+  notes?: string | null;
+}
+
+export interface RegisteredContributionInput {
+  account_id: number;
+  amount: number;
+  date: string;
+  note?: string | null;
 }
 
 export interface ExpenseReport {

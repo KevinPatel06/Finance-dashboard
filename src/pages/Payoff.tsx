@@ -495,6 +495,7 @@ function DebtEditor({
   const [interestDay, setInterestDay] = useState<string>('');
   const [compounding, setCompounding] = useState<DebtCompounding>('monthly');
   const [notes, setNotes] = useState('');
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (debt) {
@@ -522,6 +523,7 @@ function DebtEditor({
       setCompounding('semi_annual'); // default type is credit_card → overridden on type pick
       setNotes('');
     }
+    setTouched({});
   }, [debt, open]);
 
   // Picking a type sets the conventional compounding for it (user can override).
@@ -538,10 +540,24 @@ function DebtEditor({
   const showOriginal = type === 'mortgage' || type === 'car_loan' || type === 'loan';
   const showSplit = type === 'mortgage' || type === 'loan';
 
-  const canSave = name.trim().length > 0 && balance !== '' && Number(balance) >= 0;
+  const balanceNum = Number(balance);
+  const errors = {
+    name: !name.trim() ? 'Name is required.' : '',
+    balance:
+      balance === ''
+        ? 'Current balance is required.'
+        : !Number.isFinite(balanceNum) || balanceNum < 0
+          ? 'Enter a balance of 0 or more.'
+          : '',
+  };
+  const canSave = !errors.name && !errors.balance;
+  const markTouched = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
 
   const save = async () => {
-    if (!canSave) return;
+    if (!canSave) {
+      setTouched({ name: true, balance: true });
+      return;
+    }
     const payload: DebtInput = {
       name: name.trim(),
       type,
@@ -598,13 +614,18 @@ function DebtEditor({
 
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
-            <label className="label">Name</label>
+            <label className="label" htmlFor="debt-name">
+              Name
+            </label>
             <input
-              className="input"
+              id="debt-name"
+              className={`input ${touched.name && errors.name ? 'input-error' : ''}`}
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onBlur={() => markTouched('name')}
               placeholder="Visa, House, Honda Civic…"
             />
+            {touched.name && errors.name && <p className="field-error">{errors.name}</p>}
           </div>
           {showOriginal && (
             <div>
@@ -623,16 +644,21 @@ function DebtEditor({
             </div>
           )}
           <div>
-            <label className="label">Current balance</label>
+            <label className="label" htmlFor="debt-balance">
+              Current balance
+            </label>
             <input
-              className="input num"
+              id="debt-balance"
+              className={`input num ${touched.balance && errors.balance ? 'input-error' : ''}`}
               type="number"
               step="0.01"
               min="0"
               value={balance}
               onChange={(e) => setBalance(e.target.value)}
+              onBlur={() => markTouched('balance')}
               placeholder="0.00"
             />
+            {touched.balance && errors.balance && <p className="field-error">{errors.balance}</p>}
           </div>
           <div>
             <label className="label">Interest rate (% / yr)</label>

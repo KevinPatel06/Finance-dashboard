@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { initDatabase, closeDatabase } from './db';
 import { registerIpcHandlers } from './ipc/handlers';
+import { startNotificationScheduler, stopNotificationScheduler } from './notifications';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -88,6 +89,7 @@ app.whenReady().then(() => {
   initDatabase();
   registerIpcHandlers();
   createWindow();
+  startNotificationScheduler();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -100,5 +102,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  stopNotificationScheduler();
   closeDatabase();
 });

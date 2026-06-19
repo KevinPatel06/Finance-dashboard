@@ -7,6 +7,7 @@ const titles: Record<string, string> = {
   '/expenses': 'Expenses',
   '/paychecks': 'Paychecks',
   '/goals': 'Savings Goals',
+  '/registered': 'Registered Accounts',
   '/payoff': 'Payoff',
   '/calendar': 'Calendar',
   '/reports': 'Reports',

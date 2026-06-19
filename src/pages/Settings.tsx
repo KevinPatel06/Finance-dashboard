@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, Upload, Sun, Moon, CalendarClock, Check, User } from 'lucide-react';
+import { Download, Upload, Sun, Moon, CalendarClock, Check, User, Bell } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { ACCENT_LABELS, ACCENT_SWATCH } from '@/lib/accents';
 import { useConfirm, useToast } from '@/lib/ui';
@@ -38,6 +38,11 @@ export default function Settings() {
     const s = (await window.api.settings.get()) as AppSettings;
     setSettings(s);
     toast.success('Pay schedule updated.');
+  };
+
+  const updateNotify = async (patch: Partial<AppSettings>) => {
+    const s = (await window.api.settings.update(patch)) as AppSettings;
+    setSettings(s);
   };
 
   const backup = async () => {
@@ -165,6 +170,61 @@ export default function Settings() {
       </div>
 
       <div className="card p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Bell size={17} className="text-content-muted" />
+          <h2 className="font-semibold">Notifications</h2>
+        </div>
+        <p className="text-sm text-content-muted mb-4">
+          Desktop reminders for bills, paychecks, and budgets. Checked once a day when the app is
+          open.
+        </p>
+        <div className="space-y-1">
+          <ToggleRow
+            label="Enable notifications"
+            description="Master switch for all desktop reminders."
+            checked={settings.notify_enabled}
+            onChange={(v) => updateNotify({ notify_enabled: v })}
+          />
+          <div
+            className={
+              settings.notify_enabled ? '' : 'opacity-50 pointer-events-none select-none'
+            }
+          >
+            <div className="flex items-center justify-between py-2.5 border-t border-border">
+              <div>
+                <div className="text-sm font-medium">Remind me about bills</div>
+                <div className="text-xs text-content-muted">
+                  Warn this many days before a bill is due (overdue bills always notify).
+                </div>
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="30"
+                className="input num w-20 py-1.5"
+                value={settings.notify_bill_lead_days}
+                onChange={(e) =>
+                  updateNotify({ notify_bill_lead_days: Math.max(0, Number(e.target.value) || 0) })
+                }
+              />
+            </div>
+            <ToggleRow
+              label="Paycheck reminders"
+              description="A nudge the day before and the day your paycheck arrives."
+              checked={settings.notify_paycheck}
+              onChange={(v) => updateNotify({ notify_paycheck: v })}
+            />
+            <ToggleRow
+              label="Budget alerts"
+              description="Tell me when a category goes over its monthly cap."
+              checked={settings.notify_budget}
+              onChange={(v) => updateNotify({ notify_budget: v })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="card p-5">
         <h2 className="font-semibold mb-1">Data</h2>
         <p className="text-sm text-content-muted mb-4">
           Back up your finance database to a file, or restore from a previous backup. The database
@@ -180,6 +240,43 @@ export default function Settings() {
         </div>
       </div>
     </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between py-2.5 border-t border-border cursor-pointer">
+      <div className="pr-4">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-content-muted">{description}</div>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={`relative w-11 h-6 rounded-full transition shrink-0 ${
+          checked ? 'bg-brand' : 'bg-surface-3 border border-border'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-soft transition-transform ${
+            checked ? 'translate-x-5' : ''
+          }`}
+        />
+      </button>
+    </label>
   );
 }
 

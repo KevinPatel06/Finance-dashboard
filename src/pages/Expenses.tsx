@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, ShoppingCart, Search, CreditCard } from 'lucide-react';
+import { Plus, Pencil, Trash2, ShoppingCart, Search, CreditCard, Download, Repeat } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, parseISO, isWithinInterval } from 'date-fns';
 import Modal from '@/components/ui/Modal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import { fmtMoney, fmtDate } from '@/lib/format';
 import { useConfirm } from '@/lib/ui';
-import type { Debt, Expense, ExpenseCategory } from '@shared/types';
+import { exportCsv } from '@/lib/csv';
+import { cn } from '@/lib/utils';
+import type {
+  BudgetStatus,
+  Debt,
+  Expense,
+  ExpenseCategory,
+  RecurringExpense,
+  RecurringFrequency,
+} from '@shared/types';
 
 const CATEGORY_PALETTE = [
   '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b',
@@ -19,6 +28,7 @@ export default function Expenses() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [manageCats, setManageCats] = useState(false);
+  const [manageRecurring, setManageRecurring] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
 
   // Filters — month defaults to the current month; pick "All months" to widen.
@@ -27,16 +37,19 @@ export default function Expenses() {
   const [filterMonth, setFilterMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
 
   const [creditCards, setCreditCards] = useState<Debt[]>([]);
+  const [budgets, setBudgets] = useState<BudgetStatus[]>([]);
 
   const load = async () => {
-    const [e, c, d] = await Promise.all([
+    const [e, c, d, b] = await Promise.all([
       window.api.expenses.list() as Promise<Expense[]>,
       window.api.expenseCategories.list() as Promise<ExpenseCategory[]>,
       window.api.debts.list() as Promise<Debt[]>,
+      window.api.budgets.list() as Promise<BudgetStatus[]>,
     ]);
     setExpenses(e);
     setCats(c);
     setCreditCards(d.filter((x) => x.type === 'credit_card'));
+    setBudgets(b);
   };
 
   useEffect(() => {
@@ -97,6 +110,24 @@ export default function Expenses() {
     load();
   };
 
+  const exportFiltered = async () => {
+    const rows = filtered
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((e) => [
+        e.date,
+        e.description,
+        catById.get(e.category_id ?? -1)?.name ?? '',
+        e.amount.toFixed(2),
+        e.note ?? '',
+      ]);
+    await exportCsv(
+      `expenses-${format(new Date(), 'yyyy-MM-dd')}.csv`,
+      ['Date', 'Description', 'Category', 'Amount (CAD)', 'Note'],
+      rows
+    );
+  };
+
   const anyFilterActive = search.trim() !== '' || filterCat !== 'all' || filterMonth !== 'all';
 
   return (
@@ -120,6 +151,18 @@ export default function Expenses() {
           </div>
         </div>
         <div className="flex gap-2">
+          {expenses.length > 0 && (
+            <button
+              onClick={exportFiltered}
+              className="btn-outline"
+              title="Export the current list to CSV"
+            >
+              <Download size={16} /> Export CSV
+            </button>
+          )}
+          <button onClick={() => setManageRecurring(true)} className="btn-outline">
+            <Repeat size={16} /> Recurring
+          </button>
           <button onClick={() => setManageCats(true)} className="btn-outline">
             Categories
           </button>
@@ -128,6 +171,45 @@ export default function Expenses() {
           </button>
         </div>
       </div>
+
+      {budgets.length > 0 && (
+        <div className="card p-4">
+          <div className="text-xs uppercase tracking-wide text-content-muted font-medium mb-3">
+            Monthly budgets
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+            {budgets.map((b) => {
+              const pct = b.monthly_limit > 0 ? (b.spent / b.monthly_limit) * 100 : 0;
+              const tone =
+                pct >= 100 ? 'bg-danger' : pct >= 80 ? 'bg-warning' : 'bg-brand';
+              const textTone =
+                pct >= 100 ? 'text-danger' : pct >= 80 ? 'text-warning' : 'text-content-muted';
+              return (
+                <div key={b.category_id}>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: b.color }}
+                      />
+                      {b.name}
+                    </span>
+                    <span className={cn('num text-xs', textTone)}>
+                      {fmtMoney(b.spent)} / {fmtMoney(b.monthly_limit)}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-surface-3 overflow-hidden">
+                    <div
+                      className={cn('h-full rounded-full transition-all', tone)}
+                      style={{ width: `${Math.min(100, pct)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {expenses.length === 0 ? (
         <EmptyState
@@ -319,7 +401,16 @@ export default function Expenses() {
       <ExpenseCategoryManager
         open={manageCats}
         categories={cats}
+        budgets={budgets}
         onClose={() => setManageCats(false)}
+        onChanged={load}
+      />
+
+      <RecurringManager
+        open={manageRecurring}
+        categories={cats}
+        creditCards={creditCards}
+        onClose={() => setManageRecurring(false)}
         onChanged={load}
       />
 
@@ -366,6 +457,7 @@ function ExpenseEditor({
   const [note, setNote] = useState('');
   const [onCard, setOnCard] = useState(false);
   const [cardId, setCardId] = useState<number | ''>('');
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (expense) {
@@ -385,10 +477,27 @@ function ExpenseEditor({
       setOnCard(false);
       setCardId(creditCards[0]?.id ?? '');
     }
+    setTouched({});
   }, [expense, open, creditCards]);
 
+  const amountNum = Number(amount);
+  const errors = {
+    description: !description.trim() ? 'Description is required.' : '',
+    amount:
+      amount === ''
+        ? 'Amount is required.'
+        : !Number.isFinite(amountNum) || amountNum <= 0
+          ? 'Enter an amount greater than 0.'
+          : '',
+  };
+  const canSave = !errors.description && !errors.amount;
+  const markTouched = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
+
   const save = async () => {
-    if (!description.trim() || !amount) return;
+    if (!canSave) {
+      setTouched({ description: true, amount: true });
+      return;
+    }
     const payload = {
       description: description.trim(),
       amount: Number(amount),
@@ -402,8 +511,6 @@ function ExpenseEditor({
     onSaved();
   };
 
-  const canSave = description.trim().length > 0 && Number(amount) >= 0 && amount !== '';
-
   return (
     <Modal
       open={open}
@@ -414,26 +521,38 @@ function ExpenseEditor({
     >
       <div className="px-6 py-5 grid grid-cols-2 gap-4">
         <div className="col-span-2">
-          <label className="label">Description</label>
+          <label className="label" htmlFor="expense-desc">
+            Description
+          </label>
           <input
-            className="input"
+            id="expense-desc"
+            className={`input ${touched.description && errors.description ? 'input-error' : ''}`}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            onBlur={() => markTouched('description')}
             placeholder="Coffee, groceries, gas fill-up…"
             autoFocus
           />
+          {touched.description && errors.description && (
+            <p className="field-error">{errors.description}</p>
+          )}
         </div>
         <div>
-          <label className="label">Amount (CAD)</label>
+          <label className="label" htmlFor="expense-amount">
+            Amount (CAD)
+          </label>
           <input
-            className="input num"
+            id="expense-amount"
+            className={`input num ${touched.amount && errors.amount ? 'input-error' : ''}`}
             type="number"
             step="0.01"
             min="0"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            onBlur={() => markTouched('amount')}
             placeholder="0.00"
           />
+          {touched.amount && errors.amount && <p className="field-error">{errors.amount}</p>}
         </div>
         <div>
           <label className="label">Date</label>
@@ -517,17 +636,35 @@ function ExpenseEditor({
 function ExpenseCategoryManager({
   open,
   categories,
+  budgets,
   onClose,
   onChanged,
 }: {
   open: boolean;
   categories: ExpenseCategory[];
+  budgets: BudgetStatus[];
   onClose: () => void;
   onChanged: () => void;
 }) {
   const [name, setName] = useState('');
   const [color, setColor] = useState(CATEGORY_PALETTE[0]);
+  const [limits, setLimits] = useState<Record<number, string>>({});
   const confirm = useConfirm();
+
+  // Seed the per-category cap inputs from saved budgets whenever they change.
+  useEffect(() => {
+    const seed: Record<number, string> = {};
+    for (const b of budgets) seed[b.category_id] = String(b.monthly_limit);
+    setLimits(seed);
+  }, [budgets, open]);
+
+  const saveLimit = async (categoryId: number) => {
+    const raw = limits[categoryId] ?? '';
+    const value = raw === '' ? 0 : Number(raw);
+    if (!Number.isFinite(value) || value < 0) return;
+    await window.api.budgets.set(categoryId, value);
+    onChanged();
+  };
 
   const canAdd = name.trim().length > 0;
 
@@ -594,8 +731,13 @@ function ExpenseCategoryManager({
         </div>
 
         <div className="pt-2 border-t border-border">
-          <div className="text-xs font-medium text-content-muted uppercase tracking-wide mb-2">
-            Existing
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs font-medium text-content-muted uppercase tracking-wide">
+              Existing
+            </div>
+            <div className="text-xs font-medium text-content-muted uppercase tracking-wide">
+              Monthly budget
+            </div>
           </div>
           {categories.length === 0 ? (
             <div className="text-sm text-content-muted py-4 text-center">
@@ -606,11 +748,253 @@ function ExpenseCategoryManager({
               {categories.map((c) => (
                 <li key={c.id} className="py-2 flex items-center gap-3">
                   <span className="w-3 h-3 rounded-full" style={{ backgroundColor: c.color }} />
-                  <span className="flex-1">{c.name}</span>
+                  <span className="flex-1 min-w-0 truncate">{c.name}</span>
+                  <div className="relative w-28">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-content-subtle text-sm">
+                      $
+                    </span>
+                    <input
+                      className="input num pl-6 py-1.5 text-sm"
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="—"
+                      value={limits[c.id] ?? ''}
+                      onChange={(e) =>
+                        setLimits((l) => ({ ...l, [c.id]: e.target.value }))
+                      }
+                      onBlur={() => saveLimit(c.id)}
+                      title="Set a monthly spending cap (blank = no budget)"
+                    />
+                  </div>
                   <button
                     onClick={() => remove(c)}
                     className="btn-ghost p-1.5 hover:text-danger"
                     aria-label="Delete"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+      <div className="px-6 py-4 border-t border-border flex justify-end bg-surface-3/40">
+        <button className="btn-ghost" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+const RECURRING_FREQ: { value: RecurringFrequency; label: string }[] = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Bi-weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+];
+
+function RecurringManager({
+  open,
+  categories,
+  creditCards,
+  onClose,
+  onChanged,
+}: {
+  open: boolean;
+  categories: ExpenseCategory[];
+  creditCards: Debt[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [items, setItems] = useState<RecurringExpense[]>([]);
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
+  const [anchor, setAnchor] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [categoryId, setCategoryId] = useState<number | ''>('');
+  const [cardId, setCardId] = useState<number | ''>('');
+  const confirm = useConfirm();
+
+  const reload = async () => {
+    const r = (await window.api.recurringExpenses.list()) as RecurringExpense[];
+    setItems(r);
+  };
+
+  useEffect(() => {
+    if (open) {
+      reload();
+      setDescription('');
+      setAmount('');
+      setFrequency('monthly');
+      setAnchor(format(new Date(), 'yyyy-MM-dd'));
+      setCategoryId('');
+      setCardId('');
+    }
+  }, [open]);
+
+  const amountNum = Number(amount);
+  const canAdd = description.trim().length > 0 && amount !== '' && amountNum > 0;
+
+  const add = async () => {
+    if (!canAdd) return;
+    await window.api.recurringExpenses.create({
+      description: description.trim(),
+      amount: amountNum,
+      category_id: categoryId === '' ? null : Number(categoryId),
+      debt_id: cardId === '' ? null : Number(cardId),
+      frequency,
+      anchor_date: anchor,
+    });
+    setDescription('');
+    setAmount('');
+    await reload();
+    onChanged();
+  };
+
+  const remove = async (item: RecurringExpense) => {
+    const ok = await confirm({
+      title: 'Stop this recurring expense?',
+      description: (
+        <>
+          New occurrences of{' '}
+          <span className="text-content font-medium">{item.description}</span> will stop. Expenses
+          already logged stay in your ledger.
+        </>
+      ),
+      confirmLabel: 'Stop',
+      destructive: true,
+    });
+    if (!ok) return;
+    await window.api.recurringExpenses.remove(item.id);
+    await reload();
+    onChanged();
+  };
+
+  const catName = (id: number | null) =>
+    id == null ? null : categories.find((c) => c.id === id)?.name ?? null;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Recurring expenses"
+      description="Templates that auto-log an expense on a schedule — rent, subscriptions, memberships. Occurrences are created up to today whenever you open Expenses."
+      size="lg"
+    >
+      <div className="px-6 py-5 space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="label">Description</label>
+            <input
+              className="input"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Rent, Spotify, Gym…"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="label">Amount (CAD)</label>
+            <input
+              className="input num"
+              type="number"
+              step="0.01"
+              min="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+          <div>
+            <label className="label">Frequency</label>
+            <select
+              className="input"
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value as RecurringFrequency)}
+            >
+              {RECURRING_FREQ.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">First occurrence</label>
+            <input
+              className="input"
+              type="date"
+              value={anchor}
+              onChange={(e) => setAnchor(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label">Category</label>
+            <select
+              className="input"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
+            >
+              <option value="">— None —</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {creditCards.length > 0 && (
+            <div className="col-span-2">
+              <label className="label">Charge to credit card (optional)</label>
+              <select
+                className="input"
+                value={cardId}
+                onChange={(e) => setCardId(e.target.value === '' ? '' : Number(e.target.value))}
+              >
+                <option value="">— Not on a card —</option>
+                {creditCards.map((cc) => (
+                  <option key={cc.id} value={cc.id}>
+                    {cc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="col-span-2">
+            <button className="btn-primary w-full" onClick={add} disabled={!canAdd}>
+              <Plus size={16} /> Add recurring expense
+            </button>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-border">
+          <div className="text-xs font-medium text-content-muted uppercase tracking-wide mb-2">
+            Active
+          </div>
+          {items.length === 0 ? (
+            <div className="text-sm text-content-muted py-4 text-center">
+              No recurring expenses yet.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {items.map((it) => (
+                <li key={it.id} className="py-2.5 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{it.description}</div>
+                    <div className="text-xs text-content-muted">
+                      {fmtMoney(it.amount)} ·{' '}
+                      {RECURRING_FREQ.find((f) => f.value === it.frequency)?.label}
+                      {catName(it.category_id) ? ` · ${catName(it.category_id)}` : ''}
+                      {it.debt_id != null ? ' · on card' : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => remove(it)}
+                    className="btn-ghost p-1.5 hover:text-danger"
+                    aria-label="Stop recurring expense"
                   >
                     <Trash2 size={15} />
                   </button>

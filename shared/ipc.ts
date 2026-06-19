@@ -57,6 +57,24 @@ export const IPC = {
   UPDATE_EXPENSE: 'expenses:update',
   DELETE_EXPENSE: 'expenses:delete',
 
+  // Recurring expenses
+  LIST_RECURRING: 'recurring:list',
+  CREATE_RECURRING: 'recurring:create',
+  UPDATE_RECURRING: 'recurring:update',
+  DELETE_RECURRING: 'recurring:delete',
+
+  // Registered accounts (RRSP / TFSA / FHSA)
+  LIST_REGISTERED: 'registered:list',
+  CREATE_REGISTERED: 'registered:create',
+  UPDATE_REGISTERED: 'registered:update',
+  DELETE_REGISTERED: 'registered:delete',
+  ADD_REGISTERED_CONTRIBUTION: 'registered:addContribution',
+  DELETE_REGISTERED_CONTRIBUTION: 'registered:deleteContribution',
+
+  // Budgets
+  LIST_BUDGETS: 'budgets:list',
+  SET_BUDGET: 'budgets:set',
+
   // Reports
   REPORT_CATEGORIES: 'reports:categories',
   REPORT_MONTHLY: 'reports:monthly',
@@ -68,6 +86,9 @@ export const IPC = {
   // DB management
   DB_BACKUP: 'db:backup',
   DB_RESTORE: 'db:restore',
+
+  // File export
+  EXPORT_CSV: 'files:exportCsv',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

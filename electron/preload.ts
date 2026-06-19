@@ -59,6 +59,25 @@ const api = {
     update: (id: number, input: unknown) => invoke(IPC.UPDATE_EXPENSE, id, input),
     remove: (id: number) => invoke(IPC.DELETE_EXPENSE, id),
   },
+  recurringExpenses: {
+    list: () => invoke(IPC.LIST_RECURRING),
+    create: (input: unknown) => invoke(IPC.CREATE_RECURRING, input),
+    update: (id: number, input: unknown) => invoke(IPC.UPDATE_RECURRING, id, input),
+    remove: (id: number) => invoke(IPC.DELETE_RECURRING, id),
+  },
+  registered: {
+    list: () => invoke(IPC.LIST_REGISTERED),
+    create: (input: unknown) => invoke(IPC.CREATE_REGISTERED, input),
+    update: (id: number, input: unknown) => invoke(IPC.UPDATE_REGISTERED, id, input),
+    remove: (id: number) => invoke(IPC.DELETE_REGISTERED, id),
+    addContribution: (input: unknown) => invoke(IPC.ADD_REGISTERED_CONTRIBUTION, input),
+    removeContribution: (id: number) => invoke(IPC.DELETE_REGISTERED_CONTRIBUTION, id),
+  },
+  budgets: {
+    list: () => invoke(IPC.LIST_BUDGETS),
+    set: (categoryId: number, monthlyLimit: number) =>
+      invoke(IPC.SET_BUDGET, categoryId, monthlyLimit),
+  },
   dashboard: {
     get: () => invoke(IPC.DASHBOARD),
   },
@@ -76,6 +95,10 @@ const api = {
   db: {
     backup: () => invoke(IPC.DB_BACKUP),
     restore: () => invoke(IPC.DB_RESTORE),
+  },
+  files: {
+    exportCsv: (defaultName: string, content: string) =>
+      invoke<{ ok: boolean; path?: string }>(IPC.EXPORT_CSV, defaultName, content),
   },
 };
 

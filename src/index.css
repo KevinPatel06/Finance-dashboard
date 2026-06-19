@@ -116,6 +116,14 @@ body {
     @apply text-xs font-medium text-content-muted mb-1.5 block uppercase tracking-wide;
   }
 
+  /* Invalid form field + its inline message. */
+  .input-error {
+    @apply border-danger focus:ring-danger/40 focus:border-danger;
+  }
+  .field-error {
+    @apply text-xs text-danger mt-1;
+  }
+
   .card {
     @apply bg-surface-2 border border-border rounded-2xl shadow-card;
   }

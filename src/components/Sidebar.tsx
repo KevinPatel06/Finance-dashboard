@@ -8,6 +8,7 @@ import {
   BarChart3,
   ShoppingCart,
   TrendingDown,
+  Landmark,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -19,6 +20,7 @@ const nav = [
   { to: '/expenses', label: 'Expenses', icon: ShoppingCart },
   { to: '/bills', label: 'Bills', icon: Receipt },
   { to: '/goals', label: 'Goals', icon: Target },
+  { to: '/registered', label: 'Registered', icon: Landmark },
   { to: '/payoff', label: 'Payoff', icon: TrendingDown },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
