@@ -4,6 +4,7 @@ import electron from 'vite-plugin-electron/simple';
 import path from 'node:path';
 
 export default defineConfig({
+  define: { __PLATFORM__: JSON.stringify('electron') },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

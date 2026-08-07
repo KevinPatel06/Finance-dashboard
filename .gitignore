@@ -1,9 +1,17 @@
 node_modules/
 dist/
 dist-electron/
+dist-ios/
 release/
 *.local
 .DS_Store
 *.log
 .vscode/
 .idea/
+
+# iOS / Capacitor build output. The generated Xcode project itself IS committed
+# (CI needs it); these are per-machine build artifacts.
+ios/App/Pods/
+ios/App/App/public/
+ios/App/Podfile.lock
+ios/DerivedData/

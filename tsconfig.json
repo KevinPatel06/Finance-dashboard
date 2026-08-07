@@ -25,5 +25,14 @@
     },
     "types": ["vite/client"]
   },
-  "include": ["src", "shared", "electron", "vite.config.ts"]
+  "include": [
+    "src",
+    "shared",
+    "electron",
+    "test",
+    "vite.config.ts",
+    "vite.config.ios.ts",
+    "vitest.config.ts",
+    "capacitor.config.ts"
+  ]
 }
