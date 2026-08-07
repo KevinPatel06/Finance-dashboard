@@ -1,26 +1,43 @@
 # Finance Dashboard — Project Brief
 
-Personal-finance **desktop app** for tracking biweekly paychecks, bills, savings goals,
-expenses, and debt payoff. Built for Kevin (Canada), but shareable — the displayed user
-name is a runtime setting so anyone can rebrand it to their own.
+Personal-finance app for tracking biweekly paychecks, bills, savings goals, expenses, and
+debt payoff. Built for Kevin (Canada), but shareable — the displayed user name is a runtime
+setting so anyone can rebrand it to their own.
+
+Ships as **two apps from one codebase**: a Windows **Electron** desktop app and an **iOS**
+app (Capacitor, sideloaded via LiveContainer). They share `src/` verbatim and all business
+logic through `core/`. A change is written once.
 
 ## Stack
-- **Electron** (desktop shell) + **React 18** + **TypeScript** + **Vite 6** + **TailwindCSS 3**
-- **better-sqlite3** (local SQLite DB) in the main process
+- **React 18** + **TypeScript** + **Vite 6** + **TailwindCSS 3** — shared by both targets
+- **Electron** (desktop shell) + **better-sqlite3** (main process)
+- **Capacitor 6** (iOS shell) + **sql.js** (WASM SQLite, in the WebView)
 - **Recharts** (charts), **date-fns** (dates), **lucide-react** (icons), **canvas-confetti**
 - **react-router-dom** (HashRouter), **zustand** available but UI mostly uses local state
-- Packaged with **electron-builder** → Windows NSIS installer
+- **Vitest** for tests; **node:sqlite** as the Node-side test driver
+- Packaged with **electron-builder** → Windows NSIS installer; GitHub Actions → unsigned `.ipa`
 
 ## Run / Build
 ```
 npm run dev            # Vite + Electron dev (hot reload)
-npm run build          # tsc -b && vite build && electron-builder  → release/ installer
+npm test               # Vitest — repo contract on 2 drivers + apiMap + migration tests
+npm run build:web      # tsc -b && vite build          (shared step)
+npm run build          # build:web && electron-builder → release/ installer
 npm run build:unpacked # same but --dir (skips installer; avoids Windows symlink issue)
+npm run build:ios      # vite build (iOS config) && cap sync ios
 ```
-- Requires **Node 18+** (dev machine runs Node 24). Node 12 will NOT work.
+- Requires **Node 18+** for the app; **Node 22.5+** for the test suite (`node:sqlite`).
+  Dev machine runs Node 24.
 - Type-check directly with: `node node_modules/typescript/bin/tsc --noEmit`
   Build directly with: `node node_modules/vite/bin/vite.js build`
-  (the `tsc`/`vite` shims sometimes fail on this Windows shell — call via `node` directly).
+  Test directly with: `node node_modules/vitest/vitest.mjs run`
+  (the `.bin` shims sometimes fail on this Windows shell — call via `node` directly. `npm test`
+  itself can fail here because npm spawns cmd.exe without `node` on PATH; CI is unaffected.)
+- **iOS builds happen on GitHub Actions** (`.github/workflows/ios.yml`, `macos-latest`, free
+  for public repos). It runs the test suite on ubuntu first, then archives unsigned and zips a
+  `Payload/` into `FinanceDashboard.ipa`, uploaded as a workflow artifact. No Mac, no Apple
+  Developer account, and no code signing are needed — LiveContainer takes the unsigned ipa.
+  `npx cap add ios` DOES work on Windows; only `pod install` is skipped (CI runs it).
 - **Install gotcha**: better-sqlite3 has no Node 24 prebuild + no VS Build Tools here.
   Install with `npm install --ignore-scripts`, then `npx electron-rebuild -f -w better-sqlite3`
   (pulls Electron's prebuilt binary). If Electron itself won't launch
@@ -30,29 +47,52 @@ npm run build:unpacked # same but --dir (skips installer; avoids Windows symlink
 - Product name "Finance Dashboard"; installer → `release/Finance Dashboard-Setup-<ver>.exe`.
 
 ## Architecture
-- `electron/main.ts` — app entry. Pins userData to `%AppData%\Finance Dashboard` via
-  `app.setPath` (so renames don't orphan the DB); one-time migration copies an old
-  `Kevin's Finance Application` DB if present.
-- `electron/preload.ts` — exposes `window.api.*` (contextBridge). Namespaces:
-  `settings, categories, bills, goals, paychecks, debts, expenseCategories, expenses,
-  recurringExpenses, registered, budgets, dashboard, reports, calendar, db, files`.
-- `electron/notifications.ts` — desktop-reminder scheduler (native `Notification`); started
-  in `main.ts`, checks once a day for overdue/soon bills, paycheck day, over-budget categories.
-- `electron/ipc/handlers.ts` — registers `ipcMain.handle` for every channel.
-- `electron/db/index.ts` — opens SQLite (WAL, FK on), runs migrations.
-- `electron/db/migrations.ts` — versioned migrations, applied ascending, recorded in
-  `_migrations`. Settings seeded each launch (`INSERT OR IGNORE`).
-- `electron/db/repo.ts` — ALL data logic + computed projections.
-- `shared/types.ts` + `shared/ipc.ts` — types & channel-name constants shared by main+renderer.
-  `shared/debtMath.ts` — `periodRate`/`PERIODS_PER_YEAR` (dependency-free so BOTH the main
-  process and renderer import it; renderer's `src/lib/debtMath.ts` re-exports them).
-- `src/` — renderer. `pages/` = one file per screen; `components/` (Layout, Sidebar, TopBar,
-  ThemeToggle, ui/{Modal,ConfirmDialog,EmptyState}); `lib/` (theme, accents, format, utils,
-  debtMath, celebration, csv). `Modal` traps focus + autofocuses first field (`role="dialog"`).
-- IPC pattern: add channel to `shared/ipc.ts` → repo fn → `handlers.ts` → `preload.ts` → use
-  `window.api.x.y()` in a page. Keep this 4-file rhythm.
 
-## Data model (migrations v1–v10)
+**`core/` — platform-neutral. No Electron, no Capacitor, no DOM.**
+- `core/db.ts` — the ENTIRE SQLite surface the data layer uses: `prepare(sql)` →
+  `.all/.get/.run`, `exec`, `transaction`. Plus `setDb()`/`getDb()`. better-sqlite3 satisfies
+  this structurally with no runtime adapter; sql.js and node:sqlite get ~100-line shims.
+  Keeping this surface tiny is what makes the iOS port cheap — don't widen it casually.
+- `core/repo.ts` — ALL data logic + computed projections. Identical on both platforms.
+- `core/migrations.ts` — versioned migrations, applied ascending, recorded in `_migrations`.
+  Settings seeded each launch (`INSERT OR IGNORE`).
+- `core/apiMap.ts` — **the single enumeration of repo-backed IPC channels.** Electron loops
+  over it to register `ipcMain.handle`; iOS loops over it to build `window.api` in-process.
+  Each entry carries a `mutates` flag that drives the iOS flush-to-disk.
+- `core/notifications.ts` — `buildNotes()`: decides WHAT to remind about. Delivery is
+  per-platform.
+
+**`shared/`** — `types.ts`, `ipc.ts` (channel-name constants), `debtMath.ts`
+(`periodRate`/`PERIODS_PER_YEAR`, dependency-free; `src/lib/debtMath.ts` re-exports them).
+
+**`electron/`** — desktop shell.
+- `main.ts` — app entry. Pins userData to `%AppData%\Finance Dashboard` via `app.setPath`
+  (so renames don't orphan the DB); one-time migration copies an old
+  `Kevin's Finance Application` DB if present.
+- `preload.ts` — exposes `window.api.*` (contextBridge). Namespaces: `settings, categories,
+  bills, goals, paychecks, debts, expenseCategories, expenses, recurringExpenses, registered,
+  budgets, dashboard, reports, calendar, db, files`.
+- `ipc/handlers.ts` — loops over `core/apiMap.ts`, then three hand-written platform handlers
+  (db backup/restore, CSV export).
+- `db/index.ts` — opens SQLite (WAL, FK on), calls `setDb()`, runs migrations. Keeps the
+  concrete handle as `getRawDb()` for `db.backup()`, which is outside the `DB` interface.
+- `notifications.ts` — desktop delivery (native `Notification`) + the once-a-day scheduler.
+
+**`src/`** — renderer, SHARED BY BOTH TARGETS. `pages/` = one file per screen; `components/`
+(Layout, Sidebar, BottomNav, TopBar, ThemeToggle, ui/{Modal,ConfirmDialog,EmptyState});
+`lib/` (theme, accents, format, utils, debtMath, celebration, csv). `Modal` traps focus +
+autofocuses first field (`role="dialog"`), and docks as a bottom sheet below `md`.
+- `src/platform/index.ts` — `bootstrapPlatform()`. No-op on Electron (preload already
+  installed `window.api`); on iOS it opens the DB and builds the API before React renders.
+- `src/platform/ios/` — `db.ts` (sql.js adapter), `storage.ts` (open/flush/rotate backup),
+  `api.ts` (in-process `window.api`), `notify.ts`, `files.ts`.
+
+**IPC pattern (unchanged — still 4 files):** add channel to `shared/ipc.ts` → repo fn in
+`core/repo.ts` → entry in `core/apiMap.ts` → namespace method in `electron/preload.ts` AND
+`src/platform/ios/api.ts` → use `window.api.x.y()` in a page. `test/apiMap.test.ts` fails if
+a channel has no apiMap entry, so iOS support can't be silently forgotten.
+
+## Data model (migrations v1–v11)
 - **v1**: `settings(key,value)`, `categories`, `bills`, `savings_goals`, `paychecks`,
   `paycheck_allocations`.
 - **v2**: `savings_goals.archived_at`.
@@ -65,6 +105,14 @@ npm run build:unpacked # same but --dir (skips installer; avoids Windows symlink
 - **v8**: `expense_budgets(category_id PK, monthly_limit)` — optional monthly cap per category.
 - **v9**: `recurring_expenses` — templates that auto-generate expenses on a schedule.
 - **v10**: `registered_accounts` + `registered_contributions` (RRSP/TFSA/FHSA room tracking).
+- **v11**: sync groundwork — `uuid` + `updated_at` on all 12 data tables, plus `_deletions`
+  (`table_name,uuid,deleted_at`). **Pure DDL + triggers; changes zero lines of `repo.ts`.**
+  UUIDs come from `AFTER INSERT` triggers (SQLite can't take a non-constant `DEFAULT` in
+  `ALTER TABLE ADD COLUMN`), `updated_at` from `AFTER INSERT`/`AFTER UPDATE`, tombstones from
+  `AFTER DELETE`. Deletes stay HARD — a `deleted_at` column per table would have forced
+  `WHERE deleted_at IS NULL` onto nearly every SELECT. No sync is implemented; this only makes
+  it possible later (integer autoincrement PKs collide across devices, and retrofitting stable
+  IDs across historical rows is the expensive part).
 
 Notification prefs are seeded each launch (`INSERT OR IGNORE`): `notify_enabled`,
 `notify_bill_lead_days`, `notify_paycheck`, `notify_budget`. `last_notified_date` is a
@@ -112,7 +160,7 @@ Key tables:
   praise/reality-check comparison vs prior month).
 - **Settings** — user name (→ sidebar + window title), theme (light/dark), accent color
   (7 options), next-paycheck date, **notifications** (master toggle, bill lead days, paycheck &
-  budget switches), DB backup/restore.
+  budget switches), DB backup/restore (restore is desktop-only).
 - **Forms** — editors validate inline (error under the field once touched) + disable Save until
   valid. Reusable `.input-error`/`.field-error` classes.
 
@@ -133,6 +181,19 @@ Key tables:
   convention `(1+APR/2)^(2/ppy)−1`; monthly = US/everything-else. Mortgages default semi_annual.
   All payoff AND auto-interest math routes through `periodRate`.
 
+## iOS app
+- **Full parity** — all 10 nav destinations, including the Paycheck Wizard. Same `src/`.
+- **Storage**: sql.js holds the DB in memory and flushes `db.export()` to Capacitor Filesystem
+  after every mutating call (per `apiMap`'s `mutates` flag) and on `appStateChange` when iOS
+  backgrounds the app, keeping one rotated `finance.db.bak`. The DB is well under 1MB.
+- **No IPC** — `src/platform/ios/api.ts` builds `window.api` in-process from `core/apiMap.ts`
+  and wraps results in Promises, so pages can't tell the difference.
+- **Restore is desktop-only** (no first-party Capacitor document picker). Settings hides the
+  button on iOS and relabels Backup as "Share database".
+- **Distribution**: unsigned `.ipa` from GitHub Actions → LiveContainer. No App Store review,
+  so no compliance constraints. WKWebView gets JS JIT from the system WebContent process
+  regardless of the host app's entitlements, so it runs at full speed under LiveContainer.
+
 ## Conventions / gotchas
 - **Currency is CAD**, `en-CA` locale (`src/lib/format.ts`). Dates `en-CA`.
 - **Build size**: only `better-sqlite3` is in `package.json` dependencies; everything else
@@ -149,6 +210,28 @@ Key tables:
   payments. Budgets, recurring expenses, and registered accounts are ALSO isolated (they read/
   write only their own tables + the expenses ledger via `createExpense`); nothing else touches
   dashboard/paycheck/bill calc paths. Backup/restore copies the whole `finance.db`, so all
-  sections ride along.
+  sections ride along — and because both platforms share one schema and migration chain, a
+  file exported on Windows restores on iOS and vice versa. That is the current (manual) sync.
+- **Positional `?` binding ONLY** in SQL. No named parameters (`@x`/`:x`), no object-form
+  binding. The sql.js and node:sqlite shims depend on this; introducing named binding breaks
+  the iOS build.
+- **Capacitor plugins go in `devDependencies`** like everything else Vite bundles. The iOS
+  native side gets its copies through CocoaPods, not `node_modules`.
+- **Never use a `?url` import for a platform-specific asset.** Vite emits `?url` assets during
+  transform regardless of whether the importing module is reachable, so
+  `sql-wasm.wasm?url` leaked 660KB of dead WASM into the Electron bundle. The
+  `emit-sql-wasm` plugin in `vite.config.ios.ts` emits it iOS-only instead.
+- **`__PLATFORM__`** (`'electron' | 'ios'`) is a Vite `define` in both configs, declared in
+  `src/global.d.ts`. Because it's a compile-time constant, platform branches are eliminated
+  from the bundle that doesn't need them — that's what keeps sql.js out of the desktop build.
+- **Responsive rule**: the desktop layout is `md` and above and must stay pixel-identical.
+  Phone treatment goes behind `md:hidden` / `hidden md:block`. Sidebar → `BottomNav`
+  (4 tabs + More sheet), tables → card lists, modals → bottom sheets.
+- **Tests**: `test/shared/repoContract.ts` is a driver-agnostic behavioural contract run
+  against BOTH node:sqlite and sql.js. Both must pass identically — that's the iOS parity
+  proof. If a change makes them disagree, fix the adapter, never weaken the contract.
+  better-sqlite3 itself isn't under test because `electron-rebuild` builds it against
+  Electron's ABI (MODULE_VERSION 130), which plain Node (137) can't load; rebuilding it for
+  Node would break the desktop app. It's covered by the same interface plus `npm run dev`.
 - **Kevin's working style**: design-first then iterate; prefers polished UI. Present the result,
   then take change requests.
