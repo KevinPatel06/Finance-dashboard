@@ -1,4 +1,4 @@
-import { getDb } from './index';
+import { getDb } from './db';
 import type {
   AppSettings,
   Bill,
@@ -25,7 +25,7 @@ import type {
   RegisteredContributionInput,
   SavingsGoal,
   SavingsGoalInput,
-} from '../../shared/types';
+} from '../shared/types';
 import {
   addDays,
   addMonths,
@@ -38,7 +38,7 @@ import {
   startOfMonth,
   endOfMonth,
 } from 'date-fns';
-import { periodRate } from '../../shared/debtMath';
+import { periodRate } from '../shared/debtMath';
 
 // ---------- helpers ----------
 const today = () => formatISO(new Date(), { representation: 'date' });

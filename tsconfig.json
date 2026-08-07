@@ -28,6 +28,7 @@
   "include": [
     "src",
     "shared",
+    "core",
     "electron",
     "test",
     "vite.config.ts",

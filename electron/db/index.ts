@@ -2,37 +2,43 @@ import { app } from 'electron';
 import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
-import { runMigrations } from './migrations';
+import { runMigrations } from '../../core/migrations';
+import { setDb, type DB } from '../../core/db';
 
-let db: Database.Database | null = null;
+let raw: Database.Database | null = null;
 
-export function getDb(): Database.Database {
-  if (!db) throw new Error('Database not initialized — call initDatabase() first.');
-  return db;
-}
-
-/** Inject a database directly. Used by tests to supply an in-memory instance. */
-export function setDb(next: Database.Database): void {
-  db = next;
+/**
+ * The concrete better-sqlite3 handle. Only for APIs outside the DB interface
+ * (currently just db.backup()). Everything else goes through core/db.ts.
+ */
+export function getRawDb(): Database.Database {
+  if (!raw) throw new Error('Database not initialized — call initDatabase() first.');
+  return raw;
 }
 
 export function initDatabase(): Database.Database {
-  if (db) return db;
+  if (raw) return raw;
   const userData = app.getPath('userData');
   if (!fs.existsSync(userData)) fs.mkdirSync(userData, { recursive: true });
   const dbPath = path.join(userData, 'finance.db');
 
-  db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  runMigrations(db);
-  return db;
+  raw = new Database(dbPath);
+  raw.pragma('journal_mode = WAL');
+  raw.pragma('foreign_keys = ON');
+
+  // better-sqlite3 satisfies the DB interface structurally; the cast is a
+  // compile-time detail only (its Statement is generic over bind parameters and
+  // transaction() returns Transaction<F> rather than a bare F). No values are
+  // wrapped or converted at runtime.
+  setDb(raw as unknown as DB);
+  runMigrations(raw as unknown as DB);
+  return raw;
 }
 
-export function closeDatabase() {
-  if (db) {
-    db.close();
-    db = null;
+export function closeDatabase(): void {
+  if (raw) {
+    raw.close();
+    raw = null;
   }
 }
 

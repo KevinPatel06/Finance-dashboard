@@ -2,8 +2,8 @@ import { ipcMain, dialog, app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { IPC } from '../../shared/ipc';
-import { getDb, getDbPath } from '../db';
-import * as repo from '../db/repo';
+import { getRawDb, getDbPath } from '../db';
+import * as repo from '../../core/repo';
 
 export function registerIpcHandlers() {
   // ---------- Settings ----------
@@ -110,7 +110,7 @@ export function registerIpcHandlers() {
       filters: [{ name: 'SQLite DB', extensions: ['db'] }],
     });
     if (canceled || !filePath) return { ok: false };
-    const db = getDb();
+    const db = getRawDb();
     await db.backup(filePath);
     return { ok: true, path: filePath };
   });

@@ -1,4 +1,4 @@
-import { runMigrations } from '../../electron/db/migrations';
+import { runMigrations } from '../../core/migrations';
 import { makeNodeSqliteDb, wrapNodeSqlite, type TestDb } from './nodeSqlite';
 
 /** Fresh in-memory database with all migrations applied. */

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Bill } from '../../shared/types';
 import { periodRate } from '../../shared/debtMath';
-import * as repo from '../../electron/db/repo';
+import * as repo from '../../core/repo';
 
 function mkBill(partial: Partial<Bill>): Bill {
   return {

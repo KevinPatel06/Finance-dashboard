@@ -1,5 +1,5 @@
 import { makeTestDb } from './helpers/makeDb';
-import { setDb } from '../electron/db';
+import { setDb } from '../core/db';
 import { runRepoContract } from './shared/repoContract';
 
 // Node-side reference driver. See test/helpers/nodeSqlite.ts for why this is

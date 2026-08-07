@@ -1,9 +1,9 @@
-import type Database from 'better-sqlite3';
+import type { DB } from './db';
 
 interface Migration {
   version: number;
   name: string;
-  up: (db: Database.Database) => void;
+  up: (db: DB) => void;
 }
 
 const migrations: Migration[] = [
@@ -269,7 +269,7 @@ const migrations: Migration[] = [
   },
 ];
 
-export function runMigrations(db: Database.Database) {
+export function runMigrations(db: DB) {
   db.exec(`CREATE TABLE IF NOT EXISTS _migrations (
     version INTEGER PRIMARY KEY,
     name    TEXT NOT NULL,

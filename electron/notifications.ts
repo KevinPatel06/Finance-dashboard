@@ -1,5 +1,5 @@
 import { Notification } from 'electron';
-import * as repo from './db/repo';
+import * as repo from '../core/repo';
 
 // ---------------------------------------------------------------------------
 // Desktop reminders. On launch (and once a day after) we check for overdue /
