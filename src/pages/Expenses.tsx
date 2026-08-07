@@ -278,8 +278,85 @@ export default function Expenses() {
             )}
           </div>
 
+          {/* Phone: the same rows as cards. Identical data and handlers. */}
+          <div className="md:hidden space-y-2">
+            {filtered.length === 0 ? (
+              <div className="card p-8 text-center text-content-muted text-sm">
+                No expenses match your filters.
+              </div>
+            ) : (
+              <>
+                {filtered.map((e) => {
+                  const cat = e.category_id != null ? catById.get(e.category_id) : null;
+                  return (
+                    <div key={e.id} className="card p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium flex items-center gap-2 flex-wrap">
+                            <span className="truncate">{e.description}</span>
+                            {e.debt_id != null && (
+                              <span className="pill bg-danger/10 text-danger shrink-0">
+                                <CreditCard size={10} />
+                                {creditCards.find((cc) => cc.id === e.debt_id)?.name ?? 'Card'}
+                              </span>
+                            )}
+                          </div>
+                          {e.note && (
+                            <div className="text-xs text-content-subtle truncate">{e.note}</div>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-semibold num">{fmtMoney(e.amount)}</div>
+                          <div className="text-xs text-content-muted num">{fmtDate(e.date)}</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-2">
+                        <div className="text-xs text-content-muted min-w-0 truncate">
+                          {cat ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ backgroundColor: cat.color }}
+                              />
+                              {cat.name}
+                            </span>
+                          ) : (
+                            <span className="text-content-subtle">No category</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => setEditing(e)}
+                            className="btn-ghost p-2"
+                            aria-label="Edit"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            onClick={() => setPendingDelete(e)}
+                            className="btn-ghost p-2 hover:text-danger"
+                            aria-label="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="card p-4 flex items-center justify-between">
+                  <span className="text-sm text-content-muted">
+                    {filtered.length} expense{filtered.length === 1 ? '' : 's'}
+                    {anyFilterActive ? ' (filtered)' : ''}
+                  </span>
+                  <span className="font-bold num">{fmtMoney(filteredTotal)}</span>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Table */}
-          <div className="card overflow-hidden">
+          <div className="card overflow-hidden hidden md:block">
             <table className="w-full text-sm">
               <thead className="bg-surface-3 text-content-muted">
                 <tr className="text-left">

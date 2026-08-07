@@ -227,17 +227,26 @@ export default function Settings() {
       <div className="card p-5">
         <h2 className="font-semibold mb-1">Data</h2>
         <p className="text-sm text-content-muted mb-4">
-          Back up your finance database to a file, or restore from a previous backup. The database
-          is stored locally on this machine.
+          {__PLATFORM__ === 'ios'
+            ? 'Share your finance database as a file. Both apps use the same format, so a backup made here restores in the desktop app.'
+            : 'Back up your finance database to a file, or restore from a previous backup. The database is stored locally on this machine.'}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={backup} className="btn-outline">
-            <Download size={16} /> Back up database
+            <Download size={16} /> {__PLATFORM__ === 'ios' ? 'Share database' : 'Back up database'}
           </button>
-          <button onClick={restore} className="btn-outline">
-            <Upload size={16} /> Restore from backup
-          </button>
+          {/* No first-party Capacitor document picker, so restore is desktop-only. */}
+          {__PLATFORM__ !== 'ios' && (
+            <button onClick={restore} className="btn-outline">
+              <Upload size={16} /> Restore from backup
+            </button>
+          )}
         </div>
+        {__PLATFORM__ === 'ios' && (
+          <p className="text-xs text-content-subtle mt-3">
+            Restoring from a backup is available in the desktop app.
+          </p>
+        )}
       </div>
     </div>
   );

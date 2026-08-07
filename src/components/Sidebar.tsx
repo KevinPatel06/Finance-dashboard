@@ -14,7 +14,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/lib/theme';
 
-const nav = [
+// Exported so BottomNav renders the same destinations — one source of truth.
+export const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/paychecks', label: 'Paychecks', icon: Wallet },
   { to: '/expenses', label: 'Expenses', icon: ShoppingCart },
@@ -39,7 +40,7 @@ export default function Sidebar() {
   const heading = userName.trim() ? `${userName.trim()}'s Finance` : 'Finance';
 
   return (
-    <aside className="w-64 shrink-0 border-r border-border bg-surface-2 flex flex-col">
+    <aside className="hidden md:flex w-64 shrink-0 border-r border-border bg-surface-2 flex-col">
       <div className="px-5 pt-6 pb-7">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand to-brand-hover grid place-items-center text-white font-bold shadow-soft shrink-0 dark:text-slate-950">

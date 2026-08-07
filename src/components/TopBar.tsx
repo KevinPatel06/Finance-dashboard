@@ -26,7 +26,7 @@ export default function TopBar() {
   });
 
   return (
-    <header className="h-16 px-8 border-b border-border bg-surface flex items-center justify-between">
+    <header className="h-16 px-4 md:px-8 border-b border-border bg-surface flex items-center justify-between box-content">
       <div>
         <h1 className="text-xl font-display font-semibold tracking-tight">{title}</h1>
         <div className="text-xs text-content-subtle">{today}</div>

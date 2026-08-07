@@ -161,3 +161,27 @@ body {
 .num {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------------------
+   iOS shell hygiene. No effect on desktop: the safe-area insets resolve to 0
+   and the media query only fires below the md breakpoint.
+   --------------------------------------------------------------------------- */
+
+/* Stop the whole page rubber-banding; inner scroll containers still bounce. */
+body {
+  overscroll-behavior-y: none;
+}
+
+/* The TopBar sits under the status bar / notch without this. */
+header {
+  padding-top: env(safe-area-inset-top);
+}
+
+@media (max-width: 767px) {
+  /* iOS zooms the viewport when focusing any input under 16px. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

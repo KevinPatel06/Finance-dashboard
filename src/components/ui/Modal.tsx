@@ -68,14 +68,15 @@ export default function Modal({ open, onClose, title, description, children, siz
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-end md:grid md:place-items-center md:p-4 animate-fade-in">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative card w-full ${sizes[size]} shadow-pop max-h-[90vh] overflow-hidden flex flex-col`}
+        className={`relative card w-full ${sizes[size]} shadow-pop max-h-[90vh] overflow-hidden flex flex-col
+                    rounded-b-none md:rounded-b-2xl pb-[env(safe-area-inset-bottom)] md:pb-0`}
       >
         {(title || description) && (
           <div className="px-6 pt-5 pb-4 border-b border-border flex items-start justify-between">

@@ -159,7 +159,70 @@ export default function Bills() {
             </div>
           </div>
 
-          <div className="card overflow-hidden">
+          {/* Phone: the same rows as cards. Identical data and handlers. */}
+          <div className="md:hidden space-y-2">
+            {sortedBills.map((b) => {
+              const cat = cats.find((c) => c.id === b.category_id);
+              const st = statuses.get(b.id);
+              return (
+                <div key={b.id} className="card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium truncate">{b.name}</span>
+                        {b.autopay ? (
+                          <span className="pill bg-info/10 text-info">
+                            <Zap size={10} /> Auto
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1">
+                        <BillStatusBadge status={st} />
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-semibold num">{fmtMoney(b.amount)}</div>
+                      <div className="text-xs text-content-muted num">
+                        {fmtDate(st?.nextDueDate ?? b.anchor_date)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-2">
+                    <div className="text-xs text-content-muted min-w-0 truncate">
+                      {cat ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: cat.color }}
+                          />
+                          {cat.name}
+                        </span>
+                      ) : (
+                        <span className="text-content-subtle">No category</span>
+                      )}
+                      {' · '}
+                      {FREQ_LABEL[b.frequency]}
+                      {b.frequency === 'custom_days' && b.custom_days ? ` · ${b.custom_days}d` : ''}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => setEditing(b)} className="btn-ghost p-2" aria-label="Edit">
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        onClick={() => onDelete(b)}
+                        className="btn-ghost p-2 hover:text-danger"
+                        aria-label="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="card overflow-hidden hidden md:block">
           <table className="w-full text-sm">
             <thead className="bg-surface-3 text-content-muted">
               <tr className="text-left">
