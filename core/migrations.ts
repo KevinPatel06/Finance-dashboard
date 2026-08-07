@@ -6,7 +6,95 @@ interface Migration {
   up: (db: DB) => void;
 }
 
+/** Tables that a future device-to-device sync would need to reconcile. */
+const SYNC_TRACKED_TABLES = [
+  'categories',
+  'bills',
+  'savings_goals',
+  'paychecks',
+  'paycheck_allocations',
+  'expense_categories',
+  'expenses',
+  'debts',
+  'expense_budgets',
+  'recurring_expenses',
+  'registered_accounts',
+  'registered_contributions',
+];
+
 const migrations: Migration[] = [
+  {
+    version: 11,
+    name: 'sync_groundwork',
+    up: (db) => {
+      // Groundwork only — no sync is implemented. Every table keys on INTEGER
+      // PRIMARY KEY AUTOINCREMENT, so two devices both creating a bill would
+      // both call it id=7. Adding stable UUIDs while there is still one device
+      // and one database is cheap; retrofitting them across historical rows
+      // later is not.
+      //
+      // Deliberately pure DDL + triggers: this changes ZERO lines of repo.ts.
+      // A deleted_at column per table would have meant converting every delete
+      // to a soft delete and adding `WHERE deleted_at IS NULL` to essentially
+      // every SELECT — a large, risky change to query semantics for a feature
+      // that does not exist yet. A trigger-fed audit table records the same
+      // information and leaves all existing queries untouched.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS _deletions (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          table_name TEXT    NOT NULL,
+          uuid       TEXT    NOT NULL,
+          deleted_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_deletions_uuid ON _deletions(uuid);
+      `);
+
+      for (const t of SYNC_TRACKED_TABLES) {
+        const cols = (db.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map(
+          (c) => c.name
+        );
+
+        // SQLite requires a constant DEFAULT in ALTER TABLE ADD COLUMN, so the
+        // columns are added bare and backfilled; future inserts are covered by
+        // the AFTER INSERT trigger below rather than by a column default.
+        if (!cols.includes('uuid')) {
+          db.exec(`ALTER TABLE ${t} ADD COLUMN uuid TEXT`);
+        }
+        if (!cols.includes('updated_at')) {
+          db.exec(`ALTER TABLE ${t} ADD COLUMN updated_at INTEGER`);
+        }
+        db.exec(`UPDATE ${t} SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL`);
+        db.exec(
+          `UPDATE ${t} SET updated_at = CAST(strftime('%s','now') AS INTEGER)
+           WHERE updated_at IS NULL`
+        );
+
+        db.exec(`
+          CREATE TRIGGER IF NOT EXISTS ${t}_sync_ins AFTER INSERT ON ${t}
+          BEGIN
+            UPDATE ${t}
+               SET uuid = COALESCE(NEW.uuid, lower(hex(randomblob(16)))),
+                   updated_at = CAST(strftime('%s','now') AS INTEGER)
+             WHERE rowid = NEW.rowid;
+          END;
+
+          CREATE TRIGGER IF NOT EXISTS ${t}_sync_upd AFTER UPDATE ON ${t}
+          WHEN NEW.updated_at IS OLD.updated_at
+          BEGIN
+            UPDATE ${t}
+               SET updated_at = CAST(strftime('%s','now') AS INTEGER)
+             WHERE rowid = NEW.rowid;
+          END;
+
+          CREATE TRIGGER IF NOT EXISTS ${t}_sync_del AFTER DELETE ON ${t}
+          BEGIN
+            INSERT INTO _deletions (table_name, uuid, deleted_at)
+            VALUES ('${t}', OLD.uuid, CAST(strftime('%s','now') AS INTEGER));
+          END;
+        `);
+      }
+    },
+  },
   {
     version: 10,
     name: 'registered_accounts',
