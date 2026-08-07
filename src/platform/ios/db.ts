@@ -1,6 +1,13 @@
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
-import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import type { DB, Stmt } from '../../../core/db';
+
+/**
+ * Emitted at this exact name by the emit-sql-wasm plugin in vite.config.ios.ts,
+ * and resolved relative to the page. Deliberately NOT a `?url` import: Vite
+ * emits those eagerly even when the importing module is unreachable, which put
+ * 660KB of dead WASM into the Electron bundle.
+ */
+const DEFAULT_WASM = 'sql-wasm.wasm';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -94,7 +101,7 @@ function wrap(db: SqlJsDatabase): SqlJsDb {
  */
 export async function createSqlJsDb(
   bytes?: Uint8Array,
-  wasmPath: string = wasmUrl
+  wasmPath: string = DEFAULT_WASM
 ): Promise<SqlJsDb> {
   const SQL = await initSqlJs({ locateFile: () => wasmPath });
   const db = bytes && bytes.length ? new SQL.Database(bytes) : new SQL.Database();
