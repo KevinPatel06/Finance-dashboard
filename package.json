@@ -12,6 +12,8 @@
     "build": "tsc -b && vite build && electron-builder",
     "build:unpacked": "tsc -b && vite build && electron-builder --dir",
     "preview": "vite preview",
+    "test": "node node_modules/vitest/vitest.mjs run",
+    "test:watch": "node node_modules/vitest/vitest.mjs",
     "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "comment:dependencies": "ONLY runtime-required native modules belong here. Everything the renderer/main uses is bundled by Vite into dist/, so it lives in devDependencies — otherwise electron-builder copies the full (untreeshaken) package into the app and bloats app.asar by ~50MB.",
@@ -43,6 +45,7 @@
     "vite": "^6.0.7",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6",
+    "vitest": "^2.1.9",
     "zustand": "^5.0.2"
   },
   "build": {

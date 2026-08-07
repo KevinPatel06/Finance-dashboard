@@ -11,6 +11,11 @@ export function getDb(): Database.Database {
   return db;
 }
 
+/** Inject a database directly. Used by tests to supply an in-memory instance. */
+export function setDb(next: Database.Database): void {
+  db = next;
+}
+
 export function initDatabase(): Database.Database {
   if (db) return db;
   const userData = app.getPath('userData');
