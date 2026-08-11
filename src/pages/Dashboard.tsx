@@ -15,9 +15,12 @@ import { cn } from '@/lib/utils';
 import { interestPerMonth } from '@/lib/debtMath';
 import type { DashboardSnapshot, Debt } from '@shared/types';
 import EmptyState from '@/components/ui/EmptyState';
+import { useIsMobile } from '@/lib/useIsMobile';
+import MobileDashboard from './MobileDashboard';
 
 export default function Dashboard() {
   const [snap, setSnap] = useState<DashboardSnapshot | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     window.api.dashboard.get().then((s) => setSnap(s as DashboardSnapshot));
@@ -26,6 +29,11 @@ export default function Dashboard() {
   if (!snap) {
     return <div className="text-content-muted">Loading…</div>;
   }
+
+  // Phone gets a different composition, not a reflow. The fetch stays here so
+  // there's exactly one dashboard request either way; everything below this
+  // line is the desktop layout, untouched.
+  if (isMobile) return <MobileDashboard snap={snap} />;
 
   const empty =
     snap.billsThisMonth.length === 0 &&

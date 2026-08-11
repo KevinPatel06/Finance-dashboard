@@ -21,11 +21,14 @@ import type {
   RecurringFrequency,
   RegisteredAccount,
   RegisteredAccountInput,
+  MobileHomeLayout,
   RegisteredContribution,
   RegisteredContributionInput,
   SavingsGoal,
   SavingsGoalInput,
 } from '../shared/types';
+// Value import (the others above are types only).
+import { MOBILE_HOME_LAYOUTS } from '../shared/types';
 import {
   addDays,
   addMonths,
@@ -139,12 +142,16 @@ export function getSettings(): AppSettings {
   const accent = (ACCENTS as readonly string[]).includes(map.accent_color)
     ? (map.accent_color as (typeof ACCENTS)[number])
     : 'emerald';
+  const homeLayout = (MOBILE_HOME_LAYOUTS as readonly string[]).includes(map.mobile_home_layout)
+    ? (map.mobile_home_layout as MobileHomeLayout)
+    : 'hero_actions';
   return {
     theme: (map.theme as 'light' | 'dark') || 'dark',
     pay_cadence: 'biweekly',
     next_paycheck_date: map.next_paycheck_date || null,
     accent_color: accent,
     user_name: map.user_name?.trim() || 'Kevin',
+    mobile_home_layout: homeLayout,
     // Notification prefs default ON when unset; lead time defaults to 3 days.
     notify_enabled: map.notify_enabled !== 'false',
     notify_bill_lead_days: Number(map.notify_bill_lead_days) || 3,

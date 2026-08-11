@@ -106,12 +106,22 @@ export type AccentColor =
   | 'yellow'
   | 'purple';
 
+/** Which composition the phone home screen uses. Desktop ignores this. */
+export type MobileHomeLayout = 'hero_actions' | 'hero_stats' | 'hero_tabs';
+
+export const MOBILE_HOME_LAYOUTS: readonly MobileHomeLayout[] = [
+  'hero_actions',
+  'hero_stats',
+  'hero_tabs',
+];
+
 export interface AppSettings {
   theme: 'light' | 'dark';
   pay_cadence: 'biweekly';
   next_paycheck_date: string | null; // ISO YYYY-MM-DD
   accent_color: AccentColor;
   user_name: string;
+  mobile_home_layout: MobileHomeLayout;
   // Desktop notification preferences (Phase 2 reminders).
   notify_enabled: boolean;
   notify_bill_lead_days: number; // warn this many days before a bill is due

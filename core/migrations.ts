@@ -390,6 +390,7 @@ export function runMigrations(db: DB) {
   ensureSetting.run('next_paycheck_date', '');
   ensureSetting.run('accent_color', 'emerald');
   ensureSetting.run('user_name', 'Kevin');
+  ensureSetting.run('mobile_home_layout', 'hero_actions');
   ensureSetting.run('notify_enabled', 'true');
   ensureSetting.run('notify_bill_lead_days', '3');
   ensureSetting.run('notify_paycheck', 'true');

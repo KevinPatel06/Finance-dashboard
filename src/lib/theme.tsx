@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { AccentColor, AppSettings } from '@shared/types';
+import type { AccentColor, AppSettings, MobileHomeLayout } from '@shared/types';
 import { ACCENTS } from './accents';
 
 type Theme = 'light' | 'dark';
@@ -8,10 +8,13 @@ interface ThemeCtx {
   theme: Theme;
   accent: AccentColor;
   userName: string;
+  /** Which composition the phone home screen uses. Desktop ignores it. */
+  homeLayout: MobileHomeLayout;
   toggle: () => void;
   setTheme: (t: Theme) => void;
   setAccent: (a: AccentColor) => void;
   setUserName: (name: string) => void;
+  setHomeLayout: (l: MobileHomeLayout) => void;
 }
 
 const Ctx = createContext<ThemeCtx | null>(null);
@@ -41,6 +44,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark');
   const [accent, setAccentState] = useState<AccentColor>('emerald');
   const [userName, setUserNameState] = useState<string>('Kevin');
+  const [homeLayout, setHomeLayoutState] = useState<MobileHomeLayout>('hero_actions');
 
   // Hydrate from settings on mount
   useEffect(() => {
@@ -53,6 +57,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setThemeState(t);
         setAccentState(a);
         setUserNameState(n);
+        setHomeLayoutState(settings.mobile_home_layout || 'hero_actions');
         applyTheme(t);
         applyAccent(t, a);
         applyDocumentTitle(n);
@@ -86,10 +91,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     window.api.settings.update({ user_name: name }).catch(() => {});
   };
 
+  const setHomeLayout = (l: MobileHomeLayout) => {
+    setHomeLayoutState(l);
+    window.api.settings.update({ mobile_home_layout: l }).catch(() => {});
+  };
+
   const toggle = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
   return (
-    <Ctx.Provider value={{ theme, accent, userName, toggle, setTheme, setAccent, setUserName }}>
+    <Ctx.Provider
+      value={{
+        theme,
+        accent,
+        userName,
+        homeLayout,
+        toggle,
+        setTheme,
+        setAccent,
+        setUserName,
+        setHomeLayout,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

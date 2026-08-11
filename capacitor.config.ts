@@ -5,7 +5,11 @@ const config: CapacitorConfig = {
   appId: 'com.kevinpatel.financedashboard',
   appName: 'Finance Dashboard',
   webDir: 'dist-ios',
-  ios: { contentInset: 'always' },
+  // 'never' is deliberate: we apply env(safe-area-inset-*) ourselves in
+  // src/index.css. With 'always', WKWebView ALSO adds automatic insets to its
+  // scroll view, so they double-count — content starts offset and rubber-banding
+  // reads as broken.
+  ios: { contentInset: 'never' },
 };
 
 export default config;

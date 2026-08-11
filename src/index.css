@@ -167,13 +167,25 @@ body {
    and the media query only fires below the md breakpoint.
    --------------------------------------------------------------------------- */
 
-/* Stop the whole page rubber-banding; inner scroll containers still bounce. */
+/* Stop the whole page rubber-banding. */
 body {
   overscroll-behavior-y: none;
+  /* No grey flash box on tap, and no 300ms double-tap-to-zoom delay. */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-/* The TopBar sits under the status bar / notch without this. */
-header {
+/* The app's single scroll surface. `contain` matches body's `none` — without it
+   the inner scroller bounces while the page doesn't, which reads as two
+   scrollers fighting. */
+.app-scroll {
+  overscroll-behavior-y: contain;
+}
+
+/* Scoped to the app chrome only. As a bare `header {}` rule this also hit every
+   <header> inside modals and RecurringManager, indenting them under a notch
+   that isn't there. */
+.app-topbar {
   padding-top: env(safe-area-inset-top);
 }
 

@@ -107,6 +107,20 @@ export function runRepoContract(
       expect(repo.getSettings().user_name).toBe('Kevin');
     });
 
+    it('defaults the phone home layout and round-trips a valid choice', () => {
+      expect(repo.getSettings().mobile_home_layout).toBe('hero_actions');
+      expect(repo.updateSettings({ mobile_home_layout: 'hero_tabs' }).mobile_home_layout).toBe(
+        'hero_tabs'
+      );
+      expect(repo.getSettings().mobile_home_layout).toBe('hero_tabs');
+    });
+
+    it('falls back to the default home layout when the stored value is unknown', () => {
+      // Guards against a hand-edited DB or a value written by a newer build.
+      repo.setMeta('mobile_home_layout', 'not_a_layout');
+      expect(repo.getSettings().mobile_home_layout).toBe('hero_actions');
+    });
+
     it('stores and reads bookkeeping metadata', () => {
       expect(repo.getMeta('nope')).toBeNull();
       repo.setMeta('last_notified_date', '2026-08-06');
