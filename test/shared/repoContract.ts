@@ -121,6 +121,13 @@ export function runRepoContract(
       expect(repo.getSettings().mobile_home_layout).toBe('hero_actions');
     });
 
+    it('round-trips the onboarding flag', () => {
+      // A fresh database is a first run, so the welcome flow should show.
+      expect(repo.getSettings().onboarded).toBe(false);
+      expect(repo.updateSettings({ onboarded: true }).onboarded).toBe(true);
+      expect(repo.getSettings().onboarded).toBe(true);
+    });
+
     it('stores and reads bookkeeping metadata', () => {
       expect(repo.getMeta('nope')).toBeNull();
       repo.setMeta('last_notified_date', '2026-08-06');

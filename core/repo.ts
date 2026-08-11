@@ -152,6 +152,7 @@ export function getSettings(): AppSettings {
     accent_color: accent,
     user_name: map.user_name?.trim() || 'Kevin',
     mobile_home_layout: homeLayout,
+    onboarded: map.onboarded === 'true',
     // Notification prefs default ON when unset; lead time defaults to 3 days.
     notify_enabled: map.notify_enabled !== 'false',
     notify_bill_lead_days: Number(map.notify_bill_lead_days) || 3,

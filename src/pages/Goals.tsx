@@ -14,12 +14,8 @@ import EmptyState from '@/components/ui/EmptyState';
 import { fmtMoney, fmtDate } from '@/lib/format';
 import { useCelebration } from '@/lib/celebration';
 import { cn } from '@/lib/utils';
+import { GOAL_PALETTE as PALETTE } from '@/lib/palette';
 import type { SavingsGoal } from '@shared/types';
-
-const PALETTE = [
-  '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b',
-  '#ef4444', '#14b8a6', '#06b6d4', '#a855f7', '#f97316',
-];
 
 type PendingDelete = { goal: SavingsGoal; from: 'active' | 'archived' } | null;
 type PendingComplete = SavingsGoal | null;
@@ -70,11 +66,11 @@ export default function Goals() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-content-muted">
           Set targets and we'll track your progress as you allocate paychecks.
         </p>
-        <button onClick={() => setShowNew(true)} className="btn-primary">
+        <button onClick={() => setShowNew(true)} className="btn-primary shrink-0">
           <Plus size={16} /> Add goal
         </button>
       </div>

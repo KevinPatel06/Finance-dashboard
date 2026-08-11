@@ -98,17 +98,17 @@ export default function Bills() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-content-muted">
-            Recurring bills & subscriptions. Edit anytime — projections update across the app.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setManageCats(true)} className="btn-outline">
+      {/* Stacks on a phone: the copy gets a full line, then the actions sit
+          below it instead of being squeezed into the same row. */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <p className="text-sm text-content-muted">
+          Recurring bills &amp; subscriptions. Edit anytime — projections update across the app.
+        </p>
+        <div className="flex gap-2 shrink-0">
+          <button onClick={() => setManageCats(true)} className="btn-outline flex-1 md:flex-none">
             Categories
           </button>
-          <button onClick={() => setShowNew(true)} className="btn-primary">
+          <button onClick={() => setShowNew(true)} className="btn-primary flex-1 md:flex-none">
             <Plus size={16} /> Add bill
           </button>
         </div>

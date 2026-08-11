@@ -55,11 +55,11 @@ export default function Paychecks() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-content-muted">
           Log each biweekly paycheck and allocate it to bills, savings goals, and fun money.
         </p>
-        <button onClick={startNew} className="btn-primary">
+        <button onClick={startNew} className="btn-primary shrink-0">
           <Plus size={16} /> Log paycheck
         </button>
       </div>

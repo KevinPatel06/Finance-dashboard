@@ -12,7 +12,7 @@ export default function Layout() {
       {/* min-h-0 is load-bearing: a flex item defaults to min-height:auto and
           refuses to shrink below its content, which stops <main> from ever
           becoming the scroll container and makes the whole page scroll instead. */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+      <div className="app-shell flex-1 flex flex-col min-w-0 min-h-0">
         <TopBar />
         <main className="app-scroll flex-1 overflow-y-auto">
           {/* pb-28 clears the floating tab bar so it never covers the last row. */}

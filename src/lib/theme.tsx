@@ -10,11 +10,16 @@ interface ThemeCtx {
   userName: string;
   /** Which composition the phone home screen uses. Desktop ignores it. */
   homeLayout: MobileHomeLayout;
+  /** False until settings have loaded — gates the first paint. */
+  ready: boolean;
+  /** False only on a genuinely fresh install. */
+  onboarded: boolean;
   toggle: () => void;
   setTheme: (t: Theme) => void;
   setAccent: (a: AccentColor) => void;
   setUserName: (name: string) => void;
   setHomeLayout: (l: MobileHomeLayout) => void;
+  completeOnboarding: () => void;
 }
 
 const Ctx = createContext<ThemeCtx | null>(null);
@@ -45,6 +50,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [accent, setAccentState] = useState<AccentColor>('emerald');
   const [userName, setUserNameState] = useState<string>('Kevin');
   const [homeLayout, setHomeLayoutState] = useState<MobileHomeLayout>('hero_actions');
+  const [ready, setReady] = useState(false);
+  // Assume onboarded until settings say otherwise, so a failed read never traps
+  // an existing user in the welcome flow.
+  const [onboarded, setOnboarded] = useState(true);
 
   // Hydrate from settings on mount
   useEffect(() => {
@@ -58,6 +67,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setAccentState(a);
         setUserNameState(n);
         setHomeLayoutState(settings.mobile_home_layout || 'hero_actions');
+        setOnboarded(settings.onboarded);
         applyTheme(t);
         applyAccent(t, a);
         applyDocumentTitle(n);
@@ -65,6 +75,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         applyTheme('dark');
         applyAccent('dark', 'emerald');
         applyDocumentTitle('Kevin');
+      } finally {
+        setReady(true);
       }
     })();
   }, []);
@@ -96,6 +108,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     window.api.settings.update({ mobile_home_layout: l }).catch(() => {});
   };
 
+  const completeOnboarding = () => {
+    setOnboarded(true);
+    window.api.settings.update({ onboarded: true }).catch(() => {});
+  };
+
   const toggle = () => setTheme(theme === 'dark' ? 'light' : 'dark');
 
   return (
@@ -105,11 +122,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         accent,
         userName,
         homeLayout,
+        ready,
+        onboarded,
         toggle,
         setTheme,
         setAccent,
         setUserName,
         setHomeLayout,
+        completeOnboarding,
       }}
     >
       {children}

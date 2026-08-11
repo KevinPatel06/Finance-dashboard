@@ -10,8 +10,19 @@ import Payoff from './pages/Payoff';
 import CalendarView from './pages/Calendar';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import Welcome from './pages/Welcome';
+import { useTheme } from './lib/theme';
 
 export default function App() {
+  const { ready, onboarded } = useTheme();
+
+  // Hold the first paint until settings load — otherwise the app flashes the
+  // default theme, and a fresh install would flash the dashboard before the
+  // welcome flow replaces it. This is a local SQLite read, so it's imperceptible.
+  if (!ready) return null;
+
+  if (!onboarded) return <Welcome />;
+
   return (
     <Routes>
       <Route element={<Layout />}>

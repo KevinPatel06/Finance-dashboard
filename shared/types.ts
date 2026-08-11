@@ -122,6 +122,8 @@ export interface AppSettings {
   accent_color: AccentColor;
   user_name: string;
   mobile_home_layout: MobileHomeLayout;
+  /** False only on a genuinely fresh install — gates the welcome flow. */
+  onboarded: boolean;
   // Desktop notification preferences (Phase 2 reminders).
   notify_enabled: boolean;
   notify_bill_lead_days: number; // warn this many days before a bill is due

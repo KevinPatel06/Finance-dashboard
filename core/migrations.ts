@@ -24,6 +24,30 @@ const SYNC_TRACKED_TABLES = [
 
 const migrations: Migration[] = [
   {
+    version: 12,
+    name: 'onboarding_flag',
+    up: (db) => {
+      // Decide once, from the data that's already here. An install with bills,
+      // goals, or paychecks is somebody mid-use who must never be dropped into
+      // the welcome flow; an empty database is a genuine first run.
+      //
+      // This is why the flag is set here rather than in the launch-time seed
+      // block — the seed runs on every start and has no way to tell the two
+      // apart.
+      const { n } = db
+        .prepare(
+          `SELECT (SELECT COUNT(*) FROM bills)
+                + (SELECT COUNT(*) FROM savings_goals)
+                + (SELECT COUNT(*) FROM paychecks) AS n`
+        )
+        .get() as { n: number };
+      db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(
+        'onboarded',
+        n > 0 ? 'true' : 'false'
+      );
+    },
+  },
+  {
     version: 11,
     name: 'sync_groundwork',
     up: (db) => {

@@ -32,7 +32,7 @@ export default function TopBar() {
   });
 
   return (
-    <header className="app-topbar h-14 md:h-16 px-4 md:px-8 border-b border-border bg-surface flex items-center justify-between box-content">
+    <header className="h-14 md:h-16 px-4 md:px-8 border-b border-border bg-surface flex items-center justify-between">
       <div>
         <h1 className="text-lg md:text-xl font-display font-semibold tracking-tight">{title}</h1>
         {/* The date is desktop chrome; on a phone the row should stay compact. */}
