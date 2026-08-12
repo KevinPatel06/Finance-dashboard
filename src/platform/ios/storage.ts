@@ -43,14 +43,15 @@ export async function openDatabase(): Promise<{ db: SqlJsDb; isNew: boolean }> {
   return { db: handle, isNew: !bytes };
 }
 
-/**
- * Flush the in-memory DB to disk, rotating one backup first.
- *
- * The DB lives in memory, so this is what makes writes durable. Called after
- * every mutating API call and when iOS backgrounds the app.
- */
-export async function flush(): Promise<void> {
+/** Serialises flushes; `queued` is the one pending pass callers can share. */
+let tail: Promise<void> = Promise.resolve();
+let queued = false;
+
+/** Rotate one backup, then overwrite the live file. Never run concurrently. */
+async function writeSnapshot(): Promise<void> {
   if (!handle) return;
+  // Snapshot INSIDE the critical section. Taking it before waiting for a turn
+  // is what let a slow write land last carrying pre-write state.
   const bytes = handle.export();
   try {
     const prev = await Filesystem.readFile({ path: DB_FILE, directory: Directory.Data });
@@ -67,6 +68,33 @@ export async function flush(): Promise<void> {
     data: toBase64(bytes),
     directory: Directory.Data,
   });
+}
+
+/**
+ * Flush the in-memory DB to disk, rotating one backup first.
+ *
+ * The DB lives in memory, so this is what makes writes durable. Called after
+ * every mutating API call and when iOS backgrounds the app.
+ *
+ * Flushes are serialised for two reasons, both of which cost real data before:
+ * overlapping `writeFile` calls to the same path can interleave and truncate
+ * each other, and an unawaited flush (the theme context fires settings writes
+ * without awaiting them) could finish last while carrying a snapshot taken
+ * before newer rows existed — silently reverting them.
+ */
+export function flush(): Promise<void> {
+  if (!handle) return Promise.resolve();
+  // A pass that hasn't started yet will snapshot when it runs, so it already
+  // covers whatever this caller just wrote. Share it instead of queueing again.
+  if (queued) return tail;
+  queued = true;
+  const run = async () => {
+    queued = false;
+    await writeSnapshot();
+  };
+  // Run on both settle paths so one failed write cannot wedge the queue.
+  tail = tail.then(run, run);
+  return tail;
 }
 
 /** Read the live database file as base64 — used by backup/share. */

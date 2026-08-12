@@ -136,7 +136,9 @@ export async function installIosApi(): Promise<void> {
 
   // Belt-and-braces durability: flush when iOS backgrounds the app.
   void App.addListener('appStateChange', ({ isActive }) => {
-    if (!isActive) void flush();
+    if (!isActive) {
+      flush().catch((err) => console.error('Background flush failed', err));
+    }
   });
 
   // Daily notification check, off the boot path.
