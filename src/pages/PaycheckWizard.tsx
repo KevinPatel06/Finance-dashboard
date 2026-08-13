@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { format, parseISO, addDays } from 'date-fns';
+import { format, parseISO, addDays, isValid } from 'date-fns';
 import {
   ChevronLeft,
   ChevronRight,
@@ -71,7 +71,14 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
   const [funAmount, setFunAmount] = useState('');
   const [otherAmount, setOtherAmount] = useState('');
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
   const { checkForCompletions } = useCelebration();
+
+  /** The date drives every projection, so nothing may run on an unparseable one. */
+  const dateValid = !!date && isValid(parseISO(date));
 
   // Seed values from `editing` whenever the wizard opens with one.
   useEffect(() => {
@@ -105,6 +112,9 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
       setOtherAmount('');
     }
     setStep('amount');
+    setLoadError(null);
+    setSaveError(null);
+    setSaving(false);
   }, [open, editing]);
 
   // Load bills-to-pay + goals when the wizard opens or the date changes.
@@ -113,72 +123,93 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
   // already on this paycheck that aren't in that list.
   useEffect(() => {
     if (!open) return;
+    // Mid-edit the date input can read '', which parses to Invalid Date and
+    // makes every projection below throw. Keep the last good data instead.
+    if (!dateValid) return;
+    let cancelled = false;
     (async () => {
-      const to = format(addDays(parseISO(date), 14), 'yyyy-MM-dd');
-      const [u, g, allDebts] = await Promise.all([
-        window.api.bills.toPay(to) as Promise<UpcomingBill[]>,
-        window.api.goals.list() as Promise<SavingsGoal[]>,
-        window.api.debts.list() as Promise<Debt[]>,
-      ]);
-      setRevolvingDebts(
-        allDebts.filter((d) => d.type === 'credit_card' || d.type === 'line_of_credit')
-      );
+      try {
+        const to = format(addDays(parseISO(date), 14), 'yyyy-MM-dd');
+        const [u, g, allDebts] = await Promise.all([
+          window.api.bills.toPay(to) as Promise<UpcomingBill[]>,
+          window.api.goals.list() as Promise<SavingsGoal[]>,
+          window.api.debts.list() as Promise<Debt[]>,
+        ]);
 
-      let merged = u;
-      const checked: Record<string, boolean> = {};
-      const amounts: Record<string, string> = {};
+        let merged = u;
+        const checked: Record<string, boolean> = {};
+        const amounts: Record<string, string> = {};
 
-      if (editing) {
-        // Build a map of (bill_id -> allocation) for current bill allocations
-        const allocByBill = new Map<number, { amount: number; note: string | null }>();
-        for (const a of editing.allocations) {
-          if (a.kind === 'bill' && a.ref_id != null) {
-            allocByBill.set(a.ref_id, { amount: a.amount, note: a.note ?? null });
+        if (editing) {
+          // Build a map of (bill_id -> allocation) for current bill allocations
+          const allocByBill = new Map<number, { amount: number; note: string | null }>();
+          for (const a of editing.allocations) {
+            if (a.kind === 'bill' && a.ref_id != null) {
+              allocByBill.set(a.ref_id, { amount: a.amount, note: a.note ?? null });
+            }
           }
-        }
-        const projectionBillIds = new Set(u.map((e) => e.bill.id));
-        // For any allocation whose bill isn't in projection, fabricate a row using the
-        // allocation's note (the originally-stored due date) or the paycheck date itself.
-        const allBills = (await window.api.bills.list()) as Bill[];
-        const billsById = new Map(allBills.map((b) => [b.id, b]));
-        const extras: UpcomingBill[] = [];
-        for (const [billId, info] of allocByBill) {
-          if (projectionBillIds.has(billId)) continue;
-          const b = billsById.get(billId);
-          if (!b) continue;
-          extras.push({
-            bill: b,
-            dueDate: info.note && /^\d{4}-\d{2}-\d{2}$/.test(info.note) ? info.note : date,
-            category: null,
+          const projectionBillIds = new Set(u.map((e) => e.bill.id));
+          // For any allocation whose bill isn't in projection, fabricate a row using the
+          // allocation's note (the originally-stored due date) or the paycheck date itself.
+          const allBills = (await window.api.bills.list()) as Bill[];
+          const billsById = new Map(allBills.map((b) => [b.id, b]));
+          const extras: UpcomingBill[] = [];
+          for (const [billId, info] of allocByBill) {
+            if (projectionBillIds.has(billId)) continue;
+            const b = billsById.get(billId);
+            if (!b) continue;
+            extras.push({
+              bill: b,
+              dueDate: info.note && /^\d{4}-\d{2}-\d{2}$/.test(info.note) ? info.note : date,
+              category: null,
+            });
+          }
+          merged = [...extras, ...u].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+          // Pre-check/pre-fill bills present in allocations
+          merged.forEach((e, i) => {
+            const k = key(e, i);
+            const a = allocByBill.get(e.bill.id);
+            if (a) {
+              checked[k] = true;
+              amounts[k] = a.amount.toFixed(2);
+            } else {
+              checked[k] = false;
+              amounts[k] = e.bill.amount.toFixed(2);
+            }
+          });
+        } else {
+          merged.forEach((e, i) => {
+            const k = key(e, i);
+            checked[k] = true;
+            amounts[k] = e.bill.amount.toFixed(2);
           });
         }
-        merged = [...extras, ...u].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-        // Pre-check/pre-fill bills present in allocations
-        merged.forEach((e, i) => {
-          const k = key(e, i);
-          const a = allocByBill.get(e.bill.id);
-          if (a) {
-            checked[k] = true;
-            amounts[k] = a.amount.toFixed(2);
-          } else {
-            checked[k] = false;
-            amounts[k] = e.bill.amount.toFixed(2);
-          }
-        });
-      } else {
-        merged.forEach((e, i) => {
-          const k = key(e, i);
-          checked[k] = true;
-          amounts[k] = e.bill.amount.toFixed(2);
-        });
-      }
 
-      setUpcoming(merged);
-      setBillChecked(checked);
-      setBillAmounts(amounts);
-      setGoals(g);
+        // Typing in the date field re-runs this; drop a response the user has
+        // already moved past so a slower earlier load can't overwrite it.
+        if (cancelled) return;
+        setRevolvingDebts(
+          allDebts.filter((d) => d.type === 'credit_card' || d.type === 'line_of_credit')
+        );
+        setUpcoming(merged);
+        setBillChecked(checked);
+        setBillAmounts(amounts);
+        setGoals(g);
+        setLoadError(null);
+      } catch (err) {
+        if (cancelled) return;
+        // Previously this rejected into the void: the goals list simply stayed
+        // empty and the step claimed you had never created any.
+        console.error('Loading the paycheck wizard failed', err);
+        setLoadError(
+          err instanceof Error ? err.message : 'Could not load your bills and goals.'
+        );
+      }
     })();
-  }, [open, date, editing]);
+    return () => {
+      cancelled = true;
+    };
+  }, [open, date, dateValid, editing]);
 
   const paycheck = Number(amount) || 0;
   const billsTotal = useMemo(() => {
@@ -220,12 +251,16 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
   const prev = () => setStep(STEPS[Math.max(0, stepIdx - 1)].id);
 
   const canNext = () => {
-    if (step === 'amount') return paycheck > 0 && !!date;
+    if (step === 'amount') return paycheck > 0 && dateValid;
     return true;
   };
 
   const save = async () => {
-    if (paycheck <= 0) return;
+    // `saving` also guards against a double-tap creating two paychecks — on a
+    // phone the save is slow enough (it flushes the DB to disk) to invite one.
+    if (paycheck <= 0 || !dateValid || saving) return;
+    setSaving(true);
+    setSaveError(null);
     const allocations: PaycheckAllocationInput[] = [];
     upcoming.forEach((e, i) => {
       const k = key(e, i);
@@ -256,29 +291,40 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
     if (fun > 0) allocations.push({ kind: 'fun', ref_id: null, amount: fun, note: null });
     if (other > 0) allocations.push({ kind: 'other', ref_id: null, amount: other, note: null });
 
-    if (isEditing && editing) {
-      await window.api.paychecks.update(editing.id, {
-        date,
-        amount: paycheck,
-        notes: notes || null,
-        allocations,
-      });
-    } else {
-      await window.api.paychecks.create({
-        date,
-        amount: paycheck,
-        notes: notes || null,
-        allocations,
-      });
-      // Roll forward the user's next-paycheck date by 14 days only for new entries
-      await window.api.settings.update({
-        next_paycheck_date: format(addDays(parseISO(date), 14), 'yyyy-MM-dd'),
-      });
-    }
+    try {
+      if (isEditing && editing) {
+        await window.api.paychecks.update(editing.id, {
+          date,
+          amount: paycheck,
+          notes: notes || null,
+          allocations,
+        });
+      } else {
+        await window.api.paychecks.create({
+          date,
+          amount: paycheck,
+          notes: notes || null,
+          allocations,
+        });
+        // Roll forward the user's next-paycheck date by 14 days only for new entries
+        await window.api.settings.update({
+          next_paycheck_date: format(addDays(parseISO(date), 14), 'yyyy-MM-dd'),
+        });
+      }
 
-    // Check if any goal hit 100% as a result of this save
-    await checkForCompletions();
-    onSaved();
+      // Check if any goal hit 100% as a result of this save
+      await checkForCompletions();
+      onSaved();
+    } catch (err) {
+      // Without this the button simply did nothing on failure, which is
+      // indistinguishable from the tap not registering.
+      console.error('Saving the paycheck failed', err);
+      setSaveError(
+        err instanceof Error ? err.message : 'Something went wrong saving this paycheck.'
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -339,6 +385,15 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
 
       {/* Step content */}
       <div className="px-6 py-6 min-h-[360px]">
+        {loadError && (
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-danger/10 text-danger mb-4">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+            <div className="text-sm">
+              <span className="font-semibold">Couldn't load your bills and goals.</span>{' '}
+              {loadError} Close the wizard and reopen it to try again.
+            </div>
+          </div>
+        )}
         {step === 'amount' && (
           <div className="max-w-md mx-auto space-y-4">
             <div>
@@ -610,6 +665,14 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
                 leftover, or go back and add it to savings/fun money.
               </div>
             )}
+            {saveError && (
+              <div className="mt-4 flex items-start gap-3 p-3 rounded-lg bg-danger/10 text-danger">
+                <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <span className="font-semibold">This paycheck wasn't saved.</span> {saveError}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -618,6 +681,7 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
       <div className="px-6 py-4 border-t border-border flex items-center justify-between bg-surface-3/40">
         <button
           className="btn-ghost"
+          disabled={saving}
           onClick={stepIdx === 0 ? onClose : prev}
         >
           {stepIdx === 0 ? (
@@ -633,8 +697,13 @@ export default function PaycheckWizard({ open, onClose, onSaved, editing }: Prop
             Next <ChevronRight size={16} />
           </button>
         ) : (
-          <button className="btn-primary" disabled={remainder < 0} onClick={save}>
-            <Check size={16} /> {isEditing ? 'Save changes' : 'Save paycheck'}
+          <button
+            className="btn-primary"
+            disabled={remainder < 0 || saving || !dateValid}
+            onClick={save}
+          >
+            <Check size={16} />{' '}
+            {saving ? 'Saving…' : isEditing ? 'Save changes' : 'Save paycheck'}
           </button>
         )}
       </div>

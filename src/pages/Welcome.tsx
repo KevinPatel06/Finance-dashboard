@@ -27,11 +27,25 @@ export default function Welcome() {
   const [name, setName] = useState('');
   const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [goals, setGoals] = useState<DraftGoal[]>([]);
+  // The half-typed goal lives here rather than inside the editor so Finish can
+  // see it. Filling both fields and tapping Finish used to discard it silently.
+  const [draft, setDraft] = useState<{ name: string; target: string }>({ name: '', target: '' });
   const [saving, setSaving] = useState(false);
 
   const accents = Object.keys(ACCENT_LABELS) as AccentColor[];
   const trimmedName = name.trim();
   const canAdvance = step !== 0 || trimmedName.length > 0;
+
+  const draftAmount = Number(draft.target);
+  const draftGoal: DraftGoal | null =
+    draft.name.trim().length > 0 && Number.isFinite(draftAmount) && draftAmount > 0
+      ? {
+          name: draft.name.trim(),
+          target: draftAmount,
+          color: GOAL_PALETTE[goals.length % GOAL_PALETTE.length],
+        }
+      : null;
+  const pendingGoals = draftGoal ? [...goals, draftGoal] : goals;
 
   const finish = async () => {
     setSaving(true);
@@ -40,7 +54,7 @@ export default function Welcome() {
       await window.api.settings.update({ next_paycheck_date: payDate || null });
       // Sequential on purpose: these are tiny inserts and ordering keeps the
       // goal list in the order they were entered.
-      for (const g of goals) {
+      for (const g of pendingGoals) {
         await window.api.goals.create({
           name: g.name,
           target_amount: g.target,
@@ -168,7 +182,12 @@ export default function Welcome() {
               title="Saving toward anything?"
               hint="Optional — add as many as you like, or skip and do it later."
             >
-              <GoalDraftEditor goals={goals} onChange={setGoals} />
+              <GoalDraftEditor
+                goals={goals}
+                onChange={setGoals}
+                draft={draft}
+                onDraftChange={setDraft}
+              />
             </Step>
           )}
         </div>
@@ -190,7 +209,7 @@ export default function Welcome() {
             </button>
           ) : (
             <button className="btn-primary flex-1" onClick={finish} disabled={saving}>
-              {saving ? 'Setting up…' : goals.length > 0 ? 'Finish' : 'Skip & finish'}
+              {saving ? 'Setting up…' : pendingGoals.length > 0 ? 'Finish' : 'Skip & finish'}
             </button>
           )}
         </div>
@@ -242,16 +261,26 @@ function ThemeCard({
   );
 }
 
-/** Collects goals in local state; nothing is written until Finish. */
+/**
+ * Collects goals in local state; nothing is written until Finish.
+ *
+ * The in-progress row is owned by the parent so Finish can pick it up whether
+ * or not the user thought to tap Add.
+ */
 function GoalDraftEditor({
   goals,
   onChange,
+  draft,
+  onDraftChange,
 }: {
   goals: DraftGoal[];
   onChange: (next: DraftGoal[]) => void;
+  draft: { name: string; target: string };
+  onDraftChange: (next: { name: string; target: string }) => void;
 }) {
-  const [name, setName] = useState('');
-  const [target, setTarget] = useState('');
+  const { name, target } = draft;
+  const setName = (v: string) => onDraftChange({ ...draft, name: v });
+  const setTarget = (v: string) => onDraftChange({ ...draft, target: v });
 
   const amount = Number(target);
   const canAdd = name.trim().length > 0 && Number.isFinite(amount) && amount > 0;
@@ -267,8 +296,7 @@ function GoalDraftEditor({
         color: GOAL_PALETTE[goals.length % GOAL_PALETTE.length],
       },
     ]);
-    setName('');
-    setTarget('');
+    onDraftChange({ name: '', target: '' });
   };
 
   return (
