@@ -186,6 +186,11 @@ Key tables:
 - **Storage**: sql.js holds the DB in memory and flushes `db.export()` to Capacitor Filesystem
   after every mutating call (per `apiMap`'s `mutates` flag) and on `appStateChange` when iOS
   backgrounds the app, keeping one rotated `finance.db.bak`. The DB is well under 1MB.
+  **Flushes MUST stay serialised, and each MUST snapshot inside its own turn** (`storage.ts`).
+  Concurrent `writeFile`s to one path can interleave; worse, a flush that snapshots early and
+  lands late writes back pre-write state, silently reverting committed rows. That cost the
+  first-run goals: `setUserName()` fires a settings write it never awaits, so its flush raced
+  the awaited `goals.create` ones. `test/iosFlush.test.ts` pins both properties.
 - **No IPC** — `src/platform/ios/api.ts` builds `window.api` in-process from `core/apiMap.ts`
   and wraps results in Promises, so pages can't tell the difference.
 - **Restore is desktop-only** (no first-party Capacitor document picker). Settings hides the
