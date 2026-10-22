@@ -1,4 +1,5 @@
 import type { DB } from './db';
+import { suggestEmoji, suggestKind } from '../shared/emoji';
 
 interface Migration {
   version: number;
@@ -22,7 +23,161 @@ const SYNC_TRACKED_TABLES = [
   'registered_contributions',
 ];
 
+/**
+ * Gives `table` the v11 sync columns (uuid, updated_at) and the triggers that
+ * keep them filled and record hard deletes in _deletions. Idempotent.
+ */
+function addSyncTracking(db: DB, table: string) {
+  const cols = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+    (c) => c.name
+  );
+
+  // SQLite requires a constant DEFAULT in ALTER TABLE ADD COLUMN, so the
+  // columns are added bare and backfilled; future inserts are covered by
+  // the AFTER INSERT trigger below rather than by a column default.
+  if (!cols.includes('uuid')) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN uuid TEXT`);
+  }
+  if (!cols.includes('updated_at')) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN updated_at INTEGER`);
+  }
+  db.exec(`UPDATE ${table} SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL`);
+  db.exec(
+    `UPDATE ${table} SET updated_at = CAST(strftime('%s','now') AS INTEGER)
+     WHERE updated_at IS NULL`
+  );
+
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS ${table}_sync_ins AFTER INSERT ON ${table}
+    BEGIN
+      UPDATE ${table}
+         SET uuid = COALESCE(NEW.uuid, lower(hex(randomblob(16)))),
+             updated_at = CAST(strftime('%s','now') AS INTEGER)
+       WHERE rowid = NEW.rowid;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS ${table}_sync_upd AFTER UPDATE ON ${table}
+    WHEN NEW.updated_at IS OLD.updated_at
+    BEGIN
+      UPDATE ${table}
+         SET updated_at = CAST(strftime('%s','now') AS INTEGER)
+       WHERE rowid = NEW.rowid;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS ${table}_sync_del AFTER DELETE ON ${table}
+    BEGIN
+      INSERT INTO _deletions (table_name, uuid, deleted_at)
+      VALUES ('${table}', OLD.uuid, CAST(strftime('%s','now') AS INTEGER));
+    END;
+  `);
+}
+
 const migrations: Migration[] = [
+  {
+    version: 13,
+    name: 'budget_redesign',
+    up: (db) => {
+      // The phone's monthly zero-based budget. Additive only: every existing
+      // query keeps working, and the desktop app ignores the new columns.
+      const has = (table: string, col: string) =>
+        (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some(
+          (c) => c.name === col
+        );
+      const addColumn = (table: string, col: string, ddl: string) => {
+        if (!has(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`);
+      };
+
+      addColumn('expense_categories', 'emoji', 'TEXT');
+      addColumn(
+        'expense_categories',
+        'kind',
+        "TEXT NOT NULL DEFAULT 'want' CHECK (kind IN ('need','want'))"
+      );
+      addColumn('expense_categories', 'sort_order', 'INTEGER');
+      addColumn('savings_goals', 'emoji', 'TEXT');
+      addColumn('expenses', 'fund_id', 'INTEGER REFERENCES savings_goals(id) ON DELETE SET NULL');
+      addColumn(
+        'expenses',
+        'recurring_id',
+        'INTEGER REFERENCES recurring_expenses(id) ON DELETE SET NULL'
+      );
+      addColumn(
+        'recurring_expenses',
+        'interval_count',
+        'INTEGER NOT NULL DEFAULT 1 CHECK (interval_count >= 1)'
+      );
+      addColumn('recurring_expenses', 'emoji', 'TEXT');
+      addColumn('paychecks', 'payday', 'TEXT');
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS budget_months (
+          month        TEXT PRIMARY KEY,          -- 'YYYY-MM'
+          confirmed_at TEXT,                      -- NULL = draft awaiting review
+          created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- ref_id is polymorphic: expense_categories (spend), savings_goals (fund),
+        -- debts (debt). Deleting one of those rows cleans up here (repo.ts).
+        CREATE TABLE IF NOT EXISTS budget_lines (
+          id      INTEGER PRIMARY KEY AUTOINCREMENT,
+          month   TEXT NOT NULL REFERENCES budget_months(month) ON DELETE CASCADE,
+          kind    TEXT NOT NULL CHECK (kind IN ('spend','fund','debt')),
+          ref_id  INTEGER NOT NULL,
+          amount  REAL NOT NULL CHECK (amount >= 0),
+          UNIQUE (month, kind, ref_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_budget_lines_month ON budget_lines(month);
+
+        -- Money into / out of a fund from OUTSIDE the budget. Planned monthly
+        -- contributions are derived from confirmed 'fund' lines instead.
+        CREATE TABLE IF NOT EXISTS fund_transactions (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          goal_id    INTEGER NOT NULL REFERENCES savings_goals(id) ON DELETE CASCADE,
+          kind       TEXT NOT NULL CHECK (kind IN ('deposit','withdrawal')),
+          amount     REAL NOT NULL CHECK (amount > 0),
+          date       TEXT NOT NULL,
+          note       TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_fund_tx_goal ON fund_transactions(goal_id);
+        CREATE INDEX IF NOT EXISTS idx_expenses_fund ON expenses(fund_id);
+      `);
+
+      for (const t of ['budget_months', 'budget_lines', 'fund_transactions']) {
+        addSyncTracking(db, t);
+      }
+
+      // Backfills — decided once, here, so a later rename doesn't re-guess.
+      const cats = db
+        .prepare('SELECT id, name FROM expense_categories WHERE emoji IS NULL')
+        .all() as { id: number; name: string }[];
+      const setCat = db.prepare('UPDATE expense_categories SET emoji = ?, kind = ? WHERE id = ?');
+      for (const c of cats) setCat.run(suggestEmoji(c.name), suggestKind(c.name), c.id);
+
+      const goals = db
+        .prepare('SELECT id, name FROM savings_goals WHERE emoji IS NULL')
+        .all() as { id: number; name: string }[];
+      const setGoal = db.prepare('UPDATE savings_goals SET emoji = ? WHERE id = ?');
+      for (const g of goals) setGoal.run(suggestEmoji(g.name, '💰'), g.id);
+
+      const recs = db
+        .prepare('SELECT id, description FROM recurring_expenses WHERE emoji IS NULL')
+        .all() as { id: number; description: string }[];
+      const setRec = db.prepare('UPDATE recurring_expenses SET emoji = ? WHERE id = ?');
+      for (const r of recs) setRec.run(suggestEmoji(r.description, '🔁'), r.id);
+
+      // Generated expenses were only tagged with note='Recurring'; link them to
+      // the template they came from so the budget can take them off the top.
+      db.exec(`
+        UPDATE expenses
+           SET recurring_id = (
+                 SELECT r.id FROM recurring_expenses r
+                  WHERE r.description = expenses.description AND r.amount = expenses.amount
+                  ORDER BY r.id LIMIT 1)
+         WHERE note = 'Recurring' AND recurring_id IS NULL
+      `);
+    },
+  },
   {
     version: 12,
     name: 'onboarding_flag',
@@ -73,50 +228,7 @@ const migrations: Migration[] = [
         CREATE INDEX IF NOT EXISTS idx_deletions_uuid ON _deletions(uuid);
       `);
 
-      for (const t of SYNC_TRACKED_TABLES) {
-        const cols = (db.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map(
-          (c) => c.name
-        );
-
-        // SQLite requires a constant DEFAULT in ALTER TABLE ADD COLUMN, so the
-        // columns are added bare and backfilled; future inserts are covered by
-        // the AFTER INSERT trigger below rather than by a column default.
-        if (!cols.includes('uuid')) {
-          db.exec(`ALTER TABLE ${t} ADD COLUMN uuid TEXT`);
-        }
-        if (!cols.includes('updated_at')) {
-          db.exec(`ALTER TABLE ${t} ADD COLUMN updated_at INTEGER`);
-        }
-        db.exec(`UPDATE ${t} SET uuid = lower(hex(randomblob(16))) WHERE uuid IS NULL`);
-        db.exec(
-          `UPDATE ${t} SET updated_at = CAST(strftime('%s','now') AS INTEGER)
-           WHERE updated_at IS NULL`
-        );
-
-        db.exec(`
-          CREATE TRIGGER IF NOT EXISTS ${t}_sync_ins AFTER INSERT ON ${t}
-          BEGIN
-            UPDATE ${t}
-               SET uuid = COALESCE(NEW.uuid, lower(hex(randomblob(16)))),
-                   updated_at = CAST(strftime('%s','now') AS INTEGER)
-             WHERE rowid = NEW.rowid;
-          END;
-
-          CREATE TRIGGER IF NOT EXISTS ${t}_sync_upd AFTER UPDATE ON ${t}
-          WHEN NEW.updated_at IS OLD.updated_at
-          BEGIN
-            UPDATE ${t}
-               SET updated_at = CAST(strftime('%s','now') AS INTEGER)
-             WHERE rowid = NEW.rowid;
-          END;
-
-          CREATE TRIGGER IF NOT EXISTS ${t}_sync_del AFTER DELETE ON ${t}
-          BEGIN
-            INSERT INTO _deletions (table_name, uuid, deleted_at)
-            VALUES ('${t}', OLD.uuid, CAST(strftime('%s','now') AS INTEGER));
-          END;
-        `);
-      }
+      for (const t of SYNC_TRACKED_TABLES) addSyncTracking(db, t);
     },
   },
   {
@@ -381,7 +493,11 @@ const migrations: Migration[] = [
   },
 ];
 
-export function runMigrations(db: DB) {
+/**
+ * Applies pending migrations in ascending order. `maxVersion` exists so tests
+ * can build a genuine older database to upgrade from.
+ */
+export function runMigrations(db: DB, maxVersion = Infinity) {
   db.exec(`CREATE TABLE IF NOT EXISTS _migrations (
     version INTEGER PRIMARY KEY,
     name    TEXT NOT NULL,
@@ -397,7 +513,7 @@ export function runMigrations(db: DB) {
   // Apply in ascending version order so v1 schema exists before v2 patches it.
   const ordered = [...migrations].sort((a, b) => a.version - b.version);
   for (const m of ordered) {
-    if (applied.has(m.version)) continue;
+    if (applied.has(m.version) || m.version > maxVersion) continue;
     const tx = db.transaction(() => {
       m.up(db);
       insertMigration.run(m.version, m.name);
@@ -409,7 +525,7 @@ export function runMigrations(db: DB) {
   const ensureSetting = db.prepare(
     'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'
   );
-  ensureSetting.run('theme', 'dark');
+  ensureSetting.run('theme', 'light');
   ensureSetting.run('pay_cadence', 'biweekly');
   ensureSetting.run('next_paycheck_date', '');
   ensureSetting.run('accent_color', 'emerald');
@@ -419,4 +535,10 @@ export function runMigrations(db: DB) {
   ensureSetting.run('notify_bill_lead_days', '3');
   ensureSetting.run('notify_paycheck', 'true');
   ensureSetting.run('notify_budget', 'true');
+  ensureSetting.run('pay_amount', '');
+  ensureSetting.run('pay_frequency', 'biweekly');
+  ensureSetting.run('notify_daily_log', 'true');
+  ensureSetting.run('notify_daily_time', '19:00');
+  ensureSetting.run('notify_new_month', 'true');
+  ensureSetting.run('notify_weekly_report', 'true');
 }

@@ -55,6 +55,7 @@ export interface SavingsGoal {
   archived: 0 | 1;
   archived_at: string | null;
   created_at: string;
+  emoji: string | null;
   // computed
   current_amount: number;
 }
@@ -64,6 +65,7 @@ export interface SavingsGoalInput {
   target_amount: number;
   target_date?: string | null;
   color: string;
+  emoji?: string | null;
 }
 
 export interface Paycheck {
@@ -72,6 +74,8 @@ export interface Paycheck {
   amount: number;
   notes: string | null;
   created_at: string;
+  /** The scheduled payday a check-in fulfils; null for legacy / ad-hoc paychecks. */
+  payday: string | null;
 }
 
 export interface PaycheckAllocation {
@@ -135,6 +139,13 @@ export interface AppSettings {
   notify_bill_lead_days: number; // warn this many days before a bill is due
   notify_paycheck: boolean;
   notify_budget: boolean;
+  // Monthly budget (phone).
+  pay_amount: number | null; // take-home per paycheck; null until set
+  pay_frequency: PayFrequency;
+  notify_daily_log: boolean; // daily "log today's expenses" reminder
+  notify_daily_time: string; // 'HH:mm', local
+  notify_new_month: boolean;
+  notify_weekly_report: boolean;
 }
 
 export interface BillToPay {
@@ -224,6 +235,17 @@ export interface ExpenseCategory {
   id: number;
   name: string;
   color: string;
+  emoji: string | null;
+  kind: CategoryKind;
+  sort_order: number | null;
+}
+
+export interface ExpenseCategoryInput {
+  name: string;
+  color: string;
+  emoji?: string | null;
+  kind?: CategoryKind;
+  sort_order?: number | null;
 }
 
 export interface BudgetStatus {
@@ -242,6 +264,8 @@ export interface Expense {
   category_id: number | null;
   note: string | null;
   debt_id: number | null; // credit card this purchase was charged to
+  fund_id: number | null; // "paid from fund" — comes out of the fund, not the budget
+  recurring_id: number | null; // set when generated from a recurring template
   created_at: string;
 }
 
@@ -252,6 +276,7 @@ export interface ExpenseInput {
   category_id: number | null;
   note?: string | null;
   debt_id?: number | null;
+  fund_id?: number | null;
 }
 
 export type RecurringFrequency = 'weekly' | 'biweekly' | 'monthly' | 'yearly';
@@ -265,8 +290,10 @@ export interface RecurringExpense {
   frequency: RecurringFrequency;
   anchor_date: string; // ISO YYYY-MM-DD — first occurrence
   last_generated: string | null;
-  archived: number;
+  archived: number; // 1 = paused
   created_at: string;
+  interval_count: number; // every N weeks / months / years
+  emoji: string | null;
 }
 
 export interface RecurringExpenseInput {
@@ -276,6 +303,10 @@ export interface RecurringExpenseInput {
   debt_id?: number | null;
   frequency: RecurringFrequency;
   anchor_date: string;
+  interval_count?: number;
+  emoji?: string | null;
+  /** true pauses the template; false resumes it without back-filling. */
+  archived?: boolean;
 }
 
 export type RegisteredKind = 'rrsp' | 'tfsa' | 'fhsa';
@@ -335,4 +366,18 @@ export interface ExpenseReport {
     categoryName: string;
     categoryColor: string;
   }>;
+}
+
+// ---------- Monthly budget (phone) ----------
+export type BudgetLineKind = 'spend' | 'fund' | 'debt';
+
+/** Money moved into or out of a fund from outside the budget. */
+export interface FundTransaction {
+  id: number;
+  goal_id: number;
+  kind: 'deposit' | 'withdrawal';
+  amount: number; // always positive; kind gives the direction
+  date: string;
+  note: string | null;
+  created_at: string;
 }

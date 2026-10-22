@@ -22,6 +22,7 @@ import type {
   RegisteredAccount,
   RegisteredAccountInput,
   MobileHomeLayout,
+  PayFrequency,
   RegisteredContribution,
   RegisteredContributionInput,
   SavingsGoal,
@@ -145,8 +146,12 @@ export function getSettings(): AppSettings {
   const homeLayout = (MOBILE_HOME_LAYOUTS as readonly string[]).includes(map.mobile_home_layout)
     ? (map.mobile_home_layout as MobileHomeLayout)
     : 'hero_actions';
+  const payAmount = Number(map.pay_amount);
+  const payFrequency = (PAY_FREQUENCIES as readonly string[]).includes(map.pay_frequency)
+    ? (map.pay_frequency as PayFrequency)
+    : 'biweekly';
   return {
-    theme: (map.theme as 'light' | 'dark') || 'dark',
+    theme: map.theme === 'dark' ? 'dark' : 'light',
     pay_cadence: 'biweekly',
     next_paycheck_date: map.next_paycheck_date || null,
     accent_color: accent,
@@ -158,8 +163,18 @@ export function getSettings(): AppSettings {
     notify_bill_lead_days: Number(map.notify_bill_lead_days) || 3,
     notify_paycheck: map.notify_paycheck !== 'false',
     notify_budget: map.notify_budget !== 'false',
+    pay_amount: map.pay_amount && Number.isFinite(payAmount) && payAmount > 0 ? payAmount : null,
+    pay_frequency: payFrequency,
+    notify_daily_log: map.notify_daily_log !== 'false',
+    notify_daily_time: /^\d{2}:\d{2}$/.test(map.notify_daily_time ?? '')
+      ? map.notify_daily_time
+      : '19:00',
+    notify_new_month: map.notify_new_month !== 'false',
+    notify_weekly_report: map.notify_weekly_report !== 'false',
   };
 }
+
+const PAY_FREQUENCIES = ['weekly', 'biweekly', 'semi_monthly', 'monthly'] as const;
 
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const db = getDb();

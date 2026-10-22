@@ -128,6 +128,26 @@ export function runRepoContract(
       expect(repo.getSettings().onboarded).toBe(true);
     });
 
+    it('seeds the budget settings on a fresh install', () => {
+      expect(repo.getSettings()).toMatchObject({
+        theme: 'light',
+        pay_amount: null,
+        pay_frequency: 'biweekly',
+        notify_daily_log: true,
+        notify_daily_time: '19:00',
+        notify_new_month: true,
+        notify_weekly_report: true,
+      });
+    });
+
+    it('round-trips pay settings and rejects nonsense', () => {
+      repo.updateSettings({ pay_amount: 1200, pay_frequency: 'monthly' });
+      expect(repo.getSettings()).toMatchObject({ pay_amount: 1200, pay_frequency: 'monthly' });
+      repo.setMeta('pay_frequency', 'fortnightly');
+      repo.setMeta('pay_amount', 'abc');
+      expect(repo.getSettings()).toMatchObject({ pay_amount: null, pay_frequency: 'biweekly' });
+    });
+
     it('stores and reads bookkeeping metadata', () => {
       expect(repo.getMeta('nope')).toBeNull();
       repo.setMeta('last_notified_date', '2026-08-06');
