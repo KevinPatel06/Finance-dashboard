@@ -9,6 +9,12 @@ export type BillFrequency =
 
 export type AllocationKind = 'bill' | 'goal' | 'fun' | 'other' | 'debt';
 
+/** How often the user is paid. Drives payday enumeration and monthly income. */
+export type PayFrequency = 'weekly' | 'biweekly' | 'semi_monthly' | 'monthly';
+
+/** Whether a spending category is an essential (need) or discretionary (want). */
+export type CategoryKind = 'need' | 'want';
+
 export interface Category {
   id: number;
   name: string;
