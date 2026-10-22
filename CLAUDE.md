@@ -92,7 +92,7 @@ autofocuses first field (`role="dialog"`), and docks as a bottom sheet below `md
 `src/platform/ios/api.ts` → use `window.api.x.y()` in a page. `test/apiMap.test.ts` fails if
 a channel has no apiMap entry, so iOS support can't be silently forgotten.
 
-## Data model (migrations v1–v11)
+## Data model (migrations v1–v13)
 - **v1**: `settings(key,value)`, `categories`, `bills`, `savings_goals`, `paychecks`,
   `paycheck_allocations`.
 - **v2**: `savings_goals.archived_at`.
@@ -113,9 +113,20 @@ a channel has no apiMap entry, so iOS support can't be silently forgotten.
   `WHERE deleted_at IS NULL` onto nearly every SELECT. No sync is implemented; this only makes
   it possible later (integer autoincrement PKs collide across devices, and retrofitting stable
   IDs across historical rows is the expensive part).
+- **v12**: `onboarded` setting decided once from existing data.
+- **v13** (`budget_redesign`, phone budget): `expense_categories.emoji/kind('need'|'want')/
+  sort_order`, `savings_goals.emoji`, `expenses.fund_id` ("paid from fund") + `recurring_id`
+  (set by materialisation; backfilled from `note='Recurring'`), `recurring_expenses.
+  interval_count/emoji`, `paychecks.payday`; new `budget_months(month PK 'YYYY-MM',
+  confirmed_at)`, `budget_lines(month,kind[spend|fund|debt],ref_id,amount)` (polymorphic
+  ref, no FK — deletes of categories/funds/debts clean up in repo), `fund_transactions
+  (goal_id,kind[deposit|withdrawal],amount,date,note)`. All three get v11 sync triggers via
+  `addSyncTracking()`. `runMigrations(db, maxVersion)` — the ceiling is for upgrade tests.
 
 Notification prefs are seeded each launch (`INSERT OR IGNORE`): `notify_enabled`,
-`notify_bill_lead_days`, `notify_paycheck`, `notify_budget`. `last_notified_date` is a
+`notify_bill_lead_days`, `notify_paycheck`, `notify_budget`, plus (v13, phone) `pay_amount`,
+`pay_frequency`, `notify_daily_log`, `notify_daily_time`, `notify_new_month`,
+`notify_weekly_report`. Payday "Not yet" snoozes are meta keys `payday_snooze:<date>`. `last_notified_date` is a
 bookkeeping key (once-per-day dedup) read/written via `repo.getMeta`/`setMeta`.
 
 Key tables:
@@ -181,8 +192,40 @@ Key tables:
   convention `(1+APR/2)^(2/ppy)−1`; monthly = US/everything-else. Mortgages default semi_annual.
   All payoff AND auto-interest math routes through `periodRate`.
 
+## Phone app (monthly budget) — `src/phone/`
+Below `md`, `App.tsx` renders `PhoneApp` instead of the desktop routes (desktop untouched).
+Modelled on DaTrack: tabs **Budget · Expenses · More** + a floating **+** (quick add).
+Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
+- **Budget is the calendar month, zero-based**: income − recurring − debt lines − fund lines =
+  spending money, split into Needs/Wants category lines. `repo.budgetMonth(m)` returns the whole
+  `BudgetMonthView` (gauge, safe/day, pace, lines with spent/left, unbudgeted spend, paydays).
+- **Income** = scheduled paydays (`shared/paydays.ts`, from `next_paycheck_date` +
+  `pay_frequency`): confirmed amount, else `pay_amount` for *regular* paydays; *bonus* paydays
+  (beyond `guaranteedPerMonth`: weekly 4, biweekly 2, semi-monthly 2, monthly 1) count only
+  once confirmed. Legacy paychecks (payday NULL) fill a payday within ±4 days.
+- **Only everyday spending lowers left-to-spend**: not `recurring_id`/`note='Recurring'`, not
+  `fund_id`. Recurring comes off the top.
+- **Months start as drafts** copied from the previous month (skipping completed funds,
+  paid-off debts, deleted categories). Debt lines reduce `current_balance` and fund lines count
+  toward fund balances **only once confirmed**; later edits apply the difference
+  (`changePlan()`). Current-month spend lines are mirrored into `expense_budgets` for desktop.
+- **Fund balance is derived** (`fundBalance()`): paycheck goal allocations + confirmed fund lines
+  + deposits − withdrawals − expenses paid from the fund.
+- **Payday check-in** replaces the wizard on the phone (`paydays.confirm/snooze`).
+- **Quick add** (`shared/quickAdd.ts`, rules only — no AI) parses "coffee 5, gas 50 yesterday",
+  learning categories from history. **Export** (`shared/budgetExport.ts`) builds one Markdown
+  file for the user's own AI; platform channel `files:exportText`.
+- **Reminders**: repeating iOS local notifications (ids 9001–9003) scheduled by
+  `scheduleReminders()` in `src/platform` — daily log, 1st of month, Monday report.
+- Theme defaults to **light** for fresh installs.
+- Visual check: `scripts/phone-shots.mjs` (headless Edge over CDP, no puppeteer) — build
+  `vite.config.ios.ts`, `vite preview --config vite.config.ios.ts --port 4173`, then
+  `node scripts/phone-shots.mjs <outDir> light|dark [fresh]`.
+
 ## iOS app
-- **Full parity** — all 10 nav destinations, including the Paycheck Wizard. Same `src/`.
+- **Phone shell, not desktop parity** — the iPhone runs `PhoneApp`; Payoff, Registered,
+  Reports and Settings are the shared desktop pages under a back header. Bills, Paychecks/
+  Wizard, Calendar and the desktop Dashboard aren't reachable on the phone. Same `src/`.
 - **Storage**: sql.js holds the DB in memory and flushes `db.export()` to Capacitor Filesystem
   after every mutating call (per `apiMap`'s `mutates` flag) and on `appStateChange` when iOS
   backgrounds the app, keeping one rotated `finance.db.bak`. The DB is well under 1MB.
@@ -230,8 +273,8 @@ Key tables:
   `src/global.d.ts`. Because it's a compile-time constant, platform branches are eliminated
   from the bundle that doesn't need them — that's what keeps sql.js out of the desktop build.
 - **Responsive rule**: the desktop layout is `md` and above and must stay pixel-identical.
-  Phone treatment goes behind `md:hidden` / `hidden md:block`. Sidebar → `BottomNav`
-  (4 tabs + More sheet), tables → card lists, modals → bottom sheets.
+  Below `md` the app is `src/phone/` (its own shell). Shared desktop pages shown on the phone
+  (Payoff/Registered/Reports/Settings) keep their `md:hidden` / `hidden md:block` treatments.
 - **Tests**: `test/shared/repoContract.ts` is a driver-agnostic behavioural contract run
   against BOTH node:sqlite and sql.js. Both must pass identically — that's the iOS parity
   proof. If a change makes them disagree, fix the adapter, never weaken the contract.
