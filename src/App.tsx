@@ -12,14 +12,21 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Welcome from './pages/Welcome';
 import { useTheme } from './lib/theme';
+import { useIsMobile } from './lib/useIsMobile';
+import PhoneApp from './phone/PhoneApp';
 
 export default function App() {
   const { ready, onboarded } = useTheme();
+  const isMobile = useIsMobile();
 
   // Hold the first paint until settings load — otherwise the app flashes the
   // default theme, and a fresh install would flash the dashboard before the
   // welcome flow replaces it. This is a local SQLite read, so it's imperceptible.
   if (!ready) return null;
+
+  // Phone width (the iOS app, or a narrow window) is a different app shell:
+  // the monthly budget. Everything below is the desktop app, unchanged.
+  if (isMobile) return <PhoneApp />;
 
   if (!onboarded) return <Welcome />;
 

@@ -46,7 +46,7 @@ function applyDocumentTitle(name: string) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark');
+  const [theme, setThemeState] = useState<Theme>('light');
   const [accent, setAccentState] = useState<AccentColor>('emerald');
   const [userName, setUserNameState] = useState<string>('Kevin');
   const [homeLayout, setHomeLayoutState] = useState<MobileHomeLayout>('hero_actions');
@@ -60,7 +60,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const settings = (await window.api.settings.get()) as AppSettings;
-        const t: Theme = settings.theme === 'light' ? 'light' : 'dark';
+        const t: Theme = settings.theme === 'dark' ? 'dark' : 'light';
         const a: AccentColor = settings.accent_color || 'emerald';
         const n: string = settings.user_name || 'Kevin';
         setThemeState(t);
@@ -72,8 +72,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         applyAccent(t, a);
         applyDocumentTitle(n);
       } catch {
-        applyTheme('dark');
-        applyAccent('dark', 'emerald');
+        applyTheme('light');
+        applyAccent('light', 'emerald');
         applyDocumentTitle('Kevin');
       } finally {
         setReady(true);

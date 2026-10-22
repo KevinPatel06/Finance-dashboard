@@ -3,39 +3,19 @@ import { Download, Upload, Sun, Moon, CalendarClock, Check, User, Bell } from 'l
 import { useTheme } from '@/lib/theme';
 import { ACCENT_LABELS, ACCENT_SWATCH } from '@/lib/accents';
 import { useConfirm, useToast } from '@/lib/ui';
-import type { AccentColor, AppSettings, MobileHomeLayout } from '@shared/types';
-
-const HOME_LAYOUT_OPTIONS: Array<{
-  value: MobileHomeLayout;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: 'hero_actions',
-    label: 'Greeting & quick actions',
-    description: 'Greeting, the headline figure, then shortcuts to log a paycheck or add an expense.',
-  },
-  {
-    value: 'hero_stats',
-    label: 'Headline & month stats',
-    description: 'The headline figure over a swipeable row of this month’s income, bills, savings and fun.',
-  },
-  {
-    value: 'hero_tabs',
-    label: 'Headline & tabs',
-    description: 'Shortest page — the headline figure, then tabs to switch between bills, goals and payoff.',
-  },
-];
+import type { AccentColor, AppSettings } from '@shared/types';
+import { useIsMobile } from '@/lib/useIsMobile';
+import PhoneSettingsExtras from '@/phone/settings/PhoneSettingsExtras';
 
 export default function Settings() {
-  const { theme, setTheme, accent, setAccent, userName, setUserName, homeLayout, setHomeLayout } =
-    useTheme();
+  const { theme, setTheme, accent, setAccent, userName, setUserName } = useTheme();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [nextDate, setNextDate] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [nameSavedAt, setNameSavedAt] = useState<number | null>(null);
   const confirm = useConfirm();
   const toast = useToast();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     window.api.settings.get().then((s) => {
@@ -93,6 +73,9 @@ export default function Settings() {
 
   return (
     <div className="max-w-2xl space-y-6">
+      {/* The phone budget needs pay and reminder settings the desktop doesn't. */}
+      {isMobile && <PhoneSettingsExtras />}
+
       <div className="card p-5">
         <h2 className="font-semibold mb-1">Your profile</h2>
         <p className="text-sm text-content-muted mb-4">
@@ -171,24 +154,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="card p-5">
-        <h2 className="font-semibold mb-1">Home screen layout</h2>
-        <p className="text-sm text-content-muted mb-4">
-          How the home screen is arranged on a phone (and any narrow window). Average savings per
-          paycheck stays the headline in all three. The desktop layout is unaffected.
-        </p>
-        <div className="space-y-2">
-          {HOME_LAYOUT_OPTIONS.map((o) => (
-            <LayoutOption
-              key={o.value}
-              option={o}
-              active={homeLayout === o.value}
-              onClick={() => setHomeLayout(o.value)}
-            />
-          ))}
-        </div>
-      </div>
-
+      {!isMobile && (
       <div className="card p-5">
         <h2 className="font-semibold mb-1">Pay schedule</h2>
         <p className="text-sm text-content-muted mb-4">
@@ -209,6 +175,7 @@ export default function Settings() {
           </button>
         </div>
       </div>
+      )}
 
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-1">
@@ -360,38 +327,6 @@ function ThemeOption({
       <div>
         <div className="font-medium">{label}</div>
         <div className="text-xs text-content-muted">{active ? 'Currently active' : 'Select'}</div>
-      </div>
-    </button>
-  );
-}
-
-function LayoutOption({
-  option,
-  active,
-  onClick,
-}: {
-  option: (typeof HOME_LAYOUT_OPTIONS)[number];
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className={`w-full rounded-xl border p-3 flex items-start gap-3 transition text-left ${
-        active ? 'border-brand bg-brand-soft/40' : 'border-border bg-surface-3 hover:bg-surface-3/70'
-      }`}
-    >
-      <div
-        className={`mt-0.5 w-4 h-4 rounded-full border-2 grid place-items-center shrink-0 ${
-          active ? 'border-brand' : 'border-border-strong'
-        }`}
-      >
-        {active && <div className="w-2 h-2 rounded-full bg-brand" />}
-      </div>
-      <div className="min-w-0">
-        <div className="text-sm font-medium">{option.label}</div>
-        <div className="text-xs text-content-muted mt-0.5">{option.description}</div>
       </div>
     </button>
   );

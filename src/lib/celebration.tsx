@@ -11,6 +11,7 @@ import confetti from 'canvas-confetti';
 import { useNavigate } from 'react-router-dom';
 import { PartyPopper } from 'lucide-react';
 import type { SavingsGoal } from '@shared/types';
+import { useIsMobile } from './useIsMobile';
 
 const STORAGE_KEY = 'kfa.celebratedGoalIds';
 
@@ -138,6 +139,7 @@ function CelebrationModal({
   onClose: () => void;
 }) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -169,11 +171,11 @@ function CelebrationModal({
           <button
             onClick={() => {
               onClose();
-              navigate('/goals');
+              navigate(isMobile ? `/fund/${goal.id}` : '/goals');
             }}
             className="btn-primary"
           >
-            Go to goals
+            {isMobile ? 'View fund' : 'Go to goals'}
           </button>
         </div>
       </div>

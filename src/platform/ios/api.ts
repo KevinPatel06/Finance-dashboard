@@ -1,5 +1,6 @@
 import { App } from '@capacitor/app';
 import { REPO_API } from '../../../core/apiMap';
+import * as repo from '../../../core/repo';
 import { IPC } from '../../../shared/ipc';
 import { setDb } from '../../../core/db';
 import { runMigrations } from '../../../core/migrations';
@@ -164,5 +165,8 @@ export async function installIosApi(): Promise<void> {
   });
 
   // Daily notification check, off the boot path.
-  void import('./notify').then(({ runNotificationCheck }) => runNotificationCheck());
+  void import('./notify').then(async ({ runNotificationCheck, scheduleReminders }) => {
+    await runNotificationCheck();
+    await scheduleReminders(repo.getSettings());
+  });
 }

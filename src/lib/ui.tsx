@@ -100,7 +100,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
         )}
 
         <div
-          className="fixed bottom-5 right-5 z-[80] flex flex-col gap-2 pointer-events-none"
+          className="fixed z-[80] flex flex-col gap-2 pointer-events-none left-4 right-4 items-center bottom-[calc(6rem+env(safe-area-inset-bottom))] md:left-auto md:right-5 md:bottom-5 md:items-stretch"
           role="status"
           aria-live="polite"
           aria-atomic="false"
