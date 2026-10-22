@@ -3,7 +3,12 @@ import { IPC } from '../shared/ipc';
 import { REPO_API } from '../core/apiMap';
 
 /** Channels handled by platform services, not by repo functions. */
-const PLATFORM_CHANNELS = new Set<string>([IPC.DB_BACKUP, IPC.DB_RESTORE, IPC.EXPORT_CSV]);
+const PLATFORM_CHANNELS = new Set<string>([
+  IPC.DB_BACKUP,
+  IPC.DB_RESTORE,
+  IPC.EXPORT_CSV,
+  IPC.EXPORT_TEXT,
+]);
 
 describe('apiMap', () => {
   it('covers every repo-backed IPC channel exactly once', () => {
@@ -29,5 +34,8 @@ describe('apiMap', () => {
     // recurring templates — both write, despite the "list" name.
     expect(byChannel.get(IPC.LIST_DEBTS)!.mutates).toBe(true);
     expect(byChannel.get(IPC.LIST_EXPENSES)!.mutates).toBe(true);
+    // budgetMonth creates a month's draft on first view.
+    expect(byChannel.get(IPC.BUDGET_MONTH)!.mutates).toBe(true);
+    expect(byChannel.get(IPC.FUND_ACTIVITY)!.mutates).toBe(false);
   });
 });

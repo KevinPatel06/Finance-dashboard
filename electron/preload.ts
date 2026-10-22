@@ -60,10 +60,11 @@ const api = {
     remove: (id: number) => invoke(IPC.DELETE_EXPENSE, id),
   },
   recurringExpenses: {
-    list: () => invoke(IPC.LIST_RECURRING),
+    list: (includeArchived?: boolean) => invoke(IPC.LIST_RECURRING, includeArchived),
     create: (input: unknown) => invoke(IPC.CREATE_RECURRING, input),
     update: (id: number, input: unknown) => invoke(IPC.UPDATE_RECURRING, id, input),
     remove: (id: number) => invoke(IPC.DELETE_RECURRING, id),
+    importBills: () => invoke(IPC.IMPORT_BILLS_RECURRING),
   },
   registered: {
     list: () => invoke(IPC.LIST_REGISTERED),
@@ -78,6 +79,25 @@ const api = {
     set: (categoryId: number, monthlyLimit: number) =>
       invoke(IPC.SET_BUDGET, categoryId, monthlyLimit),
   },
+  budget: {
+    month: (month?: string) => invoke(IPC.BUDGET_MONTH, month),
+    setLine: (month: string, kind: string, refId: number, amount: number) =>
+      invoke(IPC.BUDGET_SET_LINE, month, kind, refId, amount),
+    removeLine: (month: string, kind: string, refId: number) =>
+      invoke(IPC.BUDGET_REMOVE_LINE, month, kind, refId),
+    savePlan: (month: string, lines: unknown, confirm: boolean) =>
+      invoke(IPC.BUDGET_SAVE_PLAN, month, lines, confirm),
+    confirm: (month: string) => invoke(IPC.BUDGET_CONFIRM, month),
+  },
+  paydays: {
+    confirm: (payday: string, amount: number) => invoke(IPC.PAYDAY_CONFIRM, payday, amount),
+    snooze: (payday: string) => invoke(IPC.PAYDAY_SNOOZE, payday),
+  },
+  funds: {
+    addTransaction: (input: unknown) => invoke(IPC.FUND_ADD_TX, input),
+    removeTransaction: (id: number) => invoke(IPC.FUND_DELETE_TX, id),
+    activity: (goalId: number) => invoke(IPC.FUND_ACTIVITY, goalId),
+  },
   dashboard: {
     get: () => invoke(IPC.DASHBOARD),
   },
@@ -87,6 +107,7 @@ const api = {
     monthly: (months: number) => invoke(IPC.REPORT_MONTHLY, months),
     expenses: (fromDate: string, toDate: string) =>
       invoke(IPC.REPORT_EXPENSES, fromDate, toDate),
+    weekly: (weekStart?: string) => invoke(IPC.REPORT_WEEKLY, weekStart),
   },
   calendar: {
     events: (fromDate: string, toDate: string) =>
@@ -99,6 +120,8 @@ const api = {
   files: {
     exportCsv: (defaultName: string, content: string) =>
       invoke<{ ok: boolean; path?: string }>(IPC.EXPORT_CSV, defaultName, content),
+    exportText: (defaultName: string, content: string) =>
+      invoke<{ ok: boolean; path?: string }>(IPC.EXPORT_TEXT, defaultName, content),
   },
 };
 

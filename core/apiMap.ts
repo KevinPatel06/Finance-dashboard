@@ -86,10 +86,11 @@ export const REPO_API: RepoApiEntry[] = [
   w(IPC.DELETE_EXPENSE, (id) => repo.deleteExpense(id)),
 
   // Recurring expenses
-  r(IPC.LIST_RECURRING, () => repo.listRecurringExpenses()),
+  r(IPC.LIST_RECURRING, (includeArchived) => repo.listRecurringExpenses(includeArchived)),
   w(IPC.CREATE_RECURRING, (input) => repo.createRecurringExpense(input)),
   w(IPC.UPDATE_RECURRING, (id, input) => repo.updateRecurringExpense(id, input)),
   w(IPC.DELETE_RECURRING, (id) => repo.deleteRecurringExpense(id)),
+  w(IPC.IMPORT_BILLS_RECURRING, () => repo.importBillsAsRecurring()),
 
   // Registered accounts
   r(IPC.LIST_REGISTERED, () => repo.listRegisteredAccounts()),
@@ -103,10 +104,27 @@ export const REPO_API: RepoApiEntry[] = [
   r(IPC.LIST_BUDGETS, () => repo.listExpenseBudgets()),
   w(IPC.SET_BUDGET, (categoryId, limit) => repo.setExpenseBudget(categoryId, limit)),
 
+  // Monthly budget — budgetMonth() creates the month's draft on first view, so it writes.
+  w(IPC.BUDGET_MONTH, (month) => repo.budgetMonth(month)),
+  w(IPC.BUDGET_SET_LINE, (month, kind, refId, amount) =>
+    repo.setBudgetLine(month, kind, refId, amount)
+  ),
+  w(IPC.BUDGET_REMOVE_LINE, (month, kind, refId) => repo.removeBudgetLine(month, kind, refId)),
+  w(IPC.BUDGET_SAVE_PLAN, (month, lines, confirm) => repo.saveBudgetPlan(month, lines, confirm)),
+  w(IPC.BUDGET_CONFIRM, (month) => repo.confirmBudgetMonth(month)),
+  w(IPC.PAYDAY_CONFIRM, (payday, amount) => repo.confirmPayday(payday, amount)),
+  w(IPC.PAYDAY_SNOOZE, (payday) => repo.snoozePayday(payday)),
+
+  // Funds
+  w(IPC.FUND_ADD_TX, (input) => repo.addFundTransaction(input)),
+  w(IPC.FUND_DELETE_TX, (id) => repo.deleteFundTransaction(id)),
+  r(IPC.FUND_ACTIVITY, (goalId) => repo.fundActivity(goalId)),
+
   // Dashboard / Reports / Calendar
   r(IPC.DASHBOARD, () => repo.dashboardSnapshot()),
   r(IPC.REPORT_CATEGORIES, (from, to) => repo.reportByCategory(from, to)),
   r(IPC.REPORT_MONTHLY, (months) => repo.reportMonthly(months)),
   r(IPC.REPORT_EXPENSES, (from, to) => repo.reportExpenses(from, to)),
+  r(IPC.REPORT_WEEKLY, (weekStart) => repo.weeklyReport(weekStart)),
   r(IPC.CALENDAR_EVENTS, (from, to) => repo.calendarEvents(from, to)),
 ];

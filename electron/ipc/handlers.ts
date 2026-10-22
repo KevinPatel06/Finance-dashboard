@@ -53,4 +53,16 @@ export function registerIpcHandlers() {
     fs.writeFileSync(filePath, '﻿' + content, 'utf8');
     return { ok: true, path: filePath };
   });
+
+  // Plain UTF-8 text (the budget export is Markdown) — no BOM.
+  ipcMain.handle(IPC.EXPORT_TEXT, async (_e, defaultName: string, content: string) => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Export',
+      defaultPath: defaultName,
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    });
+    if (canceled || !filePath) return { ok: false };
+    fs.writeFileSync(filePath, content, 'utf8');
+    return { ok: true, path: filePath };
+  });
 }

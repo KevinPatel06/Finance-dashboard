@@ -22,6 +22,25 @@ export async function exportCsv(
   }
 }
 
+/** Write a UTF-8 text file (no BOM) to the cache directory and open the share sheet. */
+export async function exportText(
+  defaultName: string,
+  content: string
+): Promise<{ ok: boolean; path?: string }> {
+  try {
+    const res = await Filesystem.writeFile({
+      path: defaultName,
+      data: content,
+      directory: Directory.Cache,
+      encoding: Encoding.UTF8,
+    });
+    await Share.share({ title: defaultName, url: res.uri });
+    return { ok: true, path: res.uri };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /**
  * Share the live finance.db so it can be AirDropped to the desktop.
  * Both platforms use an identical schema and migration chain, so a file

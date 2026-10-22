@@ -71,14 +71,33 @@ export const IPC = {
   ADD_REGISTERED_CONTRIBUTION: 'registered:addContribution',
   DELETE_REGISTERED_CONTRIBUTION: 'registered:deleteContribution',
 
-  // Budgets
+  // Budgets (legacy per-category monthly caps)
   LIST_BUDGETS: 'budgets:list',
   SET_BUDGET: 'budgets:set',
+
+  // Monthly budget (phone)
+  BUDGET_MONTH: 'budget:month',
+  BUDGET_SET_LINE: 'budget:setLine',
+  BUDGET_REMOVE_LINE: 'budget:removeLine',
+  BUDGET_SAVE_PLAN: 'budget:savePlan',
+  BUDGET_CONFIRM: 'budget:confirm',
+
+  // Payday check-ins
+  PAYDAY_CONFIRM: 'paydays:confirm',
+  PAYDAY_SNOOZE: 'paydays:snooze',
+
+  // Funds (money in/out from outside the budget)
+  FUND_ADD_TX: 'funds:addTransaction',
+  FUND_DELETE_TX: 'funds:deleteTransaction',
+  FUND_ACTIVITY: 'funds:activity',
+
+  IMPORT_BILLS_RECURRING: 'recurring:importBills',
 
   // Reports
   REPORT_CATEGORIES: 'reports:categories',
   REPORT_MONTHLY: 'reports:monthly',
   REPORT_EXPENSES: 'reports:expenses',
+  REPORT_WEEKLY: 'reports:weekly',
 
   // Calendar
   CALENDAR_EVENTS: 'calendar:events',
@@ -89,6 +108,7 @@ export const IPC = {
 
   // File export
   EXPORT_CSV: 'files:exportCsv',
+  EXPORT_TEXT: 'files:exportText',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
