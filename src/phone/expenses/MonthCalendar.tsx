@@ -57,14 +57,16 @@ export default function MonthCalendar({
               key={date}
               onClick={() => onPick(date)}
               className={cn(
-                'aspect-[4/5] rounded-xl border p-1.5 flex flex-col justify-between text-left transition active:scale-95',
+                'aspect-[4/5] rounded-xl border px-1 py-1.5 flex flex-col justify-between text-left transition active:scale-95',
                 date === today ? 'border-brand bg-brand-soft/40' : 'border-border/70 bg-surface-2',
                 future && mode !== 'upcoming' && 'opacity-55'
               )}
             >
-              <span className="text-[11px] leading-none text-content-subtle">{day}</span>
+              <span className="text-[11px] leading-none text-content-subtle pl-0.5">{day}</span>
               {mode === 'amount' && cell && cell.total > 0 && (
-                <span className="text-[13px] leading-none font-semibold num truncate">{moneyCompact(cell.total)}</span>
+                <span className="text-[12px] leading-none font-semibold num tracking-tight whitespace-nowrap pl-0.5">
+                  {moneyCompact(cell.total)}
+                </span>
               )}
               {mode === 'emoji' && cell && cell.total > 0 && (
                 <span className="text-xl leading-none self-center pb-0.5">{cell.emoji ?? '❔'}</span>

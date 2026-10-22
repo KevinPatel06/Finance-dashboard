@@ -215,6 +215,7 @@ export default function SetupFlow({
             </div>
             <label className="label mt-5">Next payday</label>
             <input type="date" className="input text-base" value={next} onChange={(e) => setNext(e.target.value)} />
+            {!next && <p className="text-xs text-content-subtle mt-1.5">Pick your next payday to continue.</p>}
           </PCard>
           {monthly > 0 && (
             <p className="text-center mt-5 text-[15px]">
