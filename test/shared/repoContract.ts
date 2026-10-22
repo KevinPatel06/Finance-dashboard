@@ -3,6 +3,7 @@ import type { Bill } from '../../shared/types';
 import { formatISO, subMonths } from 'date-fns';
 import { periodRate } from '../../shared/debtMath';
 import { occurrencesInRange } from '../../shared/recurrence';
+import { addMonthsToMonth } from '../../shared/paydays';
 import { getDb } from '../../core/db';
 import * as repo from '../../core/repo';
 
@@ -450,6 +451,186 @@ export function runRepoContract(
       getDb().prepare('UPDATE recurring_expenses SET last_generated = NULL WHERE id = ?').run(rec.id);
       repo.updateRecurringExpense(rec.id, { archived: false });
       expect(repo.listExpenses()).toHaveLength(before);
+    });
+
+    // ---------- Monthly budget ----------
+    // Fixed months (2026-01/02) keep these independent of the real clock;
+    // only the mirroring and pace tests need "now".
+
+    const visaCard = () =>
+      repo.createDebt({
+        name: 'Visa',
+        type: 'credit_card',
+        original_amount: 0,
+        current_balance: 500,
+        interest_rate: 19.99,
+        payment_amount: 0,
+        payment_frequency: 'monthly',
+        split_count: 1,
+      });
+    const groceriesId = () => repo.listExpenseCategories().find((c) => c.name === 'Groceries')!.id;
+    const balanceOf = (debtId: number) => repo.listDebts().find((d) => d.id === debtId)!.current_balance;
+    const fundOf = (goalId: number) =>
+      [...repo.listGoals(), ...repo.listArchivedGoals()].find((g) => g.id === goalId)!.current_amount;
+    const payMonthly = () =>
+      repo.updateSettings({ pay_amount: 1200, pay_frequency: 'monthly', next_paycheck_date: '2026-01-05' });
+
+    it('has no budget until one is set up', () => {
+      expect(repo.budgetMonth().status).toBe('none');
+      expect(getDb().prepare('SELECT COUNT(*) AS n FROM budget_months').get()).toEqual({ n: 0 });
+    });
+
+    it('confirming a plan pays debts and funds, and only everyday spending lowers left to spend', () => {
+      payMonthly();
+      const visa = visaCard();
+      const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+      repo.createRecurringExpense({
+        description: 'Spotify',
+        amount: 11.99,
+        category_id: null,
+        frequency: 'monthly',
+        anchor_date: '2026-01-10',
+      });
+
+      const plan = repo.saveBudgetPlan(
+        '2026-01',
+        [
+          { kind: 'spend', ref_id: groceriesId(), amount: 300 },
+          { kind: 'fund', ref_id: fund.id, amount: 200 },
+          { kind: 'debt', ref_id: visa.id, amount: 100 },
+        ],
+        true
+      );
+      expect(plan.status).toBe('confirmed');
+      expect(plan.income).toBe(1200);
+      expect(plan.recurring.total).toBeCloseTo(11.99, 6);
+      expect(plan.planned).toMatchObject({ spend: 300, fund: 200, debt: 100, needs: 300, wants: 0 });
+      expect(plan.leftToAllocate).toBeCloseTo(588.01, 6);
+      expect(fundOf(fund.id)).toBe(200);
+      expect(balanceOf(visa.id)).toBeCloseTo(400, 6);
+
+      repo.createExpense({ description: 'No Frills', amount: 50, date: '2026-01-12', category_id: groceriesId() });
+      repo.createExpense({ description: 'Hotel', amount: 20, date: '2026-01-13', category_id: null, fund_id: fund.id });
+      const after = repo.budgetMonth('2026-01');
+      expect(after.spent.total).toBe(50);
+      expect(after.leftToSpend).toBe(250);
+      expect(after.lines.spend[0]).toMatchObject({ amount: 300, spent: 50, left: 250 });
+      expect(after.recurring.items[0]).toMatchObject({ description: 'Spotify', logged: true });
+      expect(fundOf(fund.id)).toBe(180);
+    });
+
+    it('editing a confirmed month applies only the difference to a debt', () => {
+      const visa = visaCard();
+      repo.saveBudgetPlan('2026-01', [{ kind: 'debt', ref_id: visa.id, amount: 100 }], true);
+      repo.setBudgetLine('2026-01', 'debt', visa.id, 150);
+      expect(balanceOf(visa.id)).toBeCloseTo(350, 6);
+      repo.removeBudgetLine('2026-01', 'debt', visa.id);
+      expect(balanceOf(visa.id)).toBeCloseTo(500, 6);
+    });
+
+    it('a new month starts as a draft copy that applies nothing until confirmed', () => {
+      const visa = visaCard();
+      const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+      repo.saveBudgetPlan(
+        '2026-01',
+        [
+          { kind: 'spend', ref_id: groceriesId(), amount: 300 },
+          { kind: 'fund', ref_id: fund.id, amount: 200 },
+          { kind: 'debt', ref_id: visa.id, amount: 100 },
+        ],
+        true
+      );
+      const feb = repo.budgetMonth('2026-02');
+      expect(feb.status).toBe('draft');
+      expect(feb.planned).toMatchObject({ spend: 300, fund: 200, debt: 100 });
+      expect(fundOf(fund.id)).toBe(200);
+      expect(balanceOf(visa.id)).toBeCloseTo(400, 6);
+
+      expect(repo.confirmBudgetMonth('2026-02').status).toBe('confirmed');
+      expect(fundOf(fund.id)).toBe(400);
+      expect(balanceOf(visa.id)).toBeCloseTo(300, 6);
+    });
+
+    it('does not copy a completed fund into the next month', () => {
+      const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+      repo.saveBudgetPlan('2026-01', [{ kind: 'fund', ref_id: fund.id, amount: 200 }], true);
+      repo.deleteGoal(fund.id); // "Mark complete"
+      expect(repo.budgetMonth('2026-02').lines.fund).toHaveLength(0);
+    });
+
+    it('income follows confirmed paydays, bonuses and legacy paychecks', () => {
+      // Weekly from Jan 1 2026: 1, 8, 15, 22 are regular; the 29th is a bonus.
+      repo.updateSettings({ pay_amount: 500, pay_frequency: 'weekly', next_paycheck_date: '2026-01-01' });
+      const jan = () => repo.budgetMonth('2026-01');
+      expect(jan().paydays.map((p) => p.kind)).toEqual(['regular', 'regular', 'regular', 'regular', 'bonus']);
+      expect(jan().income).toBe(2000);
+
+      repo.confirmPayday('2026-01-08', 450);
+      expect(jan().income).toBe(1950);
+      expect(jan().paydays[1].paycheck).toMatchObject({ amount: 450 });
+
+      repo.confirmPayday('2026-01-29', 500);
+      expect(jan().income).toBe(2450);
+
+      // A paycheck logged the old way, a day late, fills the payday instead of doubling it.
+      repo.createPaycheck({ date: '2026-01-16', amount: 500, allocations: [] });
+      expect(jan().income).toBe(2450);
+      expect(jan().paydays[2].paycheck).toMatchObject({ amount: 500 });
+    });
+
+    it('confirming a payday twice updates it rather than adding a second paycheck', () => {
+      payMonthly();
+      repo.confirmPayday('2026-01-05', 1200);
+      repo.confirmPayday('2026-01-05', 1100);
+      expect(repo.budgetMonth('2026-01').income).toBe(1100);
+      expect(repo.listPaychecks()).toHaveLength(1);
+    });
+
+    it('confirming a payday moves the next payday past today', () => {
+      payMonthly();
+      repo.confirmPayday('2026-01-05', 1200);
+      expect(repo.getSettings().next_paycheck_date! > formatISO(new Date(), { representation: 'date' })).toBe(true);
+    });
+
+    it('"Not yet" snoozes a payday for today', () => {
+      payMonthly();
+      repo.snoozePayday('2026-01-05');
+      expect(repo.budgetMonth('2026-01').paydays[0].snoozed).toBe(true);
+    });
+
+    it('mirrors the current month’s spending plan into the legacy budget caps', () => {
+      const month = formatISO(new Date(), { representation: 'date' }).slice(0, 7);
+      repo.saveBudgetPlan(month, [{ kind: 'spend', ref_id: groceriesId(), amount: 300 }], true);
+      expect(repo.listExpenseBudgets().map((b) => [b.name, b.monthly_limit])).toEqual([['Groceries', 300]]);
+    });
+
+    it('reports pace and wants eating into needs', () => {
+      const next = addMonthsToMonth(formatISO(new Date(), { representation: 'date' }).slice(0, 7), 1);
+      const fun = repo.listExpenseCategories().find((c) => c.name === 'Entertainment')!.id;
+      repo.saveBudgetPlan(
+        next,
+        [
+          { kind: 'spend', ref_id: groceriesId(), amount: 300 },
+          { kind: 'spend', ref_id: fun, amount: 50 },
+        ],
+        true
+      );
+      repo.createExpense({ description: 'Concert', amount: 80, date: `${next}-02`, category_id: fun });
+      const v = repo.budgetMonth(next);
+      expect(v.pace).toBe('fast'); // a future month has had no time to elapse
+      expect(v.wantsEatingNeeds).toBe(true);
+      expect(v.safePerDay).toBeCloseTo((350 - 80) / v.daysInMonth, 6);
+
+      repo.createExpense({ description: 'Groceries', amount: 300, date: `${next}-03`, category_id: groceriesId() });
+      expect(repo.budgetMonth(next).pace).toBe('over');
+    });
+
+    it('lists spending in categories without a budget', () => {
+      repo.saveBudgetPlan('2026-01', [{ kind: 'spend', ref_id: groceriesId(), amount: 300 }], true);
+      repo.createExpense({ description: 'Mystery', amount: 9, date: '2026-01-04', category_id: null });
+      const v = repo.budgetMonth('2026-01');
+      expect(v.unbudgeted).toEqual([expect.objectContaining({ category_id: null, spent: 9 })]);
+      expect(v.leftToSpend).toBe(291);
     });
 
     it('materializes recurring expenses idempotently', () => {

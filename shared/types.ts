@@ -392,3 +392,95 @@ export interface FundActivityItem {
   /** The fund_transactions id for deposits/withdrawals (deletable); otherwise null. */
   ref_id: number | null;
 }
+
+export type MonthStatus = 'none' | 'draft' | 'confirmed';
+export type PaceStatus = 'on_track' | 'fast' | 'over';
+
+/** A scheduled payday and what (if anything) was confirmed for it. */
+export interface Payday {
+  date: string;
+  kind: 'regular' | 'bonus';
+  expected: number;
+  paycheck: { id: number; amount: number } | null;
+  /** The user tapped "Not yet" today. */
+  snoozed: boolean;
+}
+
+/** One occurrence of a recurring template inside a month. */
+export interface RecurringOccurrence {
+  recurring_id: number | null; // null for a logged charge whose template was deleted
+  description: string;
+  emoji: string | null;
+  amount: number;
+  date: string;
+  category_id: number | null;
+  logged: boolean;
+}
+
+export interface SpendLineView {
+  category_id: number;
+  name: string;
+  emoji: string | null;
+  color: string;
+  kind: CategoryKind;
+  amount: number;
+  spent: number;
+  left: number;
+}
+
+export interface FundLineView {
+  goal_id: number;
+  name: string;
+  emoji: string | null;
+  color: string;
+  amount: number;
+  balance: number;
+  target: number;
+}
+
+export interface DebtLineView {
+  debt_id: number;
+  name: string;
+  type: DebtType;
+  amount: number;
+  balance: number;
+}
+
+/** Everything the phone's Budget screen needs for one month. */
+export interface BudgetMonthView {
+  month: string; // 'YYYY-MM'
+  status: MonthStatus;
+  today: string;
+  daysInMonth: number;
+  /** Days remaining including today (0 for a past month, all for a future one). */
+  daysLeft: number;
+  paydays: Payday[];
+  /** Unconfirmed, unsnoozed paydays from the last 14 days (any month). */
+  pendingPaydays: Payday[];
+  income: number;
+  recurring: { items: RecurringOccurrence[]; total: number };
+  lines: { spend: SpendLineView[]; fund: FundLineView[]; debt: DebtLineView[] };
+  planned: { spend: number; fund: number; debt: number; needs: number; wants: number };
+  leftToAllocate: number;
+  spent: { total: number; needs: number; wants: number };
+  leftToSpend: number;
+  needsLeft: number;
+  wantsLeft: number;
+  safePerDay: number;
+  pace: PaceStatus;
+  wantsEatingNeeds: boolean;
+  unbudgeted: Array<{
+    category_id: number | null;
+    name: string;
+    emoji: string | null;
+    color: string;
+    kind: CategoryKind;
+    spent: number;
+  }>;
+}
+
+export interface PlanLineInput {
+  kind: BudgetLineKind;
+  ref_id: number;
+  amount: number;
+}
