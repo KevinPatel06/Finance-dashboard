@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Bill } from '../../shared/types';
-import { formatISO, subMonths } from 'date-fns';
+import { differenceInCalendarDays, formatISO, parseISO, subMonths } from 'date-fns';
 import { periodRate } from '../../shared/debtMath';
 import { occurrencesInRange } from '../../shared/recurrence';
 import { addMonthsToMonth } from '../../shared/paydays';
@@ -631,6 +631,55 @@ export function runRepoContract(
       const v = repo.budgetMonth('2026-01');
       expect(v.unbudgeted).toEqual([expect.objectContaining({ category_id: null, spent: 9 })]);
       expect(v.leftToSpend).toBe(291);
+    });
+
+    // ---------- Weekly report ----------
+
+    it('summarises a week against the previous one', () => {
+      const g = groceriesId();
+      repo.createExpense({ description: 'Farm Boy', amount: 50, date: '2026-10-06', category_id: g });
+      repo.createExpense({ description: 'No Frills', amount: 10, date: '2026-10-12', category_id: g });
+      repo.createExpense({ description: 'Costco', amount: 84.7, date: '2026-10-18', category_id: g });
+      const r = repo.weeklyReport('2026-10-12');
+      expect(r).toMatchObject({ weekStart: '2026-10-12', weekEnd: '2026-10-18', previousTotal: 50 });
+      expect(r.total).toBeCloseTo(94.7, 6);
+      expect(r.changePct).toBeCloseTo(89.4, 1);
+      expect(r.dailyAverage).toBeCloseTo(94.7 / 7, 6);
+      expect(r.biggestDay).toEqual({ date: '2026-10-18', total: 84.7 });
+      expect(r.weeks.map((w) => w.weekStart)).toEqual(['2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12']);
+      expect(r.weeks.map((w) => w.total)).toEqual([0, 0, 50, 94.7]);
+      expect(r.byCategory[0]).toMatchObject({ name: 'Groceries', total: 94.7, previous: 50 });
+      expect(r.insights[0]).toContain('Sunday');
+      expect(r.insights[0]).toContain('$84.70');
+    });
+
+    it('has no percentage change when last week was empty', () => {
+      repo.createExpense({ description: 'Lunch', amount: 12, date: '2026-08-04', category_id: null });
+      expect(repo.weeklyReport('2026-08-03').changePct).toBeNull();
+    });
+
+    it('defaults to the last full week', () => {
+      const r = repo.weeklyReport();
+      expect(parseISO(r.weekStart).getDay()).toBe(1);
+      expect(r.weekEnd < formatISO(new Date(), { representation: 'date' })).toBe(true);
+      expect(differenceInCalendarDays(new Date(), parseISO(r.weekEnd))).toBeLessThanOrEqual(7);
+    });
+
+    // ---------- Import bills into recurring ----------
+
+    it('imports active bills as recurring templates once', () => {
+      const todayIso = formatISO(new Date(), { representation: 'date' });
+      repo.createBill({ name: 'Rent', amount: 1450, frequency: 'monthly', anchor_date: '2026-01-01', category_id: null, autopay: false });
+      repo.createBill({ name: 'Car insurance', amount: 412, frequency: 'semi_annual', anchor_date: '2026-02-15', category_id: null, autopay: false });
+      repo.createBill({ name: 'Cleaner', amount: 80, frequency: 'custom_days', custom_days: 14, anchor_date: '2026-01-01', category_id: null, autopay: false });
+      expect(repo.importBillsAsRecurring()).toEqual({ imported: 3 });
+      const recs = repo.listRecurringExpenses();
+      const by = (d: string) => recs.find((r) => r.description === d)!;
+      expect(by('Rent')).toMatchObject({ frequency: 'monthly', interval_count: 1, amount: 1450 });
+      expect(by('Car insurance')).toMatchObject({ frequency: 'monthly', interval_count: 6 });
+      expect(by('Cleaner')).toMatchObject({ frequency: 'weekly', interval_count: 2 });
+      for (const r of recs) expect(r.anchor_date >= todayIso).toBe(true);
+      expect(repo.importBillsAsRecurring()).toEqual({ imported: 0 });
     });
 
     it('materializes recurring expenses idempotently', () => {

@@ -484,3 +484,25 @@ export interface PlanLineInput {
   ref_id: number;
   amount: number;
 }
+
+/** A Monday–Sunday recap of everyday spending (no recurring, no fund purchases). */
+export interface WeeklyReport {
+  weekStart: string; // Monday
+  weekEnd: string; // Sunday
+  total: number;
+  previousTotal: number;
+  changePct: number | null; // null when last week had no spending
+  dailyAverage: number;
+  weeks: Array<{ weekStart: string; total: number }>; // last 4, oldest first
+  biggestDay: { date: string; total: number } | null;
+  byCategory: Array<{
+    category_id: number | null;
+    name: string;
+    emoji: string | null;
+    color: string;
+    total: number;
+    previous: number;
+  }>;
+  fundsAdded: number;
+  insights: string[];
+}

@@ -26,6 +26,7 @@ import type {
   PlanLineInput,
   RecurringOccurrence,
   SpendLineView,
+  WeeklyReport,
   ExpenseReport,
   Paycheck,
   PaycheckAllocationInput,
@@ -54,6 +55,7 @@ import {
   getDaysInMonth,
   parseISO,
   startOfMonth,
+  startOfWeek,
   endOfMonth,
 } from 'date-fns';
 import { periodRate } from '../shared/debtMath';
@@ -1917,6 +1919,172 @@ export function budgetMonth(month?: string): BudgetMonthView {
     wantsEatingNeeds: planned.needs > 0 && spent.wants > planned.wants && leftToSpend >= 0,
     unbudgeted,
   };
+}
+
+// ---------- Weekly report ----------
+
+const cad = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
+
+/** Everyday spending (see EVERYDAY) per day and per category, for one week. */
+function weekTotals(db: Db, start: string) {
+  const end = formatISO(addDays(parseISO(start), 6), { representation: 'date' });
+  const rows = db
+    .prepare(`SELECT date, category_id, amount FROM expenses WHERE date BETWEEN ? AND ? AND ${EVERYDAY}`)
+    .all(start, end) as { date: string; category_id: number | null; amount: number }[];
+  const byDay = new Map<string, number>();
+  const byCat = new Map<number | null, number>();
+  for (const r of rows) {
+    byDay.set(r.date, (byDay.get(r.date) ?? 0) + r.amount);
+    byCat.set(r.category_id, (byCat.get(r.category_id) ?? 0) + r.amount);
+  }
+  return { end, total: r2(rows.reduce((s, r) => s + r.amount, 0)), byDay, byCat };
+}
+
+/** Monday–Sunday recap. Defaults to the last full week. */
+export function weeklyReport(weekStart?: string): WeeklyReport {
+  const db = getDb();
+  const start =
+    weekStart ??
+    formatISO(addDays(startOfWeek(parseISO(today()), { weekStartsOn: 1 }), -7), {
+      representation: 'date',
+    });
+  const shift = (days: number) => formatISO(addDays(parseISO(start), days), { representation: 'date' });
+
+  const cur = weekTotals(db, start);
+  const prev = weekTotals(db, shift(-7));
+  const weeks = [-21, -14, -7, 0].map((d) => ({ weekStart: shift(d), total: weekTotals(db, shift(d)).total }));
+
+  let biggestDay: WeeklyReport['biggestDay'] = null;
+  for (const [date, total] of cur.byDay) {
+    if (!biggestDay || total > biggestDay.total) biggestDay = { date, total: r2(total) };
+  }
+
+  const cats = new Map(listExpenseCategories().map((c) => [c.id, c]));
+  const byCategory = [...cur.byCat.entries()]
+    .map(([id, total]) => {
+      const c = id != null ? cats.get(id) : undefined;
+      return {
+        category_id: id,
+        name: c?.name ?? 'Uncategorized',
+        emoji: c?.emoji ?? '❔',
+        color: c?.color ?? '#94a3b8',
+        total: r2(total),
+        previous: r2(prev.byCat.get(id) ?? 0),
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  const fundsAdded = r2(
+    (
+      db
+        .prepare(
+          "SELECT COALESCE(SUM(amount), 0) AS v FROM fund_transactions WHERE kind = 'deposit' AND date BETWEEN ? AND ?"
+        )
+        .get(start, cur.end) as { v: number }
+    ).v
+  );
+
+  const changePct = prev.total > 0 ? ((cur.total - prev.total) / prev.total) * 100 : null;
+
+  // Plain-language observations built from the numbers — no AI.
+  const insights: string[] = [];
+  if (!biggestDay) {
+    insights.push('No everyday spending logged this week.');
+  } else {
+    const dayCats = db
+      .prepare(
+        `SELECT category_id, SUM(amount) AS v FROM expenses WHERE date = ? AND ${EVERYDAY}
+          GROUP BY category_id ORDER BY v DESC LIMIT 1`
+      )
+      .get(biggestDay.date) as { category_id: number | null; v: number } | undefined;
+    const dayCat = dayCats?.category_id != null ? cats.get(dayCats.category_id)?.name : undefined;
+    insights.push(
+      `${format(parseISO(biggestDay.date), 'EEEE')} was your biggest day at ${cad.format(biggestDay.total)}` +
+        (dayCat ? `, mostly ${dayCat.toLowerCase()}.` : '.')
+    );
+    const movers = byCategory.filter((c) => c.previous > 0 && Math.abs(c.total - c.previous) / c.previous >= 0.2);
+    if (movers[0]) {
+      const m = movers[0];
+      insights.push(
+        `${m.name} ${m.total > m.previous ? 'climbed' : 'dropped'} to ${cad.format(m.total)} from ${cad.format(m.previous)}.`
+      );
+    }
+    if (movers[1]) insights.push(`${movers[1].name} also ${movers[1].total > movers[1].previous ? 'went up' : 'came down'}.`);
+    if (changePct != null && changePct <= -10) {
+      insights.push(`You spent ${Math.round(-changePct)}% less than last week — nice.`);
+    }
+  }
+  if (fundsAdded > 0) insights.push(`You added ${cad.format(fundsAdded)} to your funds.`);
+
+  return {
+    weekStart: start,
+    weekEnd: cur.end,
+    total: cur.total,
+    previousTotal: prev.total,
+    changePct,
+    dailyAverage: cur.total / 7,
+    weeks,
+    biggestDay,
+    byCategory,
+    fundsAdded,
+    insights,
+  };
+}
+
+// ---------- Import bills ----------
+
+/**
+ * Copies each active bill into a recurring template starting at its next due
+ * date (so no history is generated). Bills stay untouched for the desktop.
+ * Bills already imported (same name and amount) are skipped.
+ */
+export function importBillsAsRecurring(): { imported: number } {
+  const existing = listRecurringExpenses(true);
+  const billCats = new Map(listCategories().map((c) => [c.id, c.name.toLowerCase()]));
+  const expenseCats = listExpenseCategories();
+  const catByName = (name: string | undefined) =>
+    name ? expenseCats.find((c) => c.name.toLowerCase() === name.toLowerCase())?.id ?? null : null;
+  const todayDate = parseISO(today());
+  let imported = 0;
+
+  for (const b of listBills()) {
+    if (existing.some((r) => r.description.toLowerCase() === b.name.toLowerCase() && r.amount === b.amount)) continue;
+    let frequency: RecurringFrequency = 'monthly';
+    let interval = 1;
+    switch (b.frequency) {
+      case 'biweekly':
+        frequency = 'weekly';
+        interval = 2;
+        break;
+      case 'semi_annual':
+        interval = 6;
+        break;
+      case 'yearly':
+        frequency = 'yearly';
+        break;
+      case 'custom_days': {
+        const n = Math.max(1, b.custom_days ?? 30);
+        if (n % 7 === 0) {
+          frequency = 'weekly';
+          interval = n / 7;
+        } else {
+          interval = Math.max(1, Math.round(n / 30));
+        }
+        break;
+      }
+    }
+    createRecurringExpense({
+      description: b.name,
+      amount: b.amount,
+      category_id:
+        catByName(b.category_id != null ? billCats.get(b.category_id) : undefined) ?? catByName(b.name),
+      frequency,
+      interval_count: interval,
+      anchor_date: formatISO(nextDueOnOrAfter(b, todayDate), { representation: 'date' }),
+    });
+    imported++;
+  }
+  return { imported };
 }
 
 // ---------- Expense reports ----------
