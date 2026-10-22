@@ -285,9 +285,10 @@ button. Typing shows live preview cards (✓, emoji, description, category · da
 pencil to edit). **Confirm (n)** creates them. Parser rules (`shared/quickAdd.ts`):
 
 - Items split on commas, semicolons, newlines and " and ".
-- Amount: `$12`, `12`, `12.50`, `12,50` is not supported; `$1,234.56` is. The first money
-  token in an item is the amount; the rest is the description. No amount → the item is
-  flagged and can't be confirmed until edited.
+- Amount: `$12`, `12`, `12.50`, `$1,234.56` (`12,50` is not supported). A token with `$`
+  wins; otherwise the **last** standalone number is the amount (so "7-eleven 12" and
+  "2 coffees 9" work); the rest is the description. No amount → the item is flagged and
+  can't be confirmed until edited.
 - Dates: `today`, `yesterday`, weekday names (most recent past occurrence, today if it
   matches), `N days ago`, `oct 3` / `3 oct`, `10/3` (month/day). A date word applies to its
   own item; with one item it applies to that item.
