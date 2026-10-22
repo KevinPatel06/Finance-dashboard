@@ -70,7 +70,14 @@ function paydayDatesInMonth(anchor: string, freq: PayFrequency, month: string): 
     for (let d = addDays(a, k * step); iso(d) <= end; d = addDays(d, step)) out.push(iso(d));
     return out;
   }
-  if (freq === 'monthly') return [dayInMonth(month, parseISO(anchor).getDate())];
+  if (freq === 'monthly') {
+    // An anchor on its month's last day means "month-end": confirming a payday
+    // rolls the anchor forward, and a 31st payer stored as Nov 30 must still
+    // land on Dec 31, not drift to the 30th for good.
+    const a = parseISO(anchor);
+    const monthEnd = a.getDate() === getDaysInMonth(a);
+    return [dayInMonth(month, monthEnd ? 31 : a.getDate())];
+  }
   // semi_monthly: the 15th and the last day of the month.
   return [`${month}-15`, end];
 }

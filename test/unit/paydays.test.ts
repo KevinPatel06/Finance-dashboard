@@ -40,6 +40,14 @@ describe('paydaysInMonth', () => {
     ]);
   });
 
+  it('keeps a month-end payday on the month end after the anchor rolls to a short month', () => {
+    // Confirming a payday stores the next one as the anchor; a Jan 31 payer
+    // rolls to Nov 30, which must still mean "the last day", not "the 30th".
+    expect(paydaysInMonth('2026-11-30', 'monthly', '2026-12')).toEqual([{ date: '2026-12-31', kind: 'regular' }]);
+    expect(nextPaydayAfter('2026-11-30', 'monthly', '2026-11-30')).toBe('2026-12-31');
+    expect(paydaysInMonth('2026-11-25', 'monthly', '2026-12')).toEqual([{ date: '2026-12-25', kind: 'regular' }]);
+  });
+
   it('pays semi-monthly on the 15th and the last day', () => {
     expect(paydaysInMonth('2026-10-15', 'semi_monthly', '2026-02').map((p) => p.date)).toEqual([
       '2026-02-15',
