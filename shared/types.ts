@@ -381,3 +381,14 @@ export interface FundTransaction {
   note: string | null;
   created_at: string;
 }
+
+/** One line of a fund's history, newest first. `amount` is signed. */
+export interface FundActivityItem {
+  id: string; // unique across sources, e.g. 'tx:4', 'line:12', 'exp:30', 'pay:7'
+  date: string;
+  kind: 'contribution' | 'deposit' | 'withdrawal' | 'spend' | 'paycheck';
+  amount: number;
+  label: string;
+  /** The fund_transactions id for deposits/withdrawals (deletable); otherwise null. */
+  ref_id: number | null;
+}

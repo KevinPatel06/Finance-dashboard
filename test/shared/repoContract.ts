@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Bill } from '../../shared/types';
+import { formatISO, subMonths } from 'date-fns';
 import { periodRate } from '../../shared/debtMath';
+import { occurrencesInRange } from '../../shared/recurrence';
+import { getDb } from '../../core/db';
 import * as repo from '../../core/repo';
 
 function mkBill(partial: Partial<Bill>): Bill {
@@ -286,6 +289,167 @@ export function runRepoContract(
 
     it('produces a dashboard snapshot with no data', () => {
       expect(() => repo.dashboardSnapshot()).not.toThrow();
+    });
+
+    // ---------- Categories (emoji / need-want / order) ----------
+
+    it('suggests an emoji and need/want for a new category', () => {
+      const rent = repo.createExpenseCategory({ name: 'Rent', color: '#000000' });
+      expect(rent).toMatchObject({ emoji: '🏠', kind: 'need' });
+      const own = repo.createExpenseCategory({ name: 'Rentals', color: '#000000', emoji: '🎿', kind: 'want' });
+      expect(own).toMatchObject({ emoji: '🎿', kind: 'want' });
+    });
+
+    it('orders categories by their sort order, then by name', () => {
+      const other = repo.listExpenseCategories().find((c) => c.name === 'Other')!;
+      repo.updateExpenseCategory(other.id, { sort_order: 0 });
+      expect(repo.listExpenseCategories()[0].name).toBe('Other');
+    });
+
+    // ---------- Funds ----------
+
+    it('suggests an emoji for a new fund', () => {
+      expect(repo.createGoal({ name: 'Japan trip', target_amount: 3500, color: '#000' }).emoji).toBe('✈️');
+      expect(repo.createGoal({ name: 'Zzz', target_amount: 10, color: '#000' }).emoji).toBe('💰');
+    });
+
+    it('derives a fund balance from paychecks, deposits, withdrawals and fund purchases', () => {
+      const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+      repo.createPaycheck({
+        date: '2026-07-01',
+        amount: 1200,
+        allocations: [{ kind: 'goal', ref_id: fund.id, amount: 40 }],
+      });
+      repo.addFundTransaction({ goal_id: fund.id, kind: 'deposit', amount: 100, date: '2026-08-01' });
+      repo.addFundTransaction({ goal_id: fund.id, kind: 'withdrawal', amount: 30, date: '2026-08-02' });
+      repo.createExpense({
+        description: 'Hotel',
+        amount: 20,
+        date: '2026-08-03',
+        category_id: null,
+        fund_id: fund.id,
+      });
+      expect(repo.listGoals().find((g) => g.id === fund.id)!.current_amount).toBeCloseTo(90, 6);
+      expect(
+        repo.fundActivity(fund.id).map((a) => [a.kind, a.amount])
+      ).toEqual([
+        ['spend', -20],
+        ['withdrawal', -30],
+        ['deposit', 100],
+        ['paycheck', 40],
+      ]);
+    });
+
+    it('removing a fund transaction restores the balance', () => {
+      const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+      const tx = repo.addFundTransaction({ goal_id: fund.id, kind: 'deposit', amount: 100, date: '2026-08-01' });
+      repo.deleteFundTransaction(tx.id);
+      expect(repo.listGoals().find((g) => g.id === fund.id)!.current_amount).toBe(0);
+    });
+
+    it('an expense paid from a fund is never also charged to a card', () => {
+      const card = repo.createDebt({
+        name: 'Visa',
+        type: 'credit_card',
+        original_amount: 0,
+        current_balance: 500,
+        interest_rate: 19.99,
+        payment_amount: 0,
+        payment_frequency: 'monthly',
+        split_count: 1,
+      });
+      const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+      const both = repo.createExpense({
+        description: 'Hotel',
+        amount: 75,
+        date: '2026-08-01',
+        category_id: null,
+        debt_id: card.id,
+        fund_id: fund.id,
+      });
+      expect(both).toMatchObject({ debt_id: null, fund_id: fund.id });
+      expect(repo.listDebts().find((d) => d.id === card.id)!.current_balance).toBeCloseTo(500, 6);
+
+      const charged = repo.createExpense({
+        description: 'Dinner',
+        amount: 40,
+        date: '2026-08-02',
+        category_id: null,
+        debt_id: card.id,
+      });
+      expect(repo.listDebts().find((d) => d.id === card.id)!.current_balance).toBeCloseTo(540, 6);
+      repo.updateExpense(charged.id, { fund_id: fund.id });
+      expect(repo.listDebts().find((d) => d.id === card.id)!.current_balance).toBeCloseTo(500, 6);
+    });
+
+    // ---------- Deleting things a plan references ----------
+
+    it('deleting a category, fund or debt removes the budget lines that point at it', () => {
+      const db = getDb();
+      const cat = repo.createExpenseCategory({ name: 'Snacks', color: '#000' });
+      const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+      const debt = repo.createDebt({
+        name: 'Loan',
+        type: 'loan',
+        original_amount: 1000,
+        current_balance: 1000,
+        interest_rate: 5,
+        payment_amount: 100,
+        payment_frequency: 'monthly',
+        split_count: 1,
+      });
+      const exp = repo.createExpense({ description: 'Chips', amount: 3, date: '2026-08-01', category_id: cat.id });
+      db.prepare("INSERT INTO budget_months (month) VALUES ('2026-08')").run();
+      const line = db.prepare("INSERT INTO budget_lines (month, kind, ref_id, amount) VALUES ('2026-08', ?, ?, ?)");
+      line.run('spend', cat.id, 50);
+      line.run('fund', fund.id, 100);
+      line.run('debt', debt.id, 100);
+
+      repo.deleteExpenseCategory(cat.id);
+      repo.hardDeleteGoal(fund.id);
+      repo.deleteDebt(debt.id);
+
+      expect(db.prepare('SELECT COUNT(*) AS n FROM budget_lines').get()).toEqual({ n: 0 });
+      expect(repo.listExpenses().find((e) => e.id === exp.id)!.category_id).toBeNull();
+    });
+
+    // ---------- Recurring (interval, pause / resume) ----------
+
+    it('generates every-N-months occurrences from the anchor and links them', () => {
+      const todayIso = formatISO(new Date(), { representation: 'date' });
+      const rec = repo.createRecurringExpense({
+        description: 'Car insurance',
+        amount: 412,
+        category_id: null,
+        frequency: 'monthly',
+        interval_count: 6,
+        anchor_date: '2026-02-15',
+      });
+      const generated = repo.listExpenses().filter((e) => e.recurring_id === rec.id);
+      expect(generated.map((e) => e.date).sort()).toEqual(
+        occurrencesInRange('2026-02-15', 'monthly', 6, '2026-02-15', todayIso)
+      );
+      expect(generated.length).toBeGreaterThanOrEqual(2);
+      expect(rec).toMatchObject({ interval_count: 6, emoji: '🚗' });
+    });
+
+    it('resuming a paused template does not back-fill the paused months', () => {
+      const anchor = formatISO(subMonths(new Date(), 3), { representation: 'date' });
+      const rec = repo.createRecurringExpense({
+        description: 'Gym',
+        amount: 50,
+        category_id: null,
+        frequency: 'monthly',
+        anchor_date: anchor,
+      });
+      const before = repo.listExpenses().length;
+      repo.updateRecurringExpense(rec.id, { archived: true });
+      expect(repo.listRecurringExpenses()).toHaveLength(0);
+      expect(repo.listRecurringExpenses(true)).toHaveLength(1);
+      // Pretend the template has been paused since it was created.
+      getDb().prepare('UPDATE recurring_expenses SET last_generated = NULL WHERE id = ?').run(rec.id);
+      repo.updateRecurringExpense(rec.id, { archived: false });
+      expect(repo.listExpenses()).toHaveLength(before);
     });
 
     it('materializes recurring expenses idempotently', () => {

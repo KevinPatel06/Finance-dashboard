@@ -11,7 +11,10 @@ import type {
   DebtInput,
   Expense,
   ExpenseCategory,
+  ExpenseCategoryInput,
   ExpenseInput,
+  FundActivityItem,
+  FundTransaction,
   ExpenseReport,
   Paycheck,
   PaycheckAllocationInput,
@@ -33,9 +36,9 @@ import { MOBILE_HOME_LAYOUTS } from '../shared/types';
 import {
   addDays,
   addMonths,
-  addWeeks,
   addYears,
   differenceInCalendarDays,
+  format,
   formatISO,
   getDaysInMonth,
   parseISO,
@@ -43,6 +46,8 @@ import {
   endOfMonth,
 } from 'date-fns';
 import { periodRate } from '../shared/debtMath';
+import { suggestEmoji, suggestKind } from '../shared/emoji';
+import { latestOccurrenceOnOrBefore, occurrencesInRange } from '../shared/recurrence';
 
 // ---------- helpers ----------
 const today = () => formatISO(new Date(), { representation: 'date' });
@@ -477,33 +482,60 @@ export function billStatuses(): BillStatusRow[] {
   });
 }
 
-// ---------- Goals ----------
+// ---------- Goals (funds) ----------
+//
+// A fund's balance is derived, never stored: legacy paycheck allocations +
+// planned contributions from CONFIRMED budget months + deposits − withdrawals
+// − purchases paid from the fund. Deriving it means editing or deleting any
+// of those sources can never leave the balance out of step.
+
+export function fundBalance(goalId: number, db = getDb()): number {
+  const row = db
+    .prepare(
+      `SELECT
+         (SELECT COALESCE(SUM(amount), 0) FROM paycheck_allocations
+           WHERE kind = 'goal' AND ref_id = ?)
+       + (SELECT COALESCE(SUM(l.amount), 0) FROM budget_lines l
+           JOIN budget_months m ON m.month = l.month
+          WHERE l.kind = 'fund' AND l.ref_id = ? AND m.confirmed_at IS NOT NULL)
+       + (SELECT COALESCE(SUM(CASE kind WHEN 'deposit' THEN amount ELSE -amount END), 0)
+            FROM fund_transactions WHERE goal_id = ?)
+       - (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE fund_id = ?) AS total`
+    )
+    .get(goalId, goalId, goalId, goalId) as { total: number };
+  return Math.round(row.total * 100) / 100;
+}
+
+function withBalance(g: Omit<SavingsGoal, 'current_amount'>, db = getDb()): SavingsGoal {
+  return { ...g, current_amount: fundBalance(g.id, db) };
+}
+
 export function listGoals(): SavingsGoal[] {
   const db = getDb();
   const rows = db
     .prepare('SELECT * FROM savings_goals WHERE archived = 0 ORDER BY name')
     .all() as SavingsGoal[];
-  const contribStmt = db.prepare(
-    "SELECT COALESCE(SUM(amount), 0) AS total FROM paycheck_allocations WHERE kind = 'goal' AND ref_id = ?"
-  );
-  return rows.map((g) => {
-    const r = contribStmt.get(g.id) as { total: number };
-    return { ...g, current_amount: r.total };
-  });
+  return rows.map((g) => withBalance(g, db));
 }
 
 export function createGoal(input: SavingsGoalInput): SavingsGoal {
   const db = getDb();
   const info = db
     .prepare(
-      `INSERT INTO savings_goals (name, target_amount, target_date, color)
-       VALUES (?, ?, ?, ?)`
+      `INSERT INTO savings_goals (name, target_amount, target_date, color, emoji)
+       VALUES (?, ?, ?, ?, ?)`
     )
-    .run(input.name, input.target_amount, input.target_date ?? null, input.color);
+    .run(
+      input.name,
+      input.target_amount,
+      input.target_date ?? null,
+      input.color,
+      input.emoji || suggestEmoji(input.name, '💰')
+    );
   const g = db
     .prepare('SELECT * FROM savings_goals WHERE id = ?')
     .get(info.lastInsertRowid) as SavingsGoal;
-  return { ...g, current_amount: 0 };
+  return withBalance(g, db);
 }
 
 export function updateGoal(id: number, input: Partial<SavingsGoalInput>): SavingsGoal {
@@ -511,23 +543,20 @@ export function updateGoal(id: number, input: Partial<SavingsGoalInput>): Saving
   const cur = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(id) as SavingsGoal;
   if (!cur) throw new Error('Goal not found');
   db.prepare(
-    'UPDATE savings_goals SET name = ?, target_amount = ?, target_date = ?, color = ? WHERE id = ?'
+    'UPDATE savings_goals SET name = ?, target_amount = ?, target_date = ?, color = ?, emoji = ? WHERE id = ?'
   ).run(
     input.name ?? cur.name,
     input.target_amount ?? cur.target_amount,
-    input.target_date ?? cur.target_date,
+    input.target_date === undefined ? cur.target_date : input.target_date,
     input.color ?? cur.color,
+    input.emoji ?? cur.emoji,
     id
   );
-  const r = db
-    .prepare(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM paycheck_allocations WHERE kind = 'goal' AND ref_id = ?"
-    )
-    .get(id) as { total: number };
   const next = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(id) as SavingsGoal;
-  return { ...next, current_amount: r.total };
+  return withBalance(next, db);
 }
 
+/** Archives the goal — on the phone this is "Mark complete". */
 export function deleteGoal(id: number): { ok: true } {
   getDb()
     .prepare(
@@ -542,23 +571,19 @@ export function listArchivedGoals(): SavingsGoal[] {
   const rows = db
     .prepare('SELECT * FROM savings_goals WHERE archived = 1 ORDER BY archived_at DESC, id DESC')
     .all() as SavingsGoal[];
-  const contribStmt = db.prepare(
-    "SELECT COALESCE(SUM(amount), 0) AS total FROM paycheck_allocations WHERE kind = 'goal' AND ref_id = ?"
-  );
-  return rows.map((g) => {
-    const r = contribStmt.get(g.id) as { total: number };
-    return { ...g, current_amount: r.total };
-  });
+  return rows.map((g) => withBalance(g, db));
 }
 
 /**
  * Permanently remove a goal from the database. Past paycheck allocations that
  * referenced this goal stay intact (their `kind='goal'` row remains) so the
  * historical Savings totals on each paycheck don't change — they just no
- * longer point at a named goal.
+ * longer point at a named goal. Budget lines planning money into it go.
  */
 export function hardDeleteGoal(id: number): { ok: true } {
-  getDb().prepare('DELETE FROM savings_goals WHERE id = ?').run(id);
+  const db = getDb();
+  db.prepare("DELETE FROM budget_lines WHERE kind = 'fund' AND ref_id = ?").run(id);
+  db.prepare('DELETE FROM savings_goals WHERE id = ?').run(id);
   return { ok: true };
 }
 
@@ -568,13 +593,89 @@ export function restoreGoal(id: number): SavingsGoal | null {
   const cur = db.prepare('SELECT * FROM savings_goals WHERE id = ?').get(id) as
     | SavingsGoal
     | undefined;
-  if (!cur) return null;
-  const r = db
+  return cur ? withBalance(cur, db) : null;
+}
+
+/** Money into or out of a fund from outside the budget. */
+export function addFundTransaction(input: {
+  goal_id: number;
+  kind: 'deposit' | 'withdrawal';
+  amount: number;
+  date: string;
+  note?: string | null;
+}): FundTransaction {
+  const db = getDb();
+  const info = db
     .prepare(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM paycheck_allocations WHERE kind = 'goal' AND ref_id = ?"
+      'INSERT INTO fund_transactions (goal_id, kind, amount, date, note) VALUES (?, ?, ?, ?, ?)'
     )
-    .get(id) as { total: number };
-  return { ...cur, current_amount: r.total };
+    .run(input.goal_id, input.kind, input.amount, input.date, input.note ?? null);
+  return db
+    .prepare('SELECT * FROM fund_transactions WHERE id = ?')
+    .get(info.lastInsertRowid) as FundTransaction;
+}
+
+export function deleteFundTransaction(id: number): { ok: true } {
+  getDb().prepare('DELETE FROM fund_transactions WHERE id = ?').run(id);
+  return { ok: true };
+}
+
+/** Everything that moved a fund's balance, newest first. */
+export function fundActivity(goalId: number): FundActivityItem[] {
+  const db = getDb();
+  const items: FundActivityItem[] = [];
+
+  const pays = db
+    .prepare(
+      `SELECT a.id, p.date, a.amount FROM paycheck_allocations a
+         JOIN paychecks p ON p.id = a.paycheck_id
+        WHERE a.kind = 'goal' AND a.ref_id = ?`
+    )
+    .all(goalId) as { id: number; date: string; amount: number }[];
+  for (const r of pays) {
+    items.push({ id: `pay:${r.id}`, date: r.date, kind: 'paycheck', amount: r.amount, label: 'From paycheck', ref_id: null });
+  }
+
+  const lines = db
+    .prepare(
+      `SELECT l.id, l.month, l.amount FROM budget_lines l
+         JOIN budget_months m ON m.month = l.month
+        WHERE l.kind = 'fund' AND l.ref_id = ? AND m.confirmed_at IS NOT NULL AND l.amount > 0`
+    )
+    .all(goalId) as { id: number; month: string; amount: number }[];
+  for (const r of lines) {
+    items.push({
+      id: `line:${r.id}`,
+      date: `${r.month}-01`,
+      kind: 'contribution',
+      amount: r.amount,
+      label: `${format(parseISO(`${r.month}-01`), 'MMMM yyyy')} budget`,
+      ref_id: null,
+    });
+  }
+
+  const txs = db
+    .prepare('SELECT * FROM fund_transactions WHERE goal_id = ?')
+    .all(goalId) as FundTransaction[];
+  for (const t of txs) {
+    items.push({
+      id: `tx:${t.id}`,
+      date: t.date,
+      kind: t.kind,
+      amount: t.kind === 'deposit' ? t.amount : -t.amount,
+      label: t.note || (t.kind === 'deposit' ? 'Added money' : 'Withdrew money'),
+      ref_id: t.id,
+    });
+  }
+
+  const spent = db
+    .prepare('SELECT id, date, amount, description FROM expenses WHERE fund_id = ?')
+    .all(goalId) as { id: number; date: string; amount: number; description: string }[];
+  for (const e of spent) {
+    items.push({ id: `exp:${e.id}`, date: e.date, kind: 'spend', amount: -e.amount, label: e.description, ref_id: null });
+  }
+
+  return items.sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 }
 
 // ---------- Paychecks ----------
@@ -981,7 +1082,9 @@ export function updateDebt(id: number, input: Partial<DebtInput>): Debt {
 }
 
 export function deleteDebt(id: number): { ok: true } {
-  getDb().prepare('DELETE FROM debts WHERE id = ?').run(id);
+  const db = getDb();
+  db.prepare("DELETE FROM budget_lines WHERE kind = 'debt' AND ref_id = ?").run(id);
+  db.prepare('DELETE FROM debts WHERE id = ?').run(id);
   return { ok: true };
 }
 
@@ -994,15 +1097,23 @@ export function deleteDebt(id: number): { ok: true } {
 // ---------- Expense categories ----------
 export function listExpenseCategories(): ExpenseCategory[] {
   return getDb()
-    .prepare('SELECT * FROM expense_categories ORDER BY name')
+    .prepare('SELECT * FROM expense_categories ORDER BY COALESCE(sort_order, 1000000), name')
     .all() as ExpenseCategory[];
 }
 
-export function createExpenseCategory(input: { name: string; color: string }): ExpenseCategory {
+export function createExpenseCategory(input: ExpenseCategoryInput): ExpenseCategory {
   const db = getDb();
   const info = db
-    .prepare('INSERT INTO expense_categories (name, color) VALUES (?, ?)')
-    .run(input.name, input.color);
+    .prepare(
+      'INSERT INTO expense_categories (name, color, emoji, kind, sort_order) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(
+      input.name,
+      input.color,
+      input.emoji || suggestEmoji(input.name),
+      input.kind ?? suggestKind(input.name),
+      input.sort_order ?? null
+    );
   return db
     .prepare('SELECT * FROM expense_categories WHERE id = ?')
     .get(info.lastInsertRowid) as ExpenseCategory;
@@ -1010,22 +1121,30 @@ export function createExpenseCategory(input: { name: string; color: string }): E
 
 export function updateExpenseCategory(
   id: number,
-  input: { name?: string; color?: string }
+  input: Partial<ExpenseCategoryInput>
 ): ExpenseCategory {
   const db = getDb();
   const cur = db.prepare('SELECT * FROM expense_categories WHERE id = ?').get(id) as ExpenseCategory;
   if (!cur) throw new Error('Expense category not found');
-  db.prepare('UPDATE expense_categories SET name = ?, color = ? WHERE id = ?').run(
+  db.prepare(
+    'UPDATE expense_categories SET name = ?, color = ?, emoji = ?, kind = ?, sort_order = ? WHERE id = ?'
+  ).run(
     input.name ?? cur.name,
     input.color ?? cur.color,
+    input.emoji ?? cur.emoji,
+    input.kind ?? cur.kind,
+    input.sort_order === undefined ? cur.sort_order : input.sort_order,
     id
   );
   return db.prepare('SELECT * FROM expense_categories WHERE id = ?').get(id) as ExpenseCategory;
 }
 
 export function deleteExpenseCategory(id: number): { ok: true } {
-  // ON DELETE SET NULL keeps the expenses but clears their category.
-  getDb().prepare('DELETE FROM expense_categories WHERE id = ?').run(id);
+  const db = getDb();
+  // ON DELETE SET NULL keeps the expenses but clears their category; the
+  // budget lines planning money for it have no FK, so they go explicitly.
+  db.prepare("DELETE FROM budget_lines WHERE kind = 'spend' AND ref_id = ?").run(id);
+  db.prepare('DELETE FROM expense_categories WHERE id = ?').run(id);
   return { ok: true };
 }
 
@@ -1082,13 +1201,20 @@ const unchargeDebt = (db: ReturnType<typeof getDb>, debtId: number, amount: numb
     .prepare('UPDATE debts SET current_balance = MAX(0, current_balance - ?) WHERE id = ?')
     .run(amount, debtId);
 
-export function createExpense(input: ExpenseInput): Expense {
+/**
+ * `recurringId` is set only by materializeRecurringExpenses — it's how the
+ * budget tells a recurring charge (taken off the top) from everyday spending.
+ * An expense paid from a fund is never also charged to a card.
+ */
+export function createExpense(input: ExpenseInput, recurringId: number | null = null): Expense {
   const db = getDb();
+  const fundId = input.fund_id ?? null;
+  const debtId = fundId != null ? null : input.debt_id ?? null;
   const tx = db.transaction(() => {
     const info = db
       .prepare(
-        `INSERT INTO expenses (description, amount, date, category_id, note, debt_id)
-         VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO expenses (description, amount, date, category_id, note, debt_id, fund_id, recurring_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.description,
@@ -1096,9 +1222,11 @@ export function createExpense(input: ExpenseInput): Expense {
         input.date,
         input.category_id ?? null,
         input.note ?? null,
-        input.debt_id ?? null
+        debtId,
+        fundId,
+        recurringId
       );
-    if (input.debt_id != null && input.amount > 0) chargeDebt(db, input.debt_id, input.amount);
+    if (debtId != null && input.amount > 0) chargeDebt(db, debtId, input.amount);
     return info.lastInsertRowid as number;
   });
   const id = tx() as number;
@@ -1110,13 +1238,16 @@ export function updateExpense(id: number, input: Partial<ExpenseInput>): Expense
   const tx = db.transaction(() => {
     const cur = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id) as Expense;
     if (!cur) throw new Error('Expense not found');
-    const nextDebtId = input.debt_id === undefined ? cur.debt_id : input.debt_id;
+    const nextFundId = input.fund_id === undefined ? cur.fund_id : input.fund_id;
+    const nextDebtId =
+      nextFundId != null ? null : input.debt_id === undefined ? cur.debt_id : input.debt_id;
     const nextAmount = input.amount ?? cur.amount;
     // Reverse the old charge, apply the new one (covers amount and card changes).
     if (cur.debt_id != null && cur.amount > 0) unchargeDebt(db, cur.debt_id, cur.amount);
     if (nextDebtId != null && nextAmount > 0) chargeDebt(db, nextDebtId, nextAmount);
     db.prepare(
-      `UPDATE expenses SET description = ?, amount = ?, date = ?, category_id = ?, note = ?, debt_id = ?
+      `UPDATE expenses SET description = ?, amount = ?, date = ?, category_id = ?, note = ?,
+         debt_id = ?, fund_id = ?
          WHERE id = ?`
     ).run(
       input.description ?? cur.description,
@@ -1125,6 +1256,7 @@ export function updateExpense(id: number, input: Partial<ExpenseInput>): Expense
       input.category_id === undefined ? cur.category_id : input.category_id,
       input.note === undefined ? cur.note : input.note,
       nextDebtId,
+      nextFundId,
       id
     );
   });
@@ -1144,22 +1276,15 @@ export function deleteExpense(id: number): { ok: true } {
 }
 
 // ---------- Recurring expenses ----------
-function stepRecurring(d: Date, freq: RecurringFrequency): Date {
-  switch (freq) {
-    case 'weekly':
-      return addWeeks(d, 1);
-    case 'biweekly':
-      return addDays(d, 14);
-    case 'monthly':
-      return addMonths(d, 1);
-    case 'yearly':
-      return addYears(d, 1);
-  }
-}
+// Occurrences are computed from the anchor (shared/recurrence.ts), so a
+// template on the 31st stays on the 31st. `archived = 1` means paused.
 
-export function listRecurringExpenses(): RecurringExpense[] {
+export function listRecurringExpenses(includeArchived = false): RecurringExpense[] {
   return getDb()
-    .prepare('SELECT * FROM recurring_expenses WHERE archived = 0 ORDER BY created_at DESC')
+    .prepare(
+      `SELECT * FROM recurring_expenses ${includeArchived ? '' : 'WHERE archived = 0'}
+        ORDER BY created_at DESC, id DESC`
+    )
     .all() as RecurringExpense[];
 }
 
@@ -1167,8 +1292,9 @@ export function createRecurringExpense(input: RecurringExpenseInput): RecurringE
   const db = getDb();
   const info = db
     .prepare(
-      `INSERT INTO recurring_expenses (description, amount, category_id, debt_id, frequency, anchor_date)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO recurring_expenses
+         (description, amount, category_id, debt_id, frequency, anchor_date, interval_count, emoji, archived)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       input.description,
@@ -1176,7 +1302,10 @@ export function createRecurringExpense(input: RecurringExpenseInput): RecurringE
       input.category_id ?? null,
       input.debt_id ?? null,
       input.frequency,
-      input.anchor_date
+      input.anchor_date,
+      Math.max(1, input.interval_count ?? 1),
+      input.emoji || suggestEmoji(input.description, '🔁'),
+      input.archived ? 1 : 0
     );
   materializeRecurringExpenses();
   return db
@@ -1193,18 +1322,37 @@ export function updateRecurringExpense(
     | RecurringExpense
     | undefined;
   if (!cur) throw new Error('Recurring expense not found');
+  const next = {
+    frequency: input.frequency ?? cur.frequency,
+    anchor_date: input.anchor_date ?? cur.anchor_date,
+    interval_count: Math.max(1, input.interval_count ?? cur.interval_count),
+    archived: input.archived === undefined ? cur.archived : input.archived ? 1 : 0,
+  };
+  // Resuming must not back-fill the months it was paused for: treat every
+  // occurrence up to today as already handled.
+  const lastGenerated =
+    cur.archived === 1 && next.archived === 0
+      ? latestOccurrenceOnOrBefore(next.anchor_date, next.frequency, next.interval_count, today()) ??
+        cur.last_generated
+      : cur.last_generated;
   db.prepare(
     `UPDATE recurring_expenses SET description = ?, amount = ?, category_id = ?, debt_id = ?,
-        frequency = ?, anchor_date = ? WHERE id = ?`
+        frequency = ?, anchor_date = ?, interval_count = ?, emoji = ?, archived = ?, last_generated = ?
+      WHERE id = ?`
   ).run(
     input.description ?? cur.description,
     input.amount ?? cur.amount,
     input.category_id === undefined ? cur.category_id : input.category_id,
     input.debt_id === undefined ? cur.debt_id : input.debt_id,
-    input.frequency ?? cur.frequency,
-    input.anchor_date ?? cur.anchor_date,
+    next.frequency,
+    next.anchor_date,
+    next.interval_count,
+    input.emoji ?? cur.emoji,
+    next.archived,
+    lastGenerated,
     id
   );
+  materializeRecurringExpenses();
   return db.prepare('SELECT * FROM recurring_expenses WHERE id = ?').get(id) as RecurringExpense;
 }
 
@@ -1217,7 +1365,6 @@ export function deleteRecurringExpense(id: number): { ok: true } {
 /**
  * Generate any due expense occurrences for active templates, advancing each
  * template's `last_generated`. Idempotent — runs cheaply on every expense read.
- * The anchor date is the first occurrence; thereafter we step by frequency.
  */
 export function materializeRecurringExpenses(): void {
   const db = getDb();
@@ -1228,29 +1375,27 @@ export function materializeRecurringExpenses(): void {
   const updateGen = db.prepare('UPDATE recurring_expenses SET last_generated = ? WHERE id = ?');
 
   for (const r of rows) {
-    // First pending occurrence: the anchor itself if never generated, else one
-    // step past the last generated date.
-    let occ = r.last_generated
-      ? stepRecurring(parseISO(r.last_generated), r.frequency)
-      : parseISO(r.anchor_date);
-    let lastGen: string | null = null;
-    let guard = 0;
-    while (formatISO(occ, { representation: 'date' }) <= todayStr && guard++ < 1000) {
-      const dateStr = formatISO(occ, { representation: 'date' });
+    const from = r.last_generated
+      ? formatISO(addDays(parseISO(r.last_generated), 1), { representation: 'date' })
+      : r.anchor_date;
+    if (from > todayStr) continue;
+    const due = occurrencesInRange(r.anchor_date, r.frequency, r.interval_count, from, todayStr);
+    for (const date of due) {
       // Reuse createExpense so the credit-card bridge (balance increase) and
       // its own transaction are honoured.
-      createExpense({
-        description: r.description,
-        amount: r.amount,
-        date: dateStr,
-        category_id: r.category_id,
-        note: 'Recurring',
-        debt_id: r.debt_id,
-      });
-      lastGen = dateStr;
-      occ = stepRecurring(occ, r.frequency);
+      createExpense(
+        {
+          description: r.description,
+          amount: r.amount,
+          date,
+          category_id: r.category_id,
+          note: 'Recurring',
+          debt_id: r.debt_id,
+        },
+        r.id
+      );
     }
-    if (lastGen) updateGen.run(lastGen, r.id);
+    if (due.length > 0) updateGen.run(due[due.length - 1], r.id);
   }
 }
 
