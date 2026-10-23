@@ -32,7 +32,8 @@ export default function PhoneLayout() {
     <Ctx.Provider value={{ openQuickAdd: (opts) => setQuickAdd(opts ?? {}) }}>
       <div className="app-shell h-full flex flex-col bg-surface text-content">
         <main ref={scroller} className="app-scroll flex-1 overflow-y-auto">
-          <div className={cn('max-w-xl mx-auto px-4 pt-2 animate-fade-in', showTabs ? 'pb-32' : 'pb-12')}>
+          {/* Keyed by path so every screen change replays the fade. */}
+          <div key={pathname} className={cn('max-w-xl mx-auto px-4 pt-2 animate-page-in', showTabs ? 'pb-32' : 'pb-12')}>
             <Outlet />
           </div>
         </main>

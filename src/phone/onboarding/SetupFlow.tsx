@@ -19,7 +19,7 @@ import { useTheme } from '@/lib/theme';
 import { useToast } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import { useApi } from '../data';
-import { currentMonth, monthLabel, nextBudgetLabel } from '../dates';
+import { currentMonth, monthLabel } from '../dates';
 import { money } from '../format';
 import { Banner, BigButton, Chip, Group, MoneyInput, PCard, parseMoney, Row } from '../ui/kit';
 import CategoryEditor from '../budget/CategoryEditor';
@@ -33,10 +33,9 @@ import DoneRing from './DoneRing';
 import ExportPanel from './ExportPanel';
 import FlowShell from './FlowShell';
 
-const STEPS = ['period', 'pay', 'recurring', 'debts', 'funds', 'export', 'plan', 'done'] as const;
+const STEPS = ['pay', 'recurring', 'debts', 'funds', 'export', 'plan', 'done'] as const;
 type Step = (typeof STEPS)[number];
 const TITLES: Record<Step, string> = {
-  period: 'Budget period',
   pay: 'Your pay',
   recurring: 'Recurring',
   debts: 'Debts',
@@ -50,7 +49,7 @@ const RECURRING_IDEAS = ['Rent', 'Phone', 'Internet', 'Hydro', 'Insurance', 'Net
 const FUND_IDEAS = ['Emergency fund', 'Vacation', 'New car', 'Gifts'];
 
 /**
- * Builds (or rebuilds) the monthly budget: period → pay → recurring → debts →
+ * Builds (or rebuilds) the monthly budget: pay → recurring → debts →
  * funds → export for an AI → plan → done. Recurring, debts and funds save as
  * they're added; the plan is written and confirmed at the end.
  */
@@ -175,27 +174,13 @@ export default function SetupFlow({
 
   return (
     <FlowShell step={i + 1} total={STEPS.length - 1} title={TITLES[step]} onBack={back} footer={footerFor()}>
-      {step === 'period' && (
-        <div className="text-center">
-          <div className="text-7xl pt-4">🗓️</div>
-          <h1 className="text-[28px] font-display font-bold mt-5">Your budget runs monthly</h1>
-          <p className="text-content-muted mt-3 leading-relaxed">
-            From the 1st to the last day of the month — the same way rent and most bills work. We plan with the
-            paychecks every month is guaranteed to get. If a month brings an extra one, it's a bonus you decide what
-            to do with.
-          </p>
-          <PCard className="mt-8 p-5">
-            <div className="text-sm text-content-muted">Your first budget</div>
-            <div className="text-[30px] font-display font-bold mt-1">{monthLabel(month)}</div>
-            <div className="text-sm text-content-subtle mt-1">The next one starts {nextBudgetLabel(month)}</div>
-          </PCard>
-        </div>
-      )}
-
       {step === 'pay' && (
         <div>
           <h1 className="text-[26px] font-display font-bold">How much do you take home?</h1>
           <p className="text-content-muted mt-2">Your average paycheck after tax. An estimate is fine.</p>
+          <p className="text-sm text-content-subtle mt-1.5">
+            🗓️ Your budget runs from the 1st to the last day of the month, starting with {monthLabel(month)}.
+          </p>
           <PCard className="mt-6 p-5">
             <MoneyInput big value={amount} onChange={setAmount} autoFocus ariaLabel="Take-home per paycheck" />
             <div className="text-center text-sm text-content-subtle mt-1">per paycheck</div>
@@ -221,6 +206,7 @@ export default function SetupFlow({
             <p className="text-center mt-5 text-[15px]">
               That's <span className="font-bold num">{money(monthly)}</span> a month to plan with
               <span className="text-content-muted"> ({guaranteedPerMonth(freq)} paycheck{guaranteedPerMonth(freq) > 1 ? 's' : ''})</span>.
+              <span className="block text-sm text-content-subtle mt-1">If a month brings an extra one, it's a bonus.</span>
             </p>
           )}
         </div>

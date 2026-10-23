@@ -217,7 +217,12 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   file for the user's own AI; platform channel `files:exportText`.
 - **Reminders**: repeating iOS local notifications (ids 9001–9003) scheduled by
   `scheduleReminders()` in `src/platform` — daily log, 1st of month, Monday report.
-- Theme defaults to **light** for fresh installs.
+- Theme defaults to **light** for fresh installs. A light/dark button (`ui/ThemeButton.tsx`) is
+  pinned top-right on every phone screen; `LargeHeader`/`NavHeader` leave room for it. Screen
+  and step changes replay a slight `animate-page-in` fade (keyed by path / step).
+- First run: one welcome screen (app icon, three points, name box) → `SetupFlow` (pay →
+  recurring → debts → funds → export → plan → done). There's no budget-period step; the pay
+  step says the budget runs 1st to month-end.
 - Visual check: `scripts/phone-shots.mjs` (headless Edge over CDP, no puppeteer) — build
   `vite.config.ios.ts`, `vite preview --config vite.config.ios.ts --port 4173`, then
   `node scripts/phone-shots.mjs <outDir> light|dark [fresh]`.

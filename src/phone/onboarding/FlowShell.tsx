@@ -25,7 +25,7 @@ export default function FlowShell({
   return (
     <div className="app-shell h-full flex flex-col bg-surface text-content">
       {step != null && total != null && (
-        <div className="shrink-0 px-4 pt-3 max-w-xl w-full mx-auto">
+        <div className="shrink-0 px-4 pt-4 max-w-xl w-full mx-auto">
           <div className="grid grid-cols-[2.5rem_1fr_2.5rem] items-center">
             {onBack ? (
               <button onClick={onBack} aria-label="Back" className="w-10 h-10 -ml-2 grid place-items-center">
@@ -52,8 +52,9 @@ export default function FlowShell({
           </div>
         </div>
       )}
-      <main className="app-scroll flex-1 overflow-y-auto">
-        <div className="max-w-xl mx-auto px-4 py-6 animate-fade-in">{children}</div>
+      {/* Keyed by step so each step fades in and starts scrolled to the top. */}
+      <main key={`${step}-${title}`} className="app-scroll flex-1 overflow-y-auto">
+        <div className="max-w-xl mx-auto px-4 py-6 animate-page-in">{children}</div>
       </main>
       {footer && (
         <div className="shrink-0 px-4 pt-2 pb-[calc(1rem+env(safe-area-inset-bottom))] max-w-xl w-full mx-auto">

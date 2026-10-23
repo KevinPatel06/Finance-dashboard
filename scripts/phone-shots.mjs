@@ -108,17 +108,11 @@ for (let i = 0; i < 50 && !(await evaluate('!!window.api')); i++) await sleep(20
 if (fresh) {
   await evaluate(`window.api.settings.update({ theme: '${theme}' })`);
   await go('#/', 1500);
-  await shot('onboard-1-intro');
-  await click('Tap to continue');
-  await sleep(1800);
-  await click('Tap to continue');
-  await sleep(500);
-  await shot('onboard-2-name');
+  await shot('onboard-1-welcome');
   await type('input', 'Kevin');
-  await click('Continue');
-  await sleep(600);
-  await shot('onboard-3-period');
-  await click('Continue');
+  await sleep(300);
+  await shot('onboard-2-welcome-named');
+  await click('Get started');
   await sleep(600);
   await type('input[aria-label="Take-home per paycheck"]', '1200');
   await sleep(300);

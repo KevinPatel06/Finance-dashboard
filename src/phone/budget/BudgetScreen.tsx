@@ -146,7 +146,9 @@ export default function BudgetScreen() {
         ]}
       />
 
-      {tab === 'spending' ? <SpendingTab view={v} onEditPlan={() => setEditor('edit')} /> : <SavingTab view={v} />}
+      <div key={tab} className="animate-page-in">
+        {tab === 'spending' ? <SpendingTab view={v} onEditPlan={() => setEditor('edit')} /> : <SavingTab view={v} />}
+      </div>
 
       {editor && (
         <PlanEditor

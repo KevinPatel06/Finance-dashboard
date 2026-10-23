@@ -227,7 +227,10 @@ export function CircleButton({
   );
 }
 
-/** Big bold page title on the left, DaTrack's "Budget" header. */
+/**
+ * Big bold page title on the left, DaTrack's "Budget" header. The right
+ * action stops short of the pinned theme button (ThemeButton).
+ */
 export function LargeHeader({
   title,
   subtitle,
@@ -238,17 +241,21 @@ export function LargeHeader({
   right?: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 pt-2 pb-1">
+    <div className="flex items-start justify-between gap-3 pt-2 pb-1 pr-12">
       <div className="min-w-0">
         <h1 className="text-[32px] leading-tight font-display font-bold tracking-tight">{title}</h1>
         {subtitle && <div className="text-sm font-medium mt-0.5">{subtitle}</div>}
       </div>
-      {right && <div className="pt-2 shrink-0">{right}</div>}
+      {right && <div className="h-10 flex items-center shrink-0">{right}</div>}
     </div>
   );
 }
 
-/** Circle back button, centred title, optional right action. */
+/**
+ * Circle back button, centred title, optional right action. The pinned theme
+ * button takes the right-hand slot, so a right action sits just left of it
+ * (and both outer columns widen to keep the title centred).
+ */
 export function NavHeader({
   title,
   subtitle,
@@ -262,13 +269,13 @@ export function NavHeader({
 }) {
   const navigate = useNavigate();
   return (
-    <div className="grid grid-cols-[2.5rem_1fr_2.5rem] items-center gap-2 py-2">
+    <div className={cn('grid items-center gap-2 py-2', right ? 'grid-cols-[5.5rem_1fr_5.5rem]' : 'grid-cols-[2.5rem_1fr_2.5rem]')}>
       <CircleButton icon={ChevronLeft} label="Back" onClick={onBack ?? (() => navigate(-1))} />
       <div className="text-center min-w-0">
         {title && <div className="text-[17px] font-semibold truncate">{title}</div>}
         {subtitle && <div className="text-xs text-content-subtle truncate">{subtitle}</div>}
       </div>
-      <div className="flex justify-end">{right}</div>
+      <div className="flex justify-end pr-12">{right}</div>
     </div>
   );
 }

@@ -19,6 +19,7 @@ import PhoneOnboarding from './onboarding/PhoneOnboarding';
 import SetupFlow from './onboarding/SetupFlow';
 import RecurringScreen from './recurring/RecurringScreen';
 import { NavHeader } from './ui/kit';
+import ThemeButton from './ui/ThemeButton';
 
 /** An existing desktop page inside the phone shell, under a back-button header. */
 function Subpage({ title, children }: { title: string; children: ReactNode }) {
@@ -44,6 +45,7 @@ export default function PhoneApp() {
 
   return (
     <RefreshProvider>
+      <ThemeButton />
       {!onboarded ? (
         <PhoneOnboarding />
       ) : (
