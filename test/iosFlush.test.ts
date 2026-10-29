@@ -26,23 +26,32 @@ const files = new Map<string, string>();
 let inFlight = 0;
 let maxInFlight = 0;
 /**
- * Latency of each successive write to finance.db, in order. Scripting it makes
- * an unlucky-but-entirely-legal interleaving reproducible instead of a flake.
+ * Latency of each successive database write (each flush writes the temp file
+ * that then becomes finance.db), in order. Scripting it makes an
+ * unlucky-but-entirely-legal interleaving reproducible instead of a flake.
  */
 let dbWriteDelays: number[] = [];
 let dbWrites = 0;
+/** Paths whose reads fail even though the file exists. */
+let unreadable = new Set<string>();
+let listingFails = false;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 vi.mock('@capacitor/filesystem', () => ({
   Directory: { Data: 'DATA' },
   Filesystem: {
+    readdir: async () => {
+      if (listingFails) throw new Error('Could not list directory');
+      return { files: [...files.keys()].map((name) => ({ name, type: 'file' })) };
+    },
     readFile: async ({ path: p }: { path: string }) => {
       if (!files.has(p)) throw new Error('File does not exist');
+      if (unreadable.has(p)) throw new Error('Read failed');
       return { data: files.get(p)! };
     },
     writeFile: async ({ path: p, data }: { path: string; data: string }) => {
-      const delay = p === 'finance.db' ? (dbWriteDelays[dbWrites++] ?? 0) : 0;
+      const delay = p === 'finance.db.tmp' ? (dbWriteDelays[dbWrites++] ?? 0) : 0;
       inFlight++;
       maxInFlight = Math.max(maxInFlight, inFlight);
       try {
@@ -53,6 +62,16 @@ vi.mock('@capacitor/filesystem', () => ({
       }
       return {};
     },
+    copy: async ({ from, to }: { from: string; to: string }) => {
+      if (!files.has(from)) throw new Error('File does not exist');
+      files.set(to, files.get(from)!);
+      return {};
+    },
+    rename: async ({ from, to }: { from: string; to: string }) => {
+      if (!files.has(from)) throw new Error('File does not exist');
+      files.set(to, files.get(from)!);
+      files.delete(from);
+    },
   },
 }));
 
@@ -62,9 +81,9 @@ import { setDb, type DB } from '../core/db';
 import { runMigrations } from '../core/migrations';
 import * as repo from '../core/repo';
 
-/** Read the persisted file back and ask it what it actually contains. */
-async function goalsOnDisk(): Promise<string[]> {
-  const b64 = files.get('finance.db');
+/** Read a persisted file back and ask it what it actually contains. */
+async function goalsOnDisk(file = 'finance.db'): Promise<string[]> {
+  const b64 = files.get(file);
   if (!b64) return [];
   const bin = Buffer.from(b64, 'base64');
   const disk = await createSqlJsDb(new Uint8Array(bin));
@@ -75,6 +94,16 @@ async function goalsOnDisk(): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
+const goal = (name: string) => repo.createGoal({ name, target_amount: 1000, color: '#10b981' });
+
+/** Relaunch: reopen from whatever is on disk, as the app does at boot. */
+async function relaunch() {
+  const opened = await openDatabase();
+  setDb(opened.db as DB);
+  runMigrations(opened.db);
+  return opened;
+}
+
 describe('iOS persistence', () => {
   beforeEach(async () => {
     files.clear();
@@ -82,6 +111,8 @@ describe('iOS persistence', () => {
     maxInFlight = 0;
     dbWrites = 0;
     dbWriteDelays = [];
+    unreadable = new Set();
+    listingFails = false;
     const { db } = await openDatabase();
     setDb(db as DB);
     runMigrations(db);
@@ -119,5 +150,77 @@ describe('iOS persistence', () => {
     await stale;
 
     expect(await goalsOnDisk()).toEqual(['Emergency fund', 'Vacation']);
+  });
+
+  it('writes through a temp file and keeps the previous copy as the backup', async () => {
+    goal('A');
+    await flush();
+    goal('B');
+    await flush();
+
+    expect(await goalsOnDisk()).toEqual(['A', 'B']);
+    expect(await goalsOnDisk('finance.db.bak')).toEqual(['A']);
+    expect(files.has('finance.db.tmp')).toBe(false);
+  });
+
+  it('opens the backup when finance.db is damaged, and never overwrites the backup with it', async () => {
+    goal('A');
+    await flush();
+    goal('B');
+    await flush(); // backup now holds A
+    files.set('finance.db', Buffer.from('not a database at all').toString('base64'));
+
+    const { recovered, isNew } = await relaunch();
+    expect({ recovered, isNew }).toEqual({ recovered: true, isNew: false });
+    expect(repo.listGoals().map((g) => g.name)).toEqual(['A']);
+
+    goal('C');
+    await flush();
+    expect(await goalsOnDisk()).toEqual(['A', 'C']);
+    expect(await goalsOnDisk('finance.db.bak')).toEqual(['A']);
+  });
+
+  it('treats an empty finance.db as a write that never finished, not a new install', async () => {
+    goal('A');
+    await flush();
+    await flush(); // backup now holds A too
+    files.set('finance.db', '');
+
+    const { recovered, isNew } = await relaunch();
+    expect({ recovered, isNew }).toEqual({ recovered: true, isNew: false });
+    expect(repo.listGoals().map((g) => g.name)).toEqual(['A']);
+  });
+
+  it('uses the finished temp file when a flush died after finance.db was removed', async () => {
+    goal('A');
+    await flush();
+    goal('B');
+    await flush();
+    files.set('finance.db.tmp', files.get('finance.db')!);
+    files.delete('finance.db');
+
+    await relaunch();
+    expect(repo.listGoals().map((g) => g.name)).toEqual(['A', 'B']);
+  });
+
+  it('refuses to start, touching nothing, when finance.db exists but cannot be read', async () => {
+    goal('A');
+    await flush();
+    const before = new Map(files);
+    unreadable.add('finance.db');
+
+    await expect(openDatabase()).rejects.toThrow();
+    expect(files).toEqual(before);
+  });
+
+  it('refuses to start when the data directory cannot be listed', async () => {
+    listingFails = true;
+    await expect(openDatabase()).rejects.toThrow();
+  });
+
+  it('refuses to start when no copy is intact, rather than starting empty', async () => {
+    files.set('finance.db', Buffer.from('garbage').toString('base64'));
+    files.set('finance.db.bak', Buffer.from('more garbage').toString('base64'));
+    await expect(openDatabase()).rejects.toThrow();
   });
 });

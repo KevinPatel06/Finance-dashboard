@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { BudgetMonthView } from '@shared/types';
+import { DAY_CHANGED } from '@/platform/events';
 
 /**
  * Phone data plumbing. Screens fetch through `useApi`, which re-runs whenever
@@ -25,6 +26,14 @@ const Ctx = createContext<RefreshCtx>({ version: 0, bump: () => {} });
 export function RefreshProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
+
+  // Resuming on a new day: refetch so the month, safe-per-day, payday cards
+  // and "Today" labels catch up.
+  useEffect(() => {
+    window.addEventListener(DAY_CHANGED, bump);
+    return () => window.removeEventListener(DAY_CHANGED, bump);
+  }, [bump]);
+
   return <Ctx.Provider value={{ version, bump }}>{children}</Ctx.Provider>;
 }
 

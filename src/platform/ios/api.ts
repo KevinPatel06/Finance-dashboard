@@ -4,6 +4,8 @@ import * as repo from '../../../core/repo';
 import { IPC } from '../../../shared/ipc';
 import { setDb } from '../../../core/db';
 import { runMigrations } from '../../../core/migrations';
+import { todayStr } from '../../../core/notifications';
+import { DAY_CHANGED } from '../events';
 import { openDatabase, flush } from './storage';
 import { exportCsv, exportText, backupDb } from './files';
 
@@ -15,10 +17,12 @@ import { exportCsv, exportText, backupDb } from './files';
  * round-trip and a direct call.
  */
 export async function installIosApi(): Promise<void> {
-  const { db, isNew } = await openDatabase();
+  const { db, isNew, recovered } = await openDatabase();
   setDb(db);
   runMigrations(db);
-  if (isNew) await flush(); // persist the freshly migrated schema
+  if (recovered) console.warn('finance.db was damaged; opened the last intact copy instead.');
+  // Persist the freshly migrated schema, or put the intact copy back in place.
+  if (isNew || recovered) await flush();
 
   const byChannel = new Map<string, (...a: any[]) => unknown>();
   const mutating = new Set<string>();
@@ -157,10 +161,20 @@ export async function installIosApi(): Promise<void> {
 
   (window as any).api = api;
 
-  // Belt-and-braces durability: flush when iOS backgrounds the app.
+  // Belt-and-braces durability: flush when iOS backgrounds the app. Coming
+  // back is not a relaunch, so run the day's reminder check (it no-ops if it
+  // already ran today) and, on a new day, have screens refetch.
+  let activeDay = todayStr();
   void App.addListener('appStateChange', ({ isActive }) => {
     if (!isActive) {
       flush().catch((err) => console.error('Background flush failed', err));
+      return;
+    }
+    void import('./notify').then(({ runNotificationCheck }) => runNotificationCheck());
+    const day = todayStr();
+    if (day !== activeDay) {
+      activeDay = day;
+      window.dispatchEvent(new Event(DAY_CHANGED));
     }
   });
 

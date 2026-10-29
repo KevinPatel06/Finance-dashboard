@@ -259,12 +259,13 @@ export default function FundDetail() {
           )}
           <Row
             title={<span className="text-danger">Delete fund</span>}
-            subtitle="Removes it and its plan lines for good"
+            subtitle="Removes it for good; past months stay as they were"
             onClick={async () => {
               setMenu(false);
               const ok = await confirm({
                 title: `Delete ${g.name}?`,
-                description: 'Its history and plan lines are removed. Purchases paid from it stay, but count as regular spending.',
+                description:
+                  "It's removed for good, and this month's plan for it is freed up. Purchases paid from it still won't count against your spending money.",
                 confirmLabel: 'Delete',
                 destructive: true,
               });

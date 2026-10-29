@@ -385,10 +385,9 @@ export function runRepoContract(
 
     // ---------- Deleting things a plan references ----------
 
-    it('deleting a category, fund or debt removes the budget lines that point at it', () => {
+    it('deleting a category or debt removes the budget lines that point at it', () => {
       const db = getDb();
       const cat = repo.createExpenseCategory({ name: 'Snacks', color: '#000' });
-      const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
       const debt = repo.createDebt({
         name: 'Loan',
         type: 'loan',
@@ -403,15 +402,42 @@ export function runRepoContract(
       db.prepare("INSERT INTO budget_months (month) VALUES ('2026-08')").run();
       const line = db.prepare("INSERT INTO budget_lines (month, kind, ref_id, amount) VALUES ('2026-08', ?, ?, ?)");
       line.run('spend', cat.id, 50);
-      line.run('fund', fund.id, 100);
       line.run('debt', debt.id, 100);
 
       repo.deleteExpenseCategory(cat.id);
-      repo.hardDeleteGoal(fund.id);
       repo.deleteDebt(debt.id);
 
       expect(db.prepare('SELECT COUNT(*) AS n FROM budget_lines').get()).toEqual({ n: 0 });
       expect(repo.listExpenses().find((e) => e.id === exp.id)!.category_id).toBeNull();
+    });
+
+    it('deleting a fund hides it everywhere but leaves the past as it was', () => {
+      const db = getDb();
+      const todayIso = formatISO(new Date(), { representation: 'date' });
+      const thisMonth = todayIso.slice(0, 7);
+      const lastMonth = addMonthsToMonth(thisMonth, -1);
+      const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+      const done = repo.createGoal({ name: 'Old car', target_amount: 500, color: '#000' });
+      repo.deleteGoal(done.id); // mark complete
+
+      for (const m of [lastMonth, thisMonth]) {
+        db.prepare("INSERT INTO budget_months (month, confirmed_at) VALUES (?, datetime('now'))").run(m);
+        db.prepare("INSERT INTO budget_lines (month, kind, ref_id, amount) VALUES (?, 'fund', ?, 100)").run(m, fund.id);
+      }
+      repo.createExpense({ description: 'Flight', amount: 300, date: todayIso, category_id: null, fund_id: fund.id });
+      const spentBefore = repo.budgetMonth(thisMonth).spent.total;
+
+      repo.hardDeleteGoal(fund.id);
+      repo.hardDeleteGoal(done.id);
+
+      expect(repo.listGoals().map((g) => g.id)).not.toContain(fund.id);
+      expect(repo.listArchivedGoals().map((g) => g.id)).not.toContain(done.id);
+      // The flight was paid from the fund, so it still isn't everyday spending.
+      expect(repo.budgetMonth(thisMonth).spent.total).toBe(spentBefore);
+      expect(repo.listExpenses().find((e) => e.description === 'Flight')!.fund_id).toBe(fund.id);
+      // Last month keeps its contribution; this month's is freed up.
+      expect(repo.budgetMonth(lastMonth).planned.fund).toBe(100);
+      expect(repo.budgetMonth(thisMonth).planned.fund).toBe(0);
     });
 
     // ---------- Recurring (interval, pause / resume) ----------

@@ -589,15 +589,25 @@ export function listArchivedGoals(): SavingsGoal[] {
 }
 
 /**
- * Permanently remove a goal from the database. Past paycheck allocations that
- * referenced this goal stay intact (their `kind='goal'` row remains) so the
- * historical Savings totals on each paycheck don't change — they just no
- * longer point at a named goal. Budget lines planning money into it go.
+ * Delete a goal for good, as far as the user can tell. The row stays behind
+ * as `archived = 2`, which every goal list skips (they ask for 0 or 1), so
+ * nothing it was part of gets rewritten: purchases paid from it still aren't
+ * everyday spending (a real DELETE would null their fund_id), and earlier
+ * months keep the contributions they planned into it. This month's and later
+ * plan lines go, freeing that money to be planned elsewhere. Past paycheck
+ * allocations never pointed at the row, so they stay either way.
  */
 export function hardDeleteGoal(id: number): { ok: true } {
   const db = getDb();
-  db.prepare("DELETE FROM budget_lines WHERE kind = 'fund' AND ref_id = ?").run(id);
-  db.prepare('DELETE FROM savings_goals WHERE id = ?').run(id);
+  db.transaction(() => {
+    db.prepare("DELETE FROM budget_lines WHERE kind = 'fund' AND ref_id = ? AND month >= ?").run(
+      id,
+      monthOf(today())
+    );
+    db.prepare(
+      "UPDATE savings_goals SET archived = 2, archived_at = COALESCE(archived_at, datetime('now')) WHERE id = ?"
+    ).run(id);
+  })();
   return { ok: true };
 }
 

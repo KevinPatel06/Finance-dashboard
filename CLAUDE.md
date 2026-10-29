@@ -211,6 +211,10 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   (`changePlan()`). Current-month spend lines are mirrored into `expense_budgets` for desktop.
 - **Fund balance is derived** (`fundBalance()`): paycheck goal allocations + confirmed fund lines
   + deposits − withdrawals − expenses paid from the fund.
+- **Deleting a fund keeps its row** as `savings_goals.archived = 2` (1 = completed). Every goal
+  list asks for `archived = 0` or `1`, so it disappears everywhere. A real DELETE would null
+  `expenses.fund_id` (FK `SET NULL`), turning purchases paid from it into everyday spending
+  and rewriting past months. `hardDeleteGoal` drops only this and later months' fund lines.
 - **Payday check-in** replaces the wizard on the phone (`paydays.confirm/snooze`).
 - **Quick add** (`shared/quickAdd.ts`, rules only — no AI) parses "coffee 5, gas 50 yesterday",
   learning categories from history. **Export** (`shared/budgetExport.ts`) builds one Markdown
@@ -239,6 +243,18 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   lands late writes back pre-write state, silently reverting committed rows. That cost the
   first-run goals: `setUserName()` fires a settings write it never awaits, so its flush raced
   the awaited `goals.create` ones. `test/iosFlush.test.ts` pins both properties.
+  Each flush writes `finance.db.tmp`, copies the live file to `.bak` (only if the live file is
+  known intact), then renames the temp over `finance.db`, because Capacitor's `writeFile` isn't
+  atomic. `openDatabase()` NEVER writes: it tries `finance.db` → `.tmp` → `.bak`, each
+  `PRAGMA quick_check`ed (an empty file counts as damaged, not new). It starts a fresh DB
+  only when no copy exists at all, and throws (stopping the launch, files untouched) if
+  the directory can't be listed, a file can't be read, or no copy is intact. Treating
+  "couldn't read" as "first launch" would save an empty DB over the real one.
+- **Resume**: iOS keeps the app suspended, so a return to the foreground re-runs the
+  once-a-day notification check (overlapping runs share one pass) and, on a new day,
+  dispatches `DAY_CHANGED` (`src/platform/events.ts`). `RefreshProvider` listens and refetches.
+- **Portrait only on iPhone** (`Info.plist`). In landscape the viewport is wider than `md`, so
+  `App.tsx` would swap in the desktop shell.
 - **No IPC** — `src/platform/ios/api.ts` builds `window.api` in-process from `core/apiMap.ts`
   and wraps results in Promises, so pages can't tell the difference.
 - **Restore is desktop-only** (no first-party Capacitor document picker). Settings hides the

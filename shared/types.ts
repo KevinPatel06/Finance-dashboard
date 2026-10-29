@@ -52,7 +52,8 @@ export interface SavingsGoal {
   target_amount: number;
   target_date: string | null;
   color: string;
-  archived: 0 | 1;
+  /** 1 = completed, 2 = deleted (kept so its history stands; never listed). */
+  archived: 0 | 1 | 2;
   archived_at: string | null;
   created_at: string;
   emoji: string | null;

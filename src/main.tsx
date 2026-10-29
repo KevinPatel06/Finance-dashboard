@@ -19,7 +19,7 @@ bootstrapPlatform()
         '<div style="padding:2rem;font-family:system-ui;color:#e5e7eb;background:#0b0d12;' +
         'height:100vh"><h1 style="font-size:1.1rem">Could not start</h1>' +
         '<p style="opacity:.7;font-size:.9rem">The database could not be opened. ' +
-        'Reopen the app; if this persists, restore from a backup.</p></div>';
+        'Nothing was changed or deleted. Fully close the app and open it again.</p></div>';
     }
     throw err;
   })

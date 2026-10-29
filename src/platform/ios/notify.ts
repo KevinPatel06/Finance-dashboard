@@ -5,10 +5,34 @@ import { flush } from './storage';
 import type { AppSettings } from '../../../shared/types';
 
 /**
- * iOS delivery for the reminders computed in core/notifications.ts.
- * Same once-per-day contract as the desktop scheduler.
+ * One-off reminder ids start above the repeating reminders' fixed ids (9001–
+ * 9003, below). Scheduling an id that's already pending replaces it, so an
+ * overlap would silently cancel a repeating reminder.
  */
-export async function runNotificationCheck(): Promise<void> {
+const ONE_OFF_BASE = 100_000;
+
+let running: Promise<void> | null = null;
+
+/**
+ * iOS delivery for the reminders computed in core/notifications.ts.
+ * Same once-per-day contract as the desktop scheduler. Runs at launch and on
+ * every return to the foreground.
+ *
+ * Overlapping calls share one pass. They do overlap: the permission prompt
+ * makes the app inactive and then active again, so the resume check starts
+ * while the launch check is still waiting on it, and both would send the
+ * day's reminders.
+ */
+export function runNotificationCheck(): Promise<void> {
+  if (!running) {
+    running = check().finally(() => {
+      running = null;
+    });
+  }
+  return running;
+}
+
+async function check(): Promise<void> {
   try {
     const settings = repo.getSettings();
     if (!settings.notify_enabled) return;
@@ -31,7 +55,7 @@ export async function runNotificationCheck(): Promise<void> {
 
     await LocalNotifications.schedule({
       notifications: notes.map((n, i) => ({
-        id: Math.floor(Date.now() % 100000) + i,
+        id: ONE_OFF_BASE + (Date.now() % 100_000) + i,
         title: n.title,
         body: n.body,
         schedule: { at: new Date(Date.now() + 2000 + i * 500) },

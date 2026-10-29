@@ -3,8 +3,16 @@ import { createSqlJsDb, type SqlJsDb } from './db';
 
 const DB_FILE = 'finance.db';
 const BAK_FILE = 'finance.db.bak';
+/** Each flush writes here first, then renames it over DB_FILE. */
+const TMP_FILE = 'finance.db.tmp';
 
 let handle: SqlJsDb | null = null;
+/**
+ * Whether DB_FILE on disk is known to be intact. Only an intact file is
+ * rotated into the backup: after recovering from a damaged one, copying it
+ * over the backup would destroy the only good copy.
+ */
+let diskIsGood = false;
 
 export function getHandle(): SqlJsDb {
   if (!handle) throw new Error('iOS database not opened — call openDatabase() first.');
@@ -27,47 +35,92 @@ function fromBase64(b64: string): Uint8Array {
   return out;
 }
 
-async function readDbFile(): Promise<Uint8Array | undefined> {
-  try {
-    const res = await Filesystem.readFile({ path: DB_FILE, directory: Directory.Data });
-    return fromBase64(res.data as string);
-  } catch {
-    return undefined; // first launch
-  }
+/** Names of the files in the data directory. Throws if it can't be listed. */
+async function dataFiles(): Promise<Set<string>> {
+  const res = await Filesystem.readdir({ path: '', directory: Directory.Data });
+  return new Set(res.files.map((f) => f.name));
 }
 
-/** Open (or create) the on-disk database and load it into memory. */
-export async function openDatabase(): Promise<{ db: SqlJsDb; isNew: boolean }> {
-  const bytes = await readDbFile();
-  handle = await createSqlJsDb(bytes);
-  return { db: handle, isNew: !bytes };
+/**
+ * Opens one copy of the database, or returns null if its contents are damaged.
+ * A file that can't be read at all throws instead: that says nothing about the
+ * data, so it must stop the launch rather than fall back to an older copy.
+ */
+async function tryOpen(path: string): Promise<SqlJsDb | null> {
+  const res = await Filesystem.readFile({ path, directory: Directory.Data });
+  const bytes = fromBase64(res.data as string);
+  // An empty file is a write that never finished, not a new database.
+  if (bytes.length === 0) return null;
+  let db: SqlJsDb | undefined;
+  try {
+    db = await createSqlJsDb(bytes);
+    const check = db.prepare('PRAGMA quick_check').get<{ quick_check: string }>();
+    if (check?.quick_check === 'ok') return db;
+  } catch {
+    // Not a database, or a damaged one.
+  }
+  db?.close();
+  return null;
+}
+
+/**
+ * Open (or create) the on-disk database and load it into memory.
+ *
+ * Copies are tried newest-acknowledged first. finance.db is what the last
+ * completed flush wrote. The temp file is newer, but it only matters when a
+ * flush died mid-rename and took finance.db with it. The backup is one flush
+ * older than finance.db. `recovered` means finance.db itself wasn't usable.
+ *
+ * Nothing here ever writes. A fresh database is only created when there is
+ * no copy at all; if copies exist and none opens, this throws so the launch
+ * stops with every file left as it was.
+ */
+export async function openDatabase(): Promise<{ db: SqlJsDb; isNew: boolean; recovered: boolean }> {
+  const present = await dataFiles();
+  for (const path of [DB_FILE, TMP_FILE, BAK_FILE]) {
+    if (!present.has(path)) continue;
+    const db = await tryOpen(path);
+    if (!db) continue;
+    handle = db;
+    diskIsGood = path === DB_FILE;
+    return { db, isNew: false, recovered: path !== DB_FILE };
+  }
+  // A lone damaged temp file is a first launch whose first flush died.
+  if (present.has(DB_FILE) || present.has(BAK_FILE)) {
+    throw new Error('No intact copy of the database could be opened.');
+  }
+  handle = await createSqlJsDb();
+  diskIsGood = false;
+  return { db: handle, isNew: true, recovered: false };
 }
 
 /** Serialises flushes; `queued` is the one pending pass callers can share. */
 let tail: Promise<void> = Promise.resolve();
 let queued = false;
 
-/** Rotate one backup, then overwrite the live file. Never run concurrently. */
+/** Rotate one backup, then replace the live file. Never run concurrently. */
 async function writeSnapshot(): Promise<void> {
   if (!handle) return;
   // Snapshot INSIDE the critical section. Taking it before waiting for a turn
   // is what let a slow write land last carrying pre-write state.
   const bytes = handle.export();
-  try {
-    const prev = await Filesystem.readFile({ path: DB_FILE, directory: Directory.Data });
-    await Filesystem.writeFile({
-      path: BAK_FILE,
-      data: prev.data as string,
-      directory: Directory.Data,
-    });
-  } catch {
-    // No prior file to rotate — first write.
-  }
+  // Capacitor's writeFile is a plain, non-atomic write, so a kill mid-write
+  // would leave finance.db half-written. Write beside it and rename it into
+  // place instead: an interrupted flush can only leave a stray temp file.
   await Filesystem.writeFile({
-    path: DB_FILE,
+    path: TMP_FILE,
     data: toBase64(bytes),
     directory: Directory.Data,
   });
+  if (diskIsGood) {
+    try {
+      await Filesystem.copy({ from: DB_FILE, to: BAK_FILE, directory: Directory.Data });
+    } catch {
+      // A missed rotation only leaves the backup one flush older.
+    }
+  }
+  await Filesystem.rename({ from: TMP_FILE, to: DB_FILE, directory: Directory.Data });
+  diskIsGood = true;
 }
 
 /**
