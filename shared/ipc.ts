@@ -44,6 +44,9 @@ export const IPC = {
   CREATE_DEBT: 'debts:create',
   UPDATE_DEBT: 'debts:update',
   DELETE_DEBT: 'debts:delete',
+  MARK_DEBT_PAID_OFF: 'debts:markPaidOff',
+  LIST_PAID_OFF_DEBTS: 'debts:listPaidOff',
+  RESTORE_DEBT: 'debts:restore',
 
   // Expense categories
   LIST_EXPENSE_CATEGORIES: 'expenseCategories:list',

@@ -3,23 +3,29 @@ import type { CategoryKind, ExpenseCategory } from '@shared/types';
 import { suggestEmoji, suggestKind } from '@shared/emoji';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { GOAL_PALETTE } from '@/lib/palette';
-import { useToast } from '@/lib/ui';
+import { useConfirm, useToast } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import EmojiField from '../ui/EmojiField';
 import Sheet from '../ui/Sheet';
 import { BigButton, EmojiAvatar } from '../ui/kit';
 
-/** Create or edit a spending category: name, emoji, colour, Need or Want. */
+/**
+ * Create or edit a spending category: name, emoji, colour, Need or Want.
+ * `onDeleted` adds a Delete button (setup uses it; the category screen has its own).
+ */
 export default function CategoryEditor({
   category,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   category?: ExpenseCategory;
   onClose: () => void;
   onSaved: (c: ExpenseCategory) => void;
+  onDeleted?: () => void;
 }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [name, setName] = useState(category?.name ?? '');
   const [emoji, setEmoji] = useState(category?.emoji ?? '');
   const [emojiTouched, setEmojiTouched] = useState(!!category);
@@ -44,6 +50,19 @@ export default function CategoryEditor({
     } finally {
       setBusy(false);
     }
+  };
+
+  const remove = async () => {
+    if (!category) return;
+    const ok = await confirm({
+      title: `Delete ${category.name}?`,
+      description: 'Expenses in it are kept but lose their category. It also leaves this month’s plan.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await window.api.expenseCategories.remove(category.id);
+    onDeleted?.();
   };
 
   return (
@@ -110,6 +129,11 @@ export default function CategoryEditor({
             ))}
           </div>
         </div>
+        {category && onDeleted && (
+          <button onClick={remove} className="w-full py-3 rounded-full bg-danger/10 text-danger text-[15px] font-semibold">
+            Delete category
+          </button>
+        )}
       </div>
     </Sheet>
   );

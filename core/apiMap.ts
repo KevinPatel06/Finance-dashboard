@@ -72,6 +72,9 @@ export const REPO_API: RepoApiEntry[] = [
   w(IPC.CREATE_DEBT, (input) => repo.createDebt(input)),
   w(IPC.UPDATE_DEBT, (id, input) => repo.updateDebt(id, input)),
   w(IPC.DELETE_DEBT, (id) => repo.deleteDebt(id)),
+  w(IPC.MARK_DEBT_PAID_OFF, (id) => repo.markDebtPaidOff(id)),
+  r(IPC.LIST_PAID_OFF_DEBTS, () => repo.listPaidOffDebts()),
+  w(IPC.RESTORE_DEBT, (id) => repo.restoreDebt(id)),
 
   // Expense categories
   r(IPC.LIST_EXPENSE_CATEGORIES, () => repo.listExpenseCategories()),

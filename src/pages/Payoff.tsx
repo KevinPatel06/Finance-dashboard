@@ -12,6 +12,9 @@ import {
   AlertTriangle,
   Users,
   ChevronDown,
+  CircleCheck,
+  PartyPopper,
+  Undo2,
 } from 'lucide-react';
 import {
   CartesianGrid,
@@ -56,9 +59,33 @@ export default function Payoff() {
   const [editing, setEditing] = useState<Debt | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Debt | null>(null);
+  const [paidOff, setPaidOff] = useState<Debt[]>([]);
+  const [pendingPaidOff, setPendingPaidOff] = useState<Debt | null>(null);
 
   const load = async () => {
-    setDebts((await window.api.debts.list()) as Debt[]);
+    const [active, done] = await Promise.all([
+      window.api.debts.list() as Promise<Debt[]>,
+      window.api.debts.listPaidOff() as Promise<Debt[]>,
+    ]);
+    setDebts(active);
+    setPaidOff(done);
+  };
+
+  const markPaidOff = async (d: Debt) => {
+    await window.api.debts.markPaidOff(d.id);
+    setPendingPaidOff(null);
+    load();
+  };
+
+  // At $0 there's nothing to confirm; with money still owing, say what happens to it.
+  const askPaidOff = (d: Debt) => {
+    if (d.current_balance > 0) setPendingPaidOff(d);
+    else void markPaidOff(d);
+  };
+
+  const restore = async (d: Debt) => {
+    await window.api.debts.restore(d.id);
+    load();
   };
 
   useEffect(() => {
@@ -131,10 +158,26 @@ export default function Payoff() {
                 debt={d}
                 onEdit={() => setEditing(d)}
                 onDelete={() => setPendingDelete(d)}
+                onPaidOff={() => askPaidOff(d)}
               />
             ))}
           </div>
         </>
+      )}
+
+      {paidOff.length > 0 && (
+        <section className="space-y-3 pt-3">
+          <div className="flex items-center gap-2">
+            <PartyPopper size={14} className="text-success" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-content-muted">Paid off</h2>
+            <span className="pill bg-surface-3 text-content-muted">{paidOff.length}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {paidOff.map((d) => (
+              <PaidOffCard key={d.id} debt={d} onRestore={() => restore(d)} onDelete={() => setPendingDelete(d)} />
+            ))}
+          </div>
+        </section>
       )}
 
       <DebtEditor
@@ -168,6 +211,52 @@ export default function Payoff() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
       />
+
+      <ConfirmDialog
+        open={!!pendingPaidOff}
+        title="Mark this debt as paid off?"
+        description={
+          pendingPaidOff ? (
+            <>
+              <span className="text-content font-medium">{pendingPaidOff.name}</span> still shows{' '}
+              <span className="text-content num">{fmtMoney(pendingPaidOff.current_balance)}</span> owing. Its
+              balance will be set to $0 and it moves to the Paid off section. You can restore it anytime.
+            </>
+          ) : undefined
+        }
+        confirmLabel="Mark as paid off"
+        onCancel={() => setPendingPaidOff(null)}
+        onConfirm={() => {
+          if (pendingPaidOff) void markPaidOff(pendingPaidOff);
+        }}
+      />
+    </div>
+  );
+}
+
+function PaidOffCard({ debt, onRestore, onDelete }: { debt: Debt; onRestore: () => void; onDelete: () => void }) {
+  const meta = TYPE_META[debt.type];
+  return (
+    <div className="card p-4 flex items-center gap-3">
+      <div
+        className="w-10 h-10 rounded-xl grid place-items-center text-white shrink-0"
+        style={{ backgroundColor: meta.color }}
+      >
+        <CircleCheck size={18} strokeWidth={2.5} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold leading-tight truncate">{debt.name}</div>
+        <div className="text-xs text-content-muted mt-0.5">
+          {meta.label}
+          {debt.original_amount > 0 && <> · {fmtMoney(debt.original_amount)} paid off</>}
+        </div>
+      </div>
+      <button onClick={onRestore} className="btn-ghost text-xs px-2 py-1.5" title="Move back to your debts">
+        <Undo2 size={13} /> Restore
+      </button>
+      <button onClick={onDelete} className="btn-ghost p-1.5 hover:text-danger" title="Delete">
+        <Trash2 size={15} />
+      </button>
     </div>
   );
 }
@@ -186,10 +275,12 @@ function DebtCard({
   debt,
   onEdit,
   onDelete,
+  onPaidOff,
 }: {
   debt: Debt;
   onEdit: () => void;
   onDelete: () => void;
+  onPaidOff: () => void;
 }) {
   const meta = TYPE_META[debt.type];
   const Icon = meta.icon;
@@ -271,7 +362,11 @@ function DebtCard({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+        {/* Hover-revealed on desktop; always shown on touch screens, which have no hover. */}
+        <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition">
+          <button onClick={onPaidOff} className="btn-ghost p-1.5 hover:text-success" title="Mark as paid off">
+            <CircleCheck size={15} />
+          </button>
           <button onClick={onEdit} className="btn-ghost p-1.5" title="Edit">
             <Pencil size={15} />
           </button>
@@ -330,7 +425,9 @@ function DebtCard({
                 : undefined
           }
         />
-        {est ? (
+        {debt.current_balance === 0 ? (
+          <Stat label="Paid off" value="Done 🎉" />
+        ) : est ? (
           est.neverPaysOff ? (
             <div className="rounded-lg p-3 bg-danger/10 text-danger">
               <div className="text-xs uppercase tracking-wide flex items-center gap-1">
@@ -348,15 +445,27 @@ function DebtCard({
             />
           )
         ) : revolving ? (
-          <Stat
-            label="Paid off"
-            value={debt.current_balance === 0 ? 'Done 🎉' : '—'}
-            sub={debt.current_balance === 0 ? undefined : 'depends on what you pay'}
-          />
+          <Stat label="Paid off" value="—" sub="depends on what you pay" />
         ) : (
           <Stat label="Paid off" value="—" sub="add a payment amount" />
         )}
       </div>
+
+      {debt.current_balance === 0 && (
+        <div className="mt-4 rounded-xl bg-success/10 px-4 py-3 flex items-center gap-3 flex-wrap">
+          <div className="text-sm flex-1 min-w-[12rem]">
+            <span className="font-semibold">{revolving ? 'Balance is $0 🎉' : 'You paid it off! 🎉'}</span>{' '}
+            <span className="text-content-muted">
+              {revolving
+                ? 'Still using this card? Leave it here. Otherwise, move it to Paid off.'
+                : 'Move it to Paid off to clear it from your list.'}
+            </span>
+          </div>
+          <button onClick={onPaidOff} className="btn-primary shrink-0">
+            <CircleCheck size={16} /> Mark as paid off
+          </button>
+        </div>
+      )}
 
       {/* What-if toggle */}
       {est && !est.neverPaysOff && (

@@ -829,7 +829,10 @@ function revertDebtPaymentsForPaycheck(db: ReturnType<typeof getDb>, paycheckId:
     )
     .all(paycheckId) as { ref_id: number; amount: number }[];
   const undo = db.prepare('UPDATE debts SET current_balance = current_balance + ? WHERE id = ?');
-  for (const o of olds) undo.run(o.amount, o.ref_id);
+  for (const o of olds) {
+    undo.run(o.amount, o.ref_id);
+    reopenIfOwing(db, o.ref_id);
+  }
 }
 
 // ---------- Dashboard ----------
@@ -1112,6 +1115,47 @@ export function deleteDebt(id: number): { ok: true } {
   return { ok: true };
 }
 
+/**
+ * "Mark as paid off": the balance goes to 0 and the debt leaves every list
+ * (they all ask for `archived = 0`), keeping its history. Payments already
+ * made stay where they are — a confirmed month keeps its line, since that
+ * money really went to this debt. Plan lines for months not yet confirmed
+ * are dropped, freeing that money to be planned elsewhere.
+ */
+export function markDebtPaidOff(id: number): { ok: true } {
+  const db = getDb();
+  db.transaction(() => {
+    db.prepare(
+      `DELETE FROM budget_lines
+        WHERE kind = 'debt' AND ref_id = ? AND month >= ?
+          AND month NOT IN (SELECT month FROM budget_months WHERE confirmed_at IS NOT NULL)`
+    ).run(id, monthOf(today()));
+    db.prepare('UPDATE debts SET current_balance = 0, archived = 1 WHERE id = ?').run(id);
+  })();
+  return { ok: true };
+}
+
+export function listPaidOffDebts(): Debt[] {
+  return getDb()
+    .prepare('SELECT * FROM debts WHERE archived = 1 ORDER BY updated_at DESC, id DESC')
+    .all() as Debt[];
+}
+
+export function restoreDebt(id: number): Debt {
+  const db = getDb();
+  db.prepare('UPDATE debts SET archived = 0 WHERE id = ?').run(id);
+  return db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as Debt;
+}
+
+/**
+ * Anything that puts money back on a paid-off debt (a purchase charged to
+ * the card, an undone payment) brings it back to the active list — it's
+ * owing again, so hiding it would hide real debt.
+ */
+function reopenIfOwing(db: Db, debtId: number) {
+  db.prepare('UPDATE debts SET archived = 0 WHERE id = ? AND archived = 1 AND current_balance > 0').run(debtId);
+}
+
 // ============================================================================
 // Expenses — fully self-contained. None of the functions below read from or
 // write to paychecks/bills/goals, so expenses never affect dashboard, paycheck,
@@ -1216,10 +1260,10 @@ export function listExpenses(): Expense[] {
 
 // Charging an expense to a credit card raises that card's balance; un-linking
 // or deleting the expense lowers it back.
-const chargeDebt = (db: ReturnType<typeof getDb>, debtId: number, amount: number) =>
-  db
-    .prepare('UPDATE debts SET current_balance = current_balance + ? WHERE id = ?')
-    .run(amount, debtId);
+const chargeDebt = (db: ReturnType<typeof getDb>, debtId: number, amount: number) => {
+  db.prepare('UPDATE debts SET current_balance = current_balance + ? WHERE id = ?').run(amount, debtId);
+  reopenIfOwing(db, debtId);
+};
 const unchargeDebt = (db: ReturnType<typeof getDb>, debtId: number, amount: number) =>
   db
     .prepare('UPDATE debts SET current_balance = MAX(0, current_balance - ?) WHERE id = ?')
@@ -1580,6 +1624,7 @@ function applyDebtLineDelta(db: Db, debtId: number, delta: number) {
     db.prepare('UPDATE debts SET current_balance = MAX(0, current_balance - ?) WHERE id = ?').run(delta, debtId);
   } else if (delta < 0) {
     db.prepare('UPDATE debts SET current_balance = current_balance + ? WHERE id = ?').run(-delta, debtId);
+    reopenIfOwing(db, debtId);
   }
 }
 

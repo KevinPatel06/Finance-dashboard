@@ -84,6 +84,9 @@ export async function installIosApi(): Promise<void> {
       create: (input: unknown) => invoke(IPC.CREATE_DEBT, input),
       update: (id: number, input: unknown) => invoke(IPC.UPDATE_DEBT, id, input),
       remove: (id: number) => invoke(IPC.DELETE_DEBT, id),
+      markPaidOff: (id: number) => invoke(IPC.MARK_DEBT_PAID_OFF, id),
+      listPaidOff: () => invoke(IPC.LIST_PAID_OFF_DEBTS),
+      restore: (id: number) => invoke(IPC.RESTORE_DEBT, id),
     },
     expenseCategories: {
       list: () => invoke(IPC.LIST_EXPENSE_CATEGORIES),

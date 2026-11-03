@@ -2,25 +2,32 @@ import { useState } from 'react';
 import type { SavingsGoal } from '@shared/types';
 import { suggestEmoji } from '@shared/emoji';
 import { GOAL_PALETTE } from '@/lib/palette';
+import { useConfirm } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import { useRefresh } from '../data';
 import EmojiField from '../ui/EmojiField';
 import Sheet from '../ui/Sheet';
 import { BigButton, EmojiAvatar, MoneyInput, parseMoney } from '../ui/kit';
 
-/** Create or edit a fund: name, emoji, target and an optional deadline. */
+/**
+ * Create or edit a fund: name, emoji, target and an optional deadline.
+ * `onDeleted` adds a Delete button (setup uses it; the fund screen has its own).
+ */
 export default function FundEditor({
   fund,
   initialName,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   fund?: SavingsGoal;
   initialName?: string;
   onClose: () => void;
   onSaved: (g: SavingsGoal) => void;
+  onDeleted?: () => void;
 }) {
   const { bump } = useRefresh();
+  const confirm = useConfirm();
   const [name, setName] = useState(fund?.name ?? initialName ?? '');
   const [emoji, setEmoji] = useState(fund?.emoji ?? '');
   const [emojiTouched, setEmojiTouched] = useState(!!fund);
@@ -50,6 +57,20 @@ export default function FundEditor({
     } finally {
       setBusy(false);
     }
+  };
+
+  const remove = async () => {
+    if (!fund) return;
+    const ok = await confirm({
+      title: `Delete ${fund.name}?`,
+      description: 'It’s removed from your funds and your budget.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await window.api.goals.purge(fund.id);
+    bump();
+    onDeleted?.();
   };
 
   return (
@@ -112,6 +133,11 @@ export default function FundEditor({
             ))}
           </div>
         </div>
+        {fund && onDeleted && (
+          <button onClick={remove} className="w-full py-3 rounded-full bg-danger/10 text-danger text-[15px] font-semibold">
+            Delete fund
+          </button>
+        )}
       </div>
     </Sheet>
   );

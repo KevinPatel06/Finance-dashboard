@@ -88,12 +88,26 @@ export default function SetupFlow({
   const { data: debts, reload: reloadDebts } = useApi<Debt[]>(() => window.api.debts.list());
   const { data: funds, reload: reloadFunds } = useApi<SavingsGoal[]>(() => window.api.goals.list());
   const { data: categories, reload: reloadCats } = useApi<ExpenseCategory[]>(() => window.api.expenseCategories.list());
-  const [sheet, setSheet] = useState<null | { kind: 'recurring'; name?: string } | { kind: 'debt' } | { kind: 'fund'; name?: string } | { kind: 'category' }>(null);
+  // Each sheet adds a new item, or edits one already added (so mistakes can be fixed or removed).
+  const [sheet, setSheet] = useState<
+    | null
+    | { kind: 'recurring'; name?: string; item?: RecurringExpense }
+    | { kind: 'debt'; debt?: Debt }
+    | { kind: 'fund'; name?: string; fund?: SavingsGoal }
+    | { kind: 'category'; category?: ExpenseCategory }
+  >(null);
 
   // ---- plan
   const [view, setView] = useState<BudgetMonthView | null>(null);
   const [draft, setDraft] = useState<PlanDraft>(emptyDraft());
   const [busy, setBusy] = useState(false);
+
+  /** A deleted fund/category/debt must leave the plan draft, or saving would point at it. */
+  const dropFromDraft = (kind: keyof PlanDraft, id: number) =>
+    setDraft((d) => {
+      const { [id]: _gone, ...rest } = d[kind];
+      return { ...d, [kind]: rest };
+    });
 
   const go = async (to: number) => {
     if (STEPS[i] === 'pay' && to > i) {
@@ -251,10 +265,20 @@ export default function SetupFlow({
           {(recurring ?? []).length > 0 && (
             <Group>
               {(recurring ?? []).map((r) => (
-                <Row key={r.id} emoji={r.emoji} color="#64748b" title={r.description} subtitle={scheduleLabel(r)} value={money(r.amount)} />
+                <Row
+                  key={r.id}
+                  emoji={r.emoji}
+                  color="#64748b"
+                  title={r.description}
+                  subtitle={r.archived ? 'Paused' : scheduleLabel(r)}
+                  value={money(r.amount)}
+                  onClick={() => setSheet({ kind: 'recurring', item: r })}
+                  chevron
+                />
               ))}
             </Group>
           )}
+          {(recurring ?? []).length > 0 && <EditHint />}
           <button
             onClick={() => setSheet({ kind: 'recurring' })}
             className="w-full py-3.5 rounded-[20px] border-2 border-dashed border-border text-[15px] font-semibold text-content-muted"
@@ -286,10 +310,13 @@ export default function SetupFlow({
                   subtitle={`${money(d.current_balance)} at ${d.interest_rate}%`}
                   value={`≈ ${money(interestPerMonth(d))}`}
                   valueSub="interest / mo"
+                  onClick={() => setSheet({ kind: 'debt', debt: d })}
+                  chevron
                 />
               ))}
             </Group>
           )}
+          {(debts ?? []).length > 0 && <EditHint />}
           <button
             onClick={() => setSheet({ kind: 'debt' })}
             className="w-full py-3.5 rounded-[20px] border-2 border-dashed border-border text-[15px] font-semibold text-content-muted"
@@ -324,10 +351,13 @@ export default function SetupFlow({
                   title={f.name}
                   subtitle={f.target_date ? `by ${fmtDate(f.target_date)}` : 'No deadline'}
                   value={money(f.target_amount)}
+                  onClick={() => setSheet({ kind: 'fund', fund: f })}
+                  chevron
                 />
               ))}
             </Group>
           )}
+          {(funds ?? []).length > 0 && <EditHint />}
           <button
             onClick={() => setSheet({ kind: 'fund' })}
             className="w-full py-3.5 rounded-[20px] border-2 border-dashed border-border text-[15px] font-semibold text-content-muted"
@@ -362,6 +392,9 @@ export default function SetupFlow({
             debts={debts}
             onAddCategory={() => setSheet({ kind: 'category' })}
             onAddFund={() => setSheet({ kind: 'fund' })}
+            onEditCategory={(c) => setSheet({ kind: 'category', category: c })}
+            onEditFund={(f) => setSheet({ kind: 'fund', fund: f })}
+            onEditDebt={(d) => setSheet({ kind: 'debt', debt: d })}
           />
           <p className="text-center text-sm text-content-subtle mt-4">If you want to set this later, just tap Continue.</p>
         </div>
@@ -369,6 +402,7 @@ export default function SetupFlow({
 
       {sheet?.kind === 'recurring' && (
         <RecurringEditor
+          item={sheet.item}
           initial={{ description: sheet.name }}
           onClose={() => setSheet(null)}
           onSaved={() => void reloadRec()}
@@ -376,8 +410,14 @@ export default function SetupFlow({
       )}
       {sheet?.kind === 'debt' && (
         <DebtSheet
+          debt={sheet.debt}
           onClose={() => setSheet(null)}
           onSaved={() => {
+            setSheet(null);
+            void reloadDebts();
+          }}
+          onDeleted={() => {
+            if (sheet.debt) dropFromDraft('debt', sheet.debt.id);
             setSheet(null);
             void reloadDebts();
           }}
@@ -385,9 +425,15 @@ export default function SetupFlow({
       )}
       {sheet?.kind === 'fund' && (
         <FundEditor
+          fund={sheet.fund}
           initialName={sheet.name}
           onClose={() => setSheet(null)}
           onSaved={() => {
+            setSheet(null);
+            void reloadFunds();
+          }}
+          onDeleted={() => {
+            if (sheet.fund) dropFromDraft('fund', sheet.fund.id);
             setSheet(null);
             void reloadFunds();
           }}
@@ -395,8 +441,14 @@ export default function SetupFlow({
       )}
       {sheet?.kind === 'category' && (
         <CategoryEditor
+          category={sheet.category}
           onClose={() => setSheet(null)}
           onSaved={() => {
+            setSheet(null);
+            void reloadCats();
+          }}
+          onDeleted={() => {
+            if (sheet.category) dropFromDraft('spend', sheet.category.id);
             setSheet(null);
             void reloadCats();
           }}
@@ -421,5 +473,9 @@ export default function SetupFlow({
         return continueBtn();
     }
   }
+}
+
+function EditHint() {
+  return <p className="text-center text-xs text-content-subtle -mt-1">Tap one to change or remove it.</p>;
 }
 

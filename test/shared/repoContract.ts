@@ -411,6 +411,74 @@ export function runRepoContract(
       expect(repo.listExpenses().find((e) => e.id === exp.id)!.category_id).toBeNull();
     });
 
+    it('marking a debt paid off hides it, keeps confirmed payments and drops unconfirmed plans', () => {
+      const db = getDb();
+      const thisMonth = formatISO(new Date(), { representation: 'date' }).slice(0, 7);
+      const nextMonth = addMonthsToMonth(thisMonth, 1);
+      const lastMonth = addMonthsToMonth(thisMonth, -1);
+      const loan = repo.createDebt({
+        name: 'Car',
+        type: 'car_loan',
+        original_amount: 5000,
+        current_balance: 12.34,
+        interest_rate: 6,
+        payment_amount: 300,
+        payment_frequency: 'monthly',
+        split_count: 1,
+      });
+      db.prepare("INSERT INTO budget_months (month, confirmed_at) VALUES (?, datetime('now'))").run(lastMonth);
+      db.prepare("INSERT INTO budget_months (month, confirmed_at) VALUES (?, datetime('now'))").run(thisMonth);
+      db.prepare('INSERT INTO budget_months (month) VALUES (?)').run(nextMonth);
+      const line = db.prepare("INSERT INTO budget_lines (month, kind, ref_id, amount) VALUES (?, 'debt', ?, 300)");
+      for (const m of [lastMonth, thisMonth, nextMonth]) line.run(m, loan.id);
+
+      expect(repo.markDebtPaidOff(loan.id)).toEqual({ ok: true });
+
+      expect(repo.listDebts().map((d) => d.id)).not.toContain(loan.id);
+      const [done] = repo.listPaidOffDebts();
+      expect(done).toMatchObject({ id: loan.id, current_balance: 0, original_amount: 5000 });
+      const months = db
+        .prepare("SELECT month FROM budget_lines WHERE kind = 'debt' AND ref_id = ? ORDER BY month")
+        .all(loan.id) as { month: string }[];
+      expect(months.map((r) => r.month)).toEqual([lastMonth, thisMonth]);
+
+      const back = repo.restoreDebt(loan.id);
+      expect(back).toMatchObject({ archived: 0, current_balance: 0 });
+      expect(repo.listPaidOffDebts()).toHaveLength(0);
+      expect(repo.listDebts().map((d) => d.id)).toContain(loan.id);
+    });
+
+    it('money going back on a paid-off debt brings it back to the active list', () => {
+      const card = repo.createDebt({
+        name: 'Visa',
+        type: 'credit_card',
+        original_amount: 500,
+        current_balance: 500,
+        interest_rate: 19.99,
+        payment_amount: 0,
+        payment_frequency: 'monthly',
+        split_count: 1,
+      });
+      // Paid down to 0 by a paycheck, then marked paid off.
+      const pay = repo.createPaycheck({
+        date: '2026-08-01',
+        amount: 2000,
+        allocations: [{ kind: 'debt', ref_id: card.id, amount: 500 }],
+      });
+      repo.markDebtPaidOff(card.id);
+      // Undoing that payment means it's owing again.
+      repo.deletePaycheck(pay.id);
+      expect(repo.listDebts().find((d) => d.id === card.id)!.current_balance).toBeCloseTo(500, 6);
+
+      // A purchase charged to a paid-off card does the same.
+      repo.updateDebt(card.id, { current_balance: 0 });
+      repo.markDebtPaidOff(card.id);
+      expect(repo.listDebts().map((d) => d.id)).not.toContain(card.id);
+      repo.createExpense({ description: 'Coffee', amount: 5, date: '2026-08-02', category_id: null, debt_id: card.id });
+      expect(repo.listDebts().find((d) => d.id === card.id)!.current_balance).toBeCloseTo(5, 6);
+      expect(repo.listPaidOffDebts()).toHaveLength(0);
+    });
+
     it('deleting a fund hides it everywhere but leaves the past as it was', () => {
       const db = getDb();
       const todayIso = formatISO(new Date(), { representation: 'date' });

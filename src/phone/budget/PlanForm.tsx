@@ -53,6 +53,9 @@ export default function PlanForm({
   debts,
   onAddCategory,
   onAddFund,
+  onEditCategory,
+  onEditFund,
+  onEditDebt,
 }: {
   income: number;
   fixed: number;
@@ -63,6 +66,10 @@ export default function PlanForm({
   debts: Debt[];
   onAddCategory?: () => void;
   onAddFund?: () => void;
+  /** Make a row's name tappable to fix it (setup). */
+  onEditCategory?: (c: ExpenseCategory) => void;
+  onEditFund?: (f: SavingsGoal) => void;
+  onEditDebt?: (d: Debt) => void;
 }) {
   const [side, setSide] = useState<'need' | 'want'>('need');
   const left = income - fixed - draftSum(draft.debt) - draftSum(draft.fund) - draftSum(draft.spend);
@@ -99,6 +106,7 @@ export default function PlanForm({
                 subtitle={`${money(d.current_balance)} owing`}
                 value={draft.debt[d.id] ?? ''}
                 onChange={(v) => set('debt', d.id, v)}
+                onEdit={onEditDebt && (() => onEditDebt(d))}
               />
             ))}
           </Group>
@@ -129,6 +137,7 @@ export default function PlanForm({
               subtitle={`${money(f.target_amount)}${f.target_date ? ` by ${f.target_date}` : ''}`}
               value={draft.fund[f.id] ?? ''}
               onChange={(v) => set('fund', f.id, v)}
+              onEdit={onEditFund && (() => onEditFund(f))}
             />
           ))}
         </Group>
@@ -155,6 +164,7 @@ export default function PlanForm({
             title={c.name}
             value={draft.spend[c.id] ?? ''}
             onChange={(v) => set('spend', c.id, v)}
+            onEdit={onEditCategory && (() => onEditCategory(c))}
           />
         ))}
         {onAddCategory && (
@@ -174,6 +184,7 @@ function AmountRow({
   subtitle,
   value,
   onChange,
+  onEdit,
 }: {
   emoji: string | null;
   color: string;
@@ -181,14 +192,31 @@ function AmountRow({
   subtitle?: string;
   value: string;
   onChange: (v: string) => void;
+  onEdit?: () => void;
 }) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-2.5">
+  const label = (
+    <>
       <EmojiAvatar emoji={emoji} color={color} size="sm" />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="text-[15px] font-medium truncate">{title}</div>
         {subtitle && <div className="text-xs text-content-subtle truncate">{subtitle}</div>}
       </div>
+    </>
+  );
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5">
+      {onEdit ? (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`Edit ${title}`}
+          className="press [--dip:0.97] min-w-0 flex-1 flex items-center gap-3 text-left"
+        >
+          {label}
+        </button>
+      ) : (
+        label
+      )}
       <div className="w-[7.5rem] shrink-0">
         <MoneyInput value={value} onChange={onChange} ariaLabel={`${title} amount`} />
       </div>

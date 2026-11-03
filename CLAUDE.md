@@ -160,6 +160,11 @@ Key tables:
   warning, inline contribution ledger. Standalone — doesn't touch paycheck/dashboard math.
 - **Payoff** (nav label deliberately NOT "Debt") — typed debt cards, payoff date/interest
   projections, progress bars, expandable "what if I paid more?" line chart (base vs +extra).
+  **Mark as paid off** (`debts.markPaidOff`) sets balance 0 + `archived = 1` → "Paid off"
+  section with Restore/Delete; drops the debt's plan lines in unconfirmed months ≥ this month
+  (confirmed months keep theirs). A $0 card shows a prompt; with money owing it confirms first.
+  Anything that puts money back on an archived debt (card charge, undone paycheck payment,
+  lowered confirmed plan line) un-archives it via `reopenIfOwing()` — owing debt never hides.
 - **Expenses** — purchases ledger, own categories, filter/search, "spent this month" header,
   optional note, CSV export (respects filters). Defaults filter to current month. Per-category
   monthly **budget** bars (amber ≥80%, red ≥100%); caps edited in the category manager.
@@ -245,7 +250,9 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   `.press` / `[role=switch]` tap; success/error toasts buzz (`lib/ui.tsx`).
 - First run: one welcome screen (app icon, three points, name box) → `SetupFlow` (pay →
   recurring → debts → funds → export → plan → done). There's no budget-period step; the pay
-  step says the budget runs 1st to month-end.
+  step says the budget runs 1st to month-end. Every item added in setup is tappable to edit or
+  delete (DebtSheet/FundEditor/CategoryEditor take an optional `onDeleted`; PlanForm takes
+  optional `onEdit*`), and a delete also drops it from the plan draft.
 - Visual check: `scripts/phone-shots.mjs` (headless Edge over CDP, no puppeteer) — build
   `vite.config.ios.ts`, `vite preview --config vite.config.ios.ts --port 4173`, then
   `node scripts/phone-shots.mjs <outDir> light|dark [fresh]`.
