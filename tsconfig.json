@@ -32,7 +32,7 @@
     "electron",
     "test",
     "vite.config.ts",
-    "vite.config.ios.ts",
+    "vite.config.mobile.ts",
     "vitest.config.ts",
     "capacitor.config.ts"
   ]

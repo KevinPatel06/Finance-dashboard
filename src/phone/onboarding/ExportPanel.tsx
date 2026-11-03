@@ -81,7 +81,7 @@ export default function ExportPanel() {
         else toast.error('Could not copy. Use Share instead.');
       } else {
         const res = (await window.api.files.exportText(`my-budget-${todayIso()}.md`, md)) as { ok: boolean };
-        if (res.ok && __PLATFORM__ !== 'ios') toast.success('Saved.');
+        if (res.ok && __PLATFORM__ !== 'mobile') toast.success('Saved.');
       }
     } finally {
       setBusy(false);

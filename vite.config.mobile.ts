@@ -8,7 +8,7 @@ import fs from 'node:fs';
  *
  * Not a `?url` import: Vite emits those during transform regardless of whether
  * the importing module is reachable, which leaked 660KB of dead WASM into the
- * Electron bundle. Emitting it here keeps it strictly iOS-only.
+ * Electron bundle. Emitting it here keeps it strictly phone-only.
  */
 function emitSqlWasm(): Plugin {
   return {
@@ -24,12 +24,12 @@ function emitSqlWasm(): Plugin {
   };
 }
 
-// The Electron plugin must not run for the iOS build — it would emit
+// The Electron plugin must not run for the phone build — it would emit
 // dist-electron/ and mark better-sqlite3 external.
 export default defineConfig({
   // Capacitor serves from a custom scheme root; absolute asset paths break there.
   base: './',
-  define: { __PLATFORM__: JSON.stringify('ios') },
+  define: { __PLATFORM__: JSON.stringify('mobile') },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
@@ -37,5 +37,5 @@ export default defineConfig({
     },
   },
   plugins: [react(), emitSqlWasm()],
-  build: { outDir: 'dist-ios', emptyOutDir: true },
+  build: { outDir: 'dist-mobile', emptyOutDir: true },
 });

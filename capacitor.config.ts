@@ -4,7 +4,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.kevinpatel.financedashboard',
   appName: 'Finance Dashboard',
-  webDir: 'dist-ios',
+  webDir: 'dist-mobile',
   // 'never' is deliberate: we apply env(safe-area-inset-*) ourselves in
   // src/index.css. With 'always', WKWebView ALSO adds automatic insets to its
   // scroll view, so they double-count — content starts offset and rubber-banding

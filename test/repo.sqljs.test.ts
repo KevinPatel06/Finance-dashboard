@@ -2,7 +2,7 @@ import path from 'node:path';
 import { setDb, type DB } from '../core/db';
 import { runMigrations } from '../core/migrations';
 import { runRepoContract } from './shared/repoContract';
-import { createSqlJsDb, type SqlJsDb } from '../src/platform/ios/db';
+import { createSqlJsDb, type SqlJsDb } from '../src/platform/mobile/db';
 
 // The app loads the WASM from a bundled asset URL; Node cannot fetch that, so
 // point sql.js at the file on disk instead.

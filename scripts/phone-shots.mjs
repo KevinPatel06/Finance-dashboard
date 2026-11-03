@@ -1,7 +1,7 @@
 // Screenshots of the phone UI at iPhone size, for checking the design without a phone.
 //
-//   node node_modules/vite/bin/vite.js build --config vite.config.ios.ts
-//   node node_modules/vite/bin/vite.js preview --config vite.config.ios.ts --port 4173 --strictPort
+//   node node_modules/vite/bin/vite.js build --config vite.config.mobile.ts
+//   node node_modules/vite/bin/vite.js preview --config vite.config.mobile.ts --port 4173 --strictPort
 //   node scripts/phone-shots.mjs <outDir> [light|dark] [fresh]
 //
 // Drives headless Microsoft Edge over the DevTools protocol with Node's built-in

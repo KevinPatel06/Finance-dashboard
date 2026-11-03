@@ -16,7 +16,7 @@ import { exportCsv, exportText, backupDb } from './files';
  * handlers from, so the 11 pages cannot tell the difference between an IPC
  * round-trip and a direct call.
  */
-export async function installIosApi(): Promise<void> {
+export async function installMobileApi(): Promise<void> {
   const { db, isNew, recovered } = await openDatabase();
   setDb(db);
   runMigrations(db);
@@ -153,7 +153,7 @@ export async function installIosApi(): Promise<void> {
     db: {
       backup: () => backupDb(),
       // No first-party Capacitor document picker; restore stays desktop-only.
-      // Settings hides the button on iOS.
+      // Settings hides the button on the phone.
       restore: async () => ({ ok: false }),
     },
     files: {
@@ -164,7 +164,7 @@ export async function installIosApi(): Promise<void> {
 
   (window as any).api = api;
 
-  // Belt-and-braces durability: flush when iOS backgrounds the app. Coming
+  // Belt-and-braces durability: flush when the OS backgrounds the app. Coming
   // back is not a relaunch, so run the day's reminder check (it no-ops if it
   // already ran today) and, on a new day, have screens refetch.
   let activeDay = todayStr();

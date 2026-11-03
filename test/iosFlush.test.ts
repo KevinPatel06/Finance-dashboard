@@ -7,9 +7,9 @@ const WASM = path.resolve(process.cwd(), 'node_modules/sql.js/dist/sql-wasm.wasm
  * sql.js resolves its WASM from a bundler asset URL, which Node cannot fetch.
  * Point it at the file on disk so storage.ts can be exercised unmodified.
  */
-vi.mock('../src/platform/ios/db', async () => {
+vi.mock('../src/platform/mobile/db', async () => {
   const actual =
-    await vi.importActual<typeof import('../src/platform/ios/db')>('../src/platform/ios/db');
+    await vi.importActual<typeof import('../src/platform/mobile/db')>('../src/platform/mobile/db');
   return {
     ...actual,
     createSqlJsDb: (bytes?: Uint8Array) => actual.createSqlJsDb(bytes, WASM),
@@ -75,8 +75,8 @@ vi.mock('@capacitor/filesystem', () => ({
   },
 }));
 
-import { openDatabase, flush } from '../src/platform/ios/storage';
-import { createSqlJsDb } from '../src/platform/ios/db';
+import { openDatabase, flush } from '../src/platform/mobile/storage';
+import { createSqlJsDb } from '../src/platform/mobile/db';
 import { setDb, type DB } from '../core/db';
 import { runMigrations } from '../core/migrations';
 import * as repo from '../core/repo';

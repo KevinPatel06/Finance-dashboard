@@ -8,7 +8,7 @@ import { CelebrationProvider } from './lib/celebration';
 import { UIProvider } from './lib/ui';
 import { bootstrapPlatform } from './platform';
 
-// On iOS the database and window.api are built in-process, so nothing may
+// On the phone the database and window.api are built in-process, so nothing may
 // render until that resolves. On Electron this is a no-op.
 bootstrapPlatform()
   .catch((err) => {

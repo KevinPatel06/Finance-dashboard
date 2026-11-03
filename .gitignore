@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-electron/
 dist-ios/
+dist-mobile/
 release/
 *.local
 .DS_Store

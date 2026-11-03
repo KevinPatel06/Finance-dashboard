@@ -2,7 +2,7 @@ import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 import type { DB, Stmt } from '../../../core/db';
 
 /**
- * Emitted at this exact name by the emit-sql-wasm plugin in vite.config.ios.ts,
+ * Emitted at this exact name by the emit-sql-wasm plugin in vite.config.mobile.ts,
  * and resolved relative to the page. Deliberately NOT a `?url` import: Vite
  * emits those eagerly even when the importing module is unreachable, which put
  * 660KB of dead WASM into the Electron bundle.
