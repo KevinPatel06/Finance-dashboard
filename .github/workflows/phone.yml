@@ -98,18 +98,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # The permanent release key. Without it (pull requests from forks) the APK
-      # is built unsigned and can't be installed — nothing to hand out by mistake.
+      # The permanent release key signs main only. Other branches and pull
+      # requests build unsigned and upload nothing: their versionCode can be
+      # higher than main's next build, and a phone that installed one would then
+      # refuse every real update. On main a missing key is an error, not a
+      # silently uninstallable APK.
       - name: Restore signing key
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
-            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
-          else
-            echo "::warning::No signing key secret; building an unsigned APK."
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing; main must build a signed APK."
+            exit 1
           fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
 
       - name: Build release APK
         working-directory: android
@@ -132,15 +136,20 @@ jobs:
 
       - name: Verify signature
         if: env.ANDROID_KEYSTORE_FILE != ''
+        # Prints only public certificate details (subject + digests).
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)
-          "$APKSIGNER" verify --print-certs "$RUNNER_TEMP/FinanceDashboard.apk" | grep -E "Signer #1 certificate (DN|SHA-256)"
+          echo "Using $APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$RUNNER_TEMP/FinanceDashboard.apk" 2>&1 | tee "$RUNNER_TEMP/apksigner.txt"
+          grep -q "^Verifies" "$RUNNER_TEMP/apksigner.txt"
+          grep -q "CN=Finance Dashboard" "$RUNNER_TEMP/apksigner.txt"
 
       - name: Remove signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/release.p12"
 
       - uses: actions/upload-artifact@v4
+        if: env.ANDROID_KEYSTORE_FILE != ''
         with:
           name: FinanceDashboard-apk
           path: ${{ runner.temp }}/FinanceDashboard.apk

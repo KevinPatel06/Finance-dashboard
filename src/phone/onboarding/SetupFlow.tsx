@@ -159,6 +159,9 @@ export default function SetupFlow({
     const remaining = view.income - fixed - debt - savings - spendNeeds - spendWants;
     return (
       <FlowShell
+        // No arrow is drawn on this step; this only gives Android's back button
+        // somewhere sensible to go (the plan) instead of leaving setup unsaved.
+        onBack={back}
         footer={
           <BigButton icon={ArrowRight} onClick={finish} disabled={busy}>
             {busy ? 'Setting up…' : 'Go to my budget'}

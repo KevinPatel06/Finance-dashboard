@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { NavigationType, useLocation, useNavigate, useNavigationType, useOutlet } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { appEdgeSwipe, currentPlatform } from './edgeSwipe';
 import TabBar, { TAB_PATHS } from './TabBar';
 import QuickAddSheet, { type QuickAddOptions } from './expenses/QuickAddSheet';
 
@@ -105,7 +106,7 @@ function useEdgeSwipe(
 
   useEffect(() => {
     const root = main.current;
-    if (!root) return;
+    if (!root || !appEdgeSwipe(currentPlatform())) return;
     const EDGE = 24;
     let g: null | {
       x: number; y: number; t: number; dx: number; v: number;
