@@ -20,8 +20,7 @@ import ExpenseEditor from './ExpenseEditor';
 import ExpenseRow from './ExpenseRow';
 import MonthCalendar, { type CalendarMode, type DayCell } from './MonthCalendar';
 
-type DayAcc = DayCell & { byCat: Map<number | null, number> };
-const blankDay = (): DayAcc => ({ total: 0, emoji: null, upcoming: [], byCat: new Map() });
+const blankDay = (): DayCell => ({ total: 0, upcoming: [] });
 
 /** Spending at a glance: month total vs last month, a calendar or a donut, and the ledger. */
 export default function ExpensesScreen() {
@@ -57,16 +56,11 @@ export default function ExpensesScreen() {
       .filter((e) => e.date.startsWith(prev) && Number(e.date.slice(8, 10)) <= cutoff)
       .reduce((s, e) => s + e.amount, 0);
 
-    const days = new Map<string, DayAcc>();
+    const days = new Map<string, DayCell>();
     for (const e of inMonth) {
       const d = days.get(e.date) ?? blankDay();
       d.total += e.amount;
-      d.byCat.set(e.category_id, (d.byCat.get(e.category_id) ?? 0) + e.amount);
       days.set(e.date, d);
-    }
-    for (const d of days.values()) {
-      const top = [...d.byCat.entries()].sort((a, b) => b[1] - a[1])[0];
-      d.emoji = top && top[0] != null ? catById.get(top[0])?.emoji ?? null : '❔';
     }
     // Recurring charges still to come this month (not yet logged).
     const { start, end } = monthBounds(month);
@@ -166,12 +160,11 @@ export default function ExpensesScreen() {
         <>
           <div className="flex justify-end">
             <SegmentedControl
-              className="w-[15.5rem]"
+              className="w-[11rem]"
               value={mode}
               onChange={setMode}
               options={[
                 { value: 'amount', label: 'Amount' },
-                { value: 'emoji', label: 'Emoji' },
                 { value: 'upcoming', label: 'Upcoming' },
               ]}
             />

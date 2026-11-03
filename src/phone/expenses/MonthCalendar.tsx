@@ -4,11 +4,10 @@ import { monthBounds } from '@shared/paydays';
 import { todayIso } from '../dates';
 import { moneyCompact } from '../format';
 
-export type CalendarMode = 'amount' | 'emoji' | 'upcoming';
+export type CalendarMode = 'amount' | 'upcoming';
 
 export interface DayCell {
   total: number;
-  emoji: string | null; // the day's biggest category
   upcoming: Array<{ emoji: string | null; amount: number }>;
 }
 
@@ -16,7 +15,7 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 /**
  * Monday-first month grid. Each day shows its spending as a compact amount,
- * as the emoji of its biggest category, or the recurring charges still due.
+ * or the recurring charges still due.
  */
 export default function MonthCalendar({
   month,
@@ -72,9 +71,6 @@ export default function MonthCalendar({
                 <span className="text-[12px] leading-none font-semibold num tracking-tight whitespace-nowrap pl-0.5">
                   {moneyCompact(cell.total)}
                 </span>
-              )}
-              {mode === 'emoji' && cell && cell.total > 0 && (
-                <span className="text-xl leading-none self-center pb-0.5">{cell.emoji ?? '❔'}</span>
               )}
               {mode === 'upcoming' && cell && cell.upcoming.length > 0 && (
                 <span className="leading-none">
