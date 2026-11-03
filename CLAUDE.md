@@ -4,18 +4,20 @@ Personal-finance app for tracking biweekly paychecks, bills, savings goals, expe
 debt payoff. Built for Kevin (Canada), but shareable — the displayed user name is a runtime
 setting so anyone can rebrand it to their own.
 
-Ships as **two apps from one codebase**: a Windows **Electron** desktop app and an **iOS**
-app (Capacitor, sideloaded via LiveContainer). They share `src/` verbatim and all business
-logic through `core/`. A change is written once.
+Ships as **three apps from one codebase**: a Windows **Electron** desktop app, an **iOS** app
+(Capacitor, sideloaded via LiveContainer) and an **Android** app (Capacitor, a signed `.apk`
+Kevin sends a friend). iOS and Android are one *mobile* build. All share `src/` verbatim and
+all business logic through `core/`. A change is written once.
 
 ## Stack
 - **React 18** + **TypeScript** + **Vite 6** + **TailwindCSS 3** — shared by both targets
 - **Electron** (desktop shell) + **better-sqlite3** (main process)
-- **Capacitor 6** (iOS shell) + **sql.js** (WASM SQLite, in the WebView)
+- **Capacitor 6** (iOS + Android shell) + **sql.js** (WASM SQLite, in the WebView)
 - **Recharts** (charts), **date-fns** (dates), **lucide-react** (icons), **canvas-confetti**
 - **react-router-dom** (HashRouter), **zustand** available but UI mostly uses local state
 - **Vitest** for tests; **node:sqlite** as the Node-side test driver
 - Packaged with **electron-builder** → Windows NSIS installer; GitHub Actions → unsigned `.ipa`
+  + signed `.apk`
 
 ## Run / Build
 ```
@@ -24,7 +26,9 @@ npm test               # Vitest — repo contract on 2 drivers + apiMap + migrat
 npm run build:web      # tsc -b && vite build          (shared step)
 npm run build          # build:web && electron-builder → release/ installer
 npm run build:unpacked # same but --dir (skips installer; avoids Windows symlink issue)
-npm run build:ios      # vite build (iOS config) && cap sync ios
+npm run build:mobile   # vite build --config vite.config.mobile.ts → dist-mobile/ (iOS + Android)
+npm run build:ios      # build:mobile && cap sync ios
+npm run build:android  # build:mobile && cap sync android
 ```
 - Requires **Node 18+** for the app; **Node 22.5+** for the test suite (`node:sqlite`).
   Dev machine runs Node 24.
@@ -33,11 +37,16 @@ npm run build:ios      # vite build (iOS config) && cap sync ios
   Test directly with: `node node_modules/vitest/vitest.mjs run`
   (the `.bin` shims sometimes fail on this Windows shell — call via `node` directly. `npm test`
   itself can fail here because npm spawns cmd.exe without `node` on PATH; CI is unaffected.)
-- **iOS builds happen on GitHub Actions** (`.github/workflows/ios.yml`, `macos-latest`, free
-  for public repos). It runs the test suite on ubuntu first, then archives unsigned and zips a
+- **Phone builds happen on GitHub Actions** (`.github/workflows/phone.yml`, "Build phone
+  apps"). Locally the `npx` shim fails too: run `node node_modules/@capacitor/cli/bin/capacitor`.
+- **iOS** (`build` job, `macos-latest`, free for public repos). It runs the test suite on ubuntu first, then archives unsigned and zips a
   `Payload/` into `FinanceDashboard.ipa`, uploaded as a workflow artifact. No Mac, no Apple
   Developer account, and no code signing are needed — LiveContainer takes the unsigned ipa.
   `npx cap add ios` DOES work on Windows; only `pod install` is skipped (CI runs it).
+  A run failing with "The job was not acquired by Runner" means GitHub had no Mac free: re-run.
+- **Android** (`android` job, `ubuntu-latest`): `build:mobile` → `cap sync android` → JDK 17 →
+  `./gradlew assembleRelease` → artifact `FinanceDashboard-apk`. There's no Android SDK or Java
+  on Kevin's PC, so the APK is only ever built in CI. Signing: see "Android app" below.
 - **Install gotcha**: better-sqlite3 has no Node 24 prebuild + no VS Build Tools here.
   Install with `npm install --ignore-scripts`, then `npx electron-rebuild -f -w better-sqlite3`
   (pulls Electron's prebuilt binary). If Electron itself won't launch
@@ -83,14 +92,15 @@ npm run build:ios      # vite build (iOS config) && cap sync ios
 `lib/` (theme, accents, format, utils, debtMath, celebration, csv). `Modal` traps focus +
 autofocuses first field (`role="dialog"`), and docks as a bottom sheet below `md`.
 - `src/platform/index.ts` — `bootstrapPlatform()`. No-op on Electron (preload already
-  installed `window.api`); on iOS it opens the DB and builds the API before React renders.
-- `src/platform/ios/` — `db.ts` (sql.js adapter), `storage.ts` (open/flush/rotate backup),
-  `api.ts` (in-process `window.api`), `notify.ts`, `files.ts`.
+  installed `window.api`); on the phone it opens the DB and builds the API before React renders.
+- `src/platform/mobile/` (iOS + Android) — `db.ts` (sql.js adapter), `storage.ts` (open/flush/rotate backup),
+  `api.ts` (in-process `window.api`), `notify.ts`, `files.ts`, `haptics.ts`, plus Android-only
+  `androidBack.ts` and `statusBar.ts` (no-ops unless `Capacitor.getPlatform() === 'android'`).
 
 **IPC pattern (unchanged — still 4 files):** add channel to `shared/ipc.ts` → repo fn in
 `core/repo.ts` → entry in `core/apiMap.ts` → namespace method in `electron/preload.ts` AND
-`src/platform/ios/api.ts` → use `window.api.x.y()` in a page. `test/apiMap.test.ts` fails if
-a channel has no apiMap entry, so iOS support can't be silently forgotten.
+`src/platform/mobile/api.ts` → use `window.api.x.y()` in a page. `test/apiMap.test.ts` fails if
+a channel has no apiMap entry, so phone support can't be silently forgotten.
 
 ## Data model (migrations v1–v13)
 - **v1**: `settings(key,value)`, `categories`, `bills`, `savings_goals`, `paychecks`,
@@ -254,7 +264,7 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   delete (DebtSheet/FundEditor/CategoryEditor take an optional `onDeleted`; PlanForm takes
   optional `onEdit*`), and a delete also drops it from the plan draft.
 - Visual check: `scripts/phone-shots.mjs` (headless Edge over CDP, no puppeteer) — build
-  `vite.config.ios.ts`, `vite preview --config vite.config.ios.ts --port 4173`, then
+  `vite.config.mobile.ts`, `vite preview --config vite.config.mobile.ts --port 4173`, then
   `node scripts/phone-shots.mjs <outDir> light|dark [fresh]`.
 
 ## iOS app
@@ -281,13 +291,39 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   dispatches `DAY_CHANGED` (`src/platform/events.ts`). `RefreshProvider` listens and refetches.
 - **Portrait only on iPhone** (`Info.plist`). In landscape the viewport is wider than `md`, so
   `App.tsx` would swap in the desktop shell.
-- **No IPC** — `src/platform/ios/api.ts` builds `window.api` in-process from `core/apiMap.ts`
+- **No IPC** — `src/platform/mobile/api.ts` builds `window.api` in-process from `core/apiMap.ts`
   and wraps results in Promises, so pages can't tell the difference.
 - **Restore is desktop-only** (no first-party Capacitor document picker). Settings hides the
   button on iOS and relabels Backup as "Share database".
 - **Distribution**: unsigned `.ipa` from GitHub Actions → LiveContainer. No App Store review,
   so no compliance constraints. WKWebView gets JS JIT from the system WebContent process
   regardless of the host app's entitlements, so it runs at full speed under LiveContainer.
+
+## Android app
+- **Same phone app as iOS**, no Android-only screens; everything in "Phone app" and the iOS
+  storage/resume rules applies. Capacitor Filesystem's Android `rename` deletes the target
+  then renames, so the tmp → `finance.db` swap works as on iOS (the `.bak` covers the gap).
+- **Back button** (`src/lib/backStack.ts`): `Sheet`, `Modal`, `ConfirmDialog` and `FlowShell`
+  register with `useBackHandler()` while open. Back runs the top one, else `navigate(-1)`, else
+  on a root tab or the welcome screen `App.minimizeApp()`. A new overlay must register too, or
+  back skips straight past it.
+- **Status bar** follows the theme (`setStatusBar()`, called from `applyTheme`): Beige
+  `#EEE5D5` / Charcoal `#1D1E1C`. Portrait-only activity; Beige launch screen. Reminder icon
+  `res/drawable/ic_stat_notify.xml` (`capacitor.config.ts` → `LocalNotifications.smallIcon`).
+  App icon = the iOS 1024px PNG as an adaptive-icon background (`res/drawable-nodpi`).
+- **Signing: never regenerate or lose the key.** One PKCS#12 keystore signs every APK, which is
+  what lets a new build install over the old one and keep the friend's data. It lives ONLY in
+  repo secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+  `ANDROID_KEY_PASSWORD`) and in Kevin's backup folder `Documents\Finance Dashboard signing key`.
+  The repo is **public**: never commit it (`.gitignore` blocks `*.p12`, `*.jks`, `*.keystore`),
+  print it, or upload it as an artifact. Without the secret, CI builds an unsigned APK.
+- **versionCode = `git rev-list --count HEAD`** (CI checks out full history); `versionName` =
+  `package.json` version. Android refuses an "update" with a lower code, so never rewrite
+  `main`'s history. (Not `run_number`: that restarts whenever the workflow file is renamed.)
+- **Sending it to the friend**: open the green run → Artifacts → `FinanceDashboard-apk` (a zip)
+  → unzip → send `FinanceDashboard.apk` (chat app, email, Drive). On first install Android asks
+  to allow "Install unknown apps" for whatever opened the file. Updates: same steps; the phone
+  says "Update" and keeps their data.
 
 ## Conventions / gotchas
 - **Currency is CAD**, `en-CA` locale (`src/lib/format.ts`). Dates `en-CA`.
@@ -315,8 +351,8 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
 - **Never use a `?url` import for a platform-specific asset.** Vite emits `?url` assets during
   transform regardless of whether the importing module is reachable, so
   `sql-wasm.wasm?url` leaked 660KB of dead WASM into the Electron bundle. The
-  `emit-sql-wasm` plugin in `vite.config.ios.ts` emits it iOS-only instead.
-- **`__PLATFORM__`** (`'electron' | 'ios'`) is a Vite `define` in both configs, declared in
+  `emit-sql-wasm` plugin in `vite.config.mobile.ts` emits it phone-only instead.
+- **`__PLATFORM__`** (`'electron' | 'mobile'`) is a Vite `define` in both configs, declared in
   `src/global.d.ts`. Because it's a compile-time constant, platform branches are eliminated
   from the bundle that doesn't need them — that's what keeps sql.js out of the desktop build.
 - **Responsive rule**: the desktop layout is `md` and above and must stay pixel-identical.
