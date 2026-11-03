@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,6 +66,12 @@ export function HatchedBar({
 }) {
   const { theme } = useTheme();
   const w = Math.max(0, Math.min(100, pct));
+  // Start empty and fill on the next frame, so a screen opening shows the bars grow.
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => setShown(true));
+    return () => window.cancelAnimationFrame(id);
+  }, []);
   return (
     <div
       className={cn('relative w-full rounded-md overflow-hidden', height === 'md' ? 'h-[22px]' : 'h-3')}
@@ -83,9 +89,9 @@ export function HatchedBar({
       />
       {w > 0 && (
         <div
-          className="absolute inset-y-0 left-0 rounded-md transition-[width] duration-500"
+          className="absolute inset-y-0 left-0 rounded-md transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
           style={{
-            width: `${w}%`,
+            width: shown ? `${w}%` : '0%',
             backgroundColor: over ? 'rgb(var(--danger) / 0.55)' : fillTint(color, theme),
           }}
         />
@@ -116,7 +122,7 @@ export function PCard({
       onClick={onClick}
       className={cn(
         'block w-full text-left rounded-[22px] bg-surface-2 border border-border/70 shadow-card',
-        onClick && 'transition active:scale-[0.99]',
+        onClick && 'press [--dip:0.98]',
         className
       )}
     >
@@ -169,7 +175,7 @@ export function Row({
   return (
     <Tag
       onClick={onClick}
-      className={cn('w-full flex items-center gap-3 px-4 py-3 text-left', onClick && 'active:bg-surface-3/60')}
+      className={cn('w-full flex items-center gap-3 px-4 py-3 text-left', onClick && 'transition-colors active:bg-surface-3/60')}
     >
       {leading}
       {emoji !== undefined && color && <EmojiAvatar emoji={emoji} color={color} />}
@@ -216,7 +222,7 @@ export function CircleButton({
       onClick={onClick}
       aria-label={label}
       className={cn(
-        'w-10 h-10 rounded-full grid place-items-center shrink-0 border transition active:scale-95',
+        'press [--dip:0.9] w-10 h-10 rounded-full grid place-items-center shrink-0 border',
         tone === 'brand'
           ? 'bg-brand text-white dark:text-slate-950 border-transparent shadow-soft'
           : 'bg-surface-2 border-border text-content shadow-soft'
@@ -312,8 +318,8 @@ export function BigButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'relative w-full h-14 rounded-full text-[17px] font-semibold transition active:scale-[0.99]',
-        'disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center gap-2',
+        'press [--dip:0.97] relative w-full h-14 rounded-full text-[17px] font-semibold',
+        'disabled:opacity-40 flex items-center justify-center gap-2',
         tone === 'content' && 'bg-content text-surface shadow-pop',
         tone === 'brand' && 'bg-brand text-white dark:text-slate-950 shadow-pop',
         tone === 'outline' && 'bg-surface-2 border border-border text-content',
@@ -344,7 +350,7 @@ export function Chip({
     <button
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition active:scale-95 whitespace-nowrap',
+        'press [--dip:0.94] inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium whitespace-nowrap',
         active ? 'bg-content text-surface' : 'bg-surface-3 text-content',
         className
       )}
@@ -381,7 +387,7 @@ export function Banner({
   return (
     <Tag
       onClick={onClick}
-      className={cn('w-full text-left rounded-[20px] border px-4 py-3.5 flex gap-3 items-start', BANNER_TONE[tone])}
+      className={cn('w-full text-left rounded-[20px] border px-4 py-3.5 flex gap-3 items-start', onClick && 'press [--dip:0.98]', BANNER_TONE[tone])}
     >
       {icon && <div className="text-xl leading-none pt-0.5 shrink-0">{icon}</div>}
       <div className="min-w-0 flex-1">

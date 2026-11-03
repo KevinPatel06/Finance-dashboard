@@ -136,6 +136,9 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* The phone has its own fixed warm palette (index.css, html.phone), so
+          an accent picker there would do nothing. */}
+      {!isMobile && (
       <div className="card p-5">
         <h2 className="font-semibold mb-1">Accent color</h2>
         <p className="text-sm text-content-muted mb-4">
@@ -153,6 +156,7 @@ export default function Settings() {
           ))}
         </div>
       </div>
+      )}
 
       {!isMobile && (
       <div className="card p-5">

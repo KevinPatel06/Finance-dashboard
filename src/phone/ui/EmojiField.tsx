@@ -37,7 +37,7 @@ export default function EmojiField({ value, onChange }: { value: string; onChang
             type="button"
             onClick={() => onChange(e)}
             className={cn(
-              'aspect-square rounded-xl text-xl grid place-items-center transition active:scale-90',
+              'aspect-square rounded-xl text-xl grid place-items-center press [--dip:0.88]',
               value === e ? 'bg-brand-soft ring-2 ring-brand' : 'bg-surface-3/70'
             )}
           >

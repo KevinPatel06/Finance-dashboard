@@ -222,8 +222,27 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
 - **Reminders**: repeating iOS local notifications (ids 9001–9003) scheduled by
   `scheduleReminders()` in `src/platform` — daily log, 1st of month, Monday report.
 - Theme defaults to **light** for fresh installs. A light/dark button (`ui/ThemeButton.tsx`) is
-  pinned top-right on every phone screen; `LargeHeader`/`NavHeader` leave room for it. Screen
-  and step changes replay a slight `animate-page-in` fade (keyed by path / step).
+  pinned top-right on every phone screen; `LargeHeader`/`NavHeader` leave room for it, and it
+  cross-fades colours by putting `theming` on `<html>` for ~400ms.
+- **Warm phone palette** (Life Centralized's): `PhoneApp` puts `phone` on `<html>`, and
+  `index.css` redefines the tokens under `html.phone` — light = Beige page + Ivory cards, dark =
+  Charcoal page + **Sage cards**. Sage cards are light, so in dark mode anything with
+  `bg-surface-2` / `.card` / `.input` / `[data-on-card]` re-scopes the tokens to dark ink (plus a
+  base-layer `color` rule, since inherited text colour is computed and won't follow the vars).
+  New card-like surfaces must use one of those or they'll get light text on sage. The phone
+  ignores the accent picker (`--brand` is `!important` there; Settings hides it on mobile).
+  `pastel.ts` washes toward the (always light) card colour.
+- **Motion** (all in `index.css`, phone-scoped, off under Reduce Motion): `.press` (dip + spring
+  back via `linear()` springs `--spring-press/slide/sheet`; `[--dip:0.9]` to tune). `PhoneLayout`
+  is a screen **stack**: pushes slide in over the previous screen, which stays mounted
+  underneath (`ph-under`) so Back / the left-edge swipe reveal it with scroll intact; tabs and
+  `replace` navigations fade up. Animations use `fill: backwards` so a resting screen has no
+  transform (a transform would re-anchor `position: fixed` children). `Sheet` is portalled to
+  `<body>`, springs in, drags down to dismiss, and animates out by cloning its last frame (callers
+  usually unmount it, leaving React nothing to animate). Segmented control + tab bar use one
+  sliding thumb; the gauge lights segment by segment (`CountUp` for the amount); bars fill on mount.
+- **Haptics**: `haptic()` in `src/platform` (`@capacitor/haptics`, iOS-only branch). Clicks on
+  `.press` / `[role=switch]` tap; success/error toasts buzz (`lib/ui.tsx`).
 - First run: one welcome screen (app icon, three points, name box) → `SetupFlow` (pay →
   recurring → debts → funds → export → plan → done). There's no budget-period step; the pay
   step says the budget runs 1st to month-end.

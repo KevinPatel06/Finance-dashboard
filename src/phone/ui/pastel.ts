@@ -1,7 +1,8 @@
 /**
- * DaTrack's soft circles and bars: an item's colour washed toward the page.
- * Light mode mixes with white; dark mode mixes with the dark card surface so
- * the pastel doesn't glow. Returns an opaque colour so text on top stays crisp.
+ * DaTrack's soft circles and bars: an item's colour washed toward the card it
+ * sits on. Cards are Ivory in light mode and Sage in dark mode (index.css,
+ * html.phone), and both are light, so both mix toward a light base. Returns an
+ * opaque colour so text on top stays crisp.
  */
 
 function parseHex(hex: string): [number, number, number] {
@@ -14,18 +15,22 @@ function parseHex(hex: string): [number, number, number] {
 
 const mix = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
 
-export function pastel(hex: string, theme: 'light' | 'dark'): string {
+const CARD = {
+  light: [251, 247, 239], // Ivory
+  dark: [220, 230, 213], // Sage
+} as const;
+
+function wash(hex: string, theme: 'light' | 'dark', amount: number): string {
   const [r, g, b] = parseHex(hex);
-  if (theme === 'dark') {
-    // Toward #1a1f2c (≈ surface-2/3 in dark), keeping ~38% of the colour.
-    return `rgb(${mix(26, r, 0.38)} ${mix(31, g, 0.38)} ${mix(44, b, 0.38)})`;
-  }
-  return `rgb(${mix(255, r, 0.24)} ${mix(255, g, 0.24)} ${mix(255, b, 0.24)})`;
+  const [br, bg, bb] = CARD[theme];
+  return `rgb(${mix(br, r, amount)} ${mix(bg, g, amount)} ${mix(bb, b, amount)})`;
+}
+
+export function pastel(hex: string, theme: 'light' | 'dark'): string {
+  return wash(hex, theme, theme === 'dark' ? 0.28 : 0.24);
 }
 
 /** A stronger tint for progress fills (bars), still soft. */
 export function fillTint(hex: string, theme: 'light' | 'dark'): string {
-  const [r, g, b] = parseHex(hex);
-  if (theme === 'dark') return `rgb(${mix(26, r, 0.62)} ${mix(31, g, 0.62)} ${mix(44, b, 0.62)})`;
-  return `rgb(${mix(255, r, 0.42)} ${mix(255, g, 0.42)} ${mix(255, b, 0.42)})`;
+  return wash(hex, theme, theme === 'dark' ? 0.5 : 0.44);
 }

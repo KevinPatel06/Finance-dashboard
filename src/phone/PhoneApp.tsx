@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, type ReactNode } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/lib/theme';
+import { haptic } from '@/platform';
 import Payoff from '@/pages/Payoff';
 import Registered from '@/pages/Registered';
 import Reports from '@/pages/Reports';
@@ -37,11 +38,36 @@ function Setup() {
 }
 
 /**
+ * Turns on the phone's warm palette and motion (index.css, `html.phone`) and
+ * gives pressable things a light tap on the iPhone.
+ */
+function usePhoneShell() {
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.classList.add('phone');
+    // iOS only applies :active (the .press dip) once a touchstart listener exists.
+    const noop = () => {};
+    const onClick = (e: MouseEvent) => {
+      const el = (e.target as Element | null)?.closest?.('.press, [role="switch"]');
+      if (el && !(el as HTMLButtonElement).disabled) haptic(el.getAttribute('role') === 'switch' ? 'select' : 'tap');
+    };
+    document.addEventListener('touchstart', noop, { passive: true });
+    document.addEventListener('click', onClick, true);
+    return () => {
+      root.classList.remove('phone');
+      document.removeEventListener('touchstart', noop);
+      document.removeEventListener('click', onClick, true);
+    };
+  }, []);
+}
+
+/**
  * The iPhone app (and any phone-width window): a monthly budget with
  * Budget / Expenses / More tabs. Desktop keeps its own routes in App.tsx.
  */
 export default function PhoneApp() {
   const { onboarded } = useTheme();
+  usePhoneShell();
 
   return (
     <RefreshProvider>

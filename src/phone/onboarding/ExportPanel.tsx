@@ -107,7 +107,7 @@ export default function ExportPanel() {
         <button
           disabled={busy}
           onClick={() => void run('share')}
-          className="rounded-[20px] bg-content text-surface py-4 flex flex-col items-center gap-1.5 font-semibold disabled:opacity-50 active:scale-[0.98]"
+          className="rounded-[20px] bg-content text-surface py-4 flex flex-col items-center gap-1.5 font-semibold disabled:opacity-50 press [--dip:0.97]"
         >
           <Share2 size={22} />
           Share file
@@ -115,7 +115,7 @@ export default function ExportPanel() {
         <button
           disabled={busy}
           onClick={() => void run('copy')}
-          className="rounded-[20px] bg-surface-2 border border-border py-4 flex flex-col items-center gap-1.5 font-semibold disabled:opacity-50 active:scale-[0.98]"
+          className="rounded-[20px] bg-surface-2 border border-border py-4 flex flex-col items-center gap-1.5 font-semibold disabled:opacity-50 press [--dip:0.97]"
         >
           <Copy size={22} />
           Copy text

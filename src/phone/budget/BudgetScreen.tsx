@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useApi, useMonth } from '../data';
 import { monthLabel, monthName, nextBudgetLabel } from '../dates';
 import { money, moneyWhole } from '../format';
+import CountUp from '../ui/CountUp';
 import Gauge from '../ui/Gauge';
 import Sheet from '../ui/Sheet';
 import { Banner, BigButton, Chip, LargeHeader, PCard } from '../ui/kit';
@@ -65,7 +66,7 @@ export default function BudgetScreen() {
           </>
         }
         right={
-          <button className="text-[15px] font-semibold text-brand" onClick={() => setEditor('edit')}>
+          <button className="press [--dip:0.94] text-[15px] font-semibold text-brand" onClick={() => setEditor('edit')}>
             Edit plan
           </button>
         }
@@ -122,11 +123,11 @@ export default function BudgetScreen() {
           fraction={fraction}
           tone={pace.tone}
           label={v.leftToSpend < 0 ? 'Over by' : 'Left to spend'}
-          value={moneyWhole(Math.abs(v.leftToSpend))}
+          value={<CountUp value={Math.abs(v.leftToSpend)} format={moneyWhole} />}
         />
         <button
           onClick={() => setInfo(true)}
-          className="mx-auto -mt-1 flex items-center gap-3 rounded-full bg-surface-2 border border-border/70 shadow-card px-5 py-2.5"
+          className="press mx-auto -mt-1 flex items-center gap-3 rounded-full bg-surface-2 border border-border/70 shadow-card px-5 py-2.5"
         >
           <span className="text-center leading-tight">
             <span className="block text-[15px] font-semibold num">{money(v.safePerDay)} / day safe to spend</span>

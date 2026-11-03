@@ -44,6 +44,9 @@ export default function Gauge({
               fill={i < lit ? TONE[tone] : 'rgb(var(--surface-3))'}
               stroke={i < lit ? 'none' : 'rgb(var(--border))'}
               strokeWidth={1}
+              // Lit segments come on one after another when the screen opens.
+              className={i < lit ? 'ph-seg-in' : undefined}
+              style={i < lit ? { animationDelay: `${i * 28}ms` } : undefined}
             />
           );
         })}

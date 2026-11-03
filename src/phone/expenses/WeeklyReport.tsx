@@ -35,9 +35,9 @@ export default function WeeklyReport() {
       <div className="flex items-center justify-between py-2">
         <CircleButton icon={X} label="Close" onClick={() => navigate('/expenses')} />
         <div className="flex gap-2">
-          <CircleButton icon={ChevronLeft} label="Previous week" onClick={() => navigate(`/expenses/week/${shiftWeek(r.weekStart, -1)}`)} />
+          <CircleButton icon={ChevronLeft} label="Previous week" onClick={() => navigate(`/expenses/week/${shiftWeek(r.weekStart, -1)}`, { replace: true })} />
           {canGoNext && (
-            <CircleButton icon={ChevronRight} label="Next week" onClick={() => navigate(`/expenses/week/${shiftWeek(r.weekStart, 1)}`)} />
+            <CircleButton icon={ChevronRight} label="Next week" onClick={() => navigate(`/expenses/week/${shiftWeek(r.weekStart, 1)}`, { replace: true })} />
           )}
         </div>
       </div>

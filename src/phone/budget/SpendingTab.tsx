@@ -49,7 +49,7 @@ export default function SpendingTab({ view: v, onEditPlan }: { view: BudgetMonth
             <button
               aria-label={sort === 'used' ? 'Sort by name' : 'Sort by most used'}
               onClick={() => setSort(sort === 'used' ? 'name' : 'used')}
-              className="w-8 h-8 rounded-full bg-content text-surface grid place-items-center"
+              className="press [--dip:0.9] w-8 h-8 rounded-full bg-content text-surface grid place-items-center"
             >
               <ArrowDownUp size={15} strokeWidth={2.4} />
             </button>
@@ -115,7 +115,7 @@ function SplitCard({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'rounded-[20px] border px-4 py-3 text-left transition active:scale-[0.98]',
+        'press [--dip:0.97] rounded-[20px] border px-4 py-3 text-left',
         active ? 'bg-content text-surface border-transparent' : 'bg-surface-2 border-border/70 shadow-card'
       )}
     >

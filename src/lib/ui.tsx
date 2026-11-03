@@ -9,6 +9,7 @@ import {
 import { CheckCircle2, Info, AlertTriangle, X } from 'lucide-react';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
+import { haptic } from '@/platform';
 
 // ---------------------------------------------------------------------------
 // Imperative confirm + toast.
@@ -69,6 +70,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
 
   const push = useCallback((tone: ToastTone, message: string) => {
     const id = nextId.current++;
+    if (tone !== 'info') haptic(tone === 'error' ? 'warning' : 'success');
     setToasts((t) => [...t, { id, tone, message }]);
     window.setTimeout(() => {
       setToasts((t) => t.filter((x) => x.id !== id));
