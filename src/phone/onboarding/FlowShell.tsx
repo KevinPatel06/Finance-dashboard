@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { useBackHandler } from '@/lib/backStack';
 import { cn } from '@/lib/utils';
 
 /**
@@ -22,6 +23,8 @@ export default function FlowShell({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  // Android back = the arrow. No arrow (first step) → falls through to the app's default.
+  useBackHandler(onBack, !!onBack);
   return (
     <div className="app-shell h-full flex flex-col bg-surface text-content">
       {step != null && total != null && (

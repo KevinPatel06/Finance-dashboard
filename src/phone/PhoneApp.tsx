@@ -1,7 +1,8 @@
-import { useLayoutEffect, type ReactNode } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/lib/theme';
-import { haptic } from '@/platform';
+import { haptic, onAndroidBack } from '@/platform';
+import { TAB_PATHS } from './TabBar';
 import Payoff from '@/pages/Payoff';
 import Registered from '@/pages/Registered';
 import Reports from '@/pages/Reports';
@@ -62,12 +63,33 @@ function usePhoneShell() {
 }
 
 /**
- * The iPhone app (and any phone-width window): a monthly budget with
+ * Android back with nothing open: step back a screen, or on a root tab (and
+ * on the welcome screen) put the app in the background.
+ */
+function useAndroidBack(onboarded: boolean) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const latest = useRef({ navigate, pathname, onboarded });
+  latest.current = { navigate, pathname, onboarded };
+  useEffect(
+    () =>
+      onAndroidBack(() => {
+        const { navigate: go, pathname: path, onboarded: done } = latest.current;
+        if (!done || TAB_PATHS.includes(path)) return 'minimize';
+        go(-1);
+      }),
+    []
+  );
+}
+
+/**
+ * The phone app (and any phone-width window): a monthly budget with
  * Budget / Expenses / More tabs. Desktop keeps its own routes in App.tsx.
  */
 export default function PhoneApp() {
   const { onboarded } = useTheme();
   usePhoneShell();
+  useAndroidBack(onboarded);
 
   return (
     <RefreshProvider>

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useBackHandler } from '@/lib/backStack';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -73,6 +74,7 @@ export default function Sheet({
   // below from re-running (and re-focusing) on every parent render.
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  useBackHandler(onClose, open);
 
   useEffect(() => {
     if (!open) return;

@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { useBackHandler } from '@/lib/backStack';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -23,6 +24,7 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: Props) {
+  useBackHandler(onCancel, open);
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {

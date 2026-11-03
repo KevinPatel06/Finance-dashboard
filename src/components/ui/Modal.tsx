@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useBackHandler } from '@/lib/backStack';
 
 interface Props {
   open: boolean;
@@ -22,6 +23,7 @@ const FOCUSABLE =
 
 export default function Modal({ open, onClose, title, description, children, size = 'md' }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+  useBackHandler(onClose, open);
 
   useEffect(() => {
     if (!open) return;

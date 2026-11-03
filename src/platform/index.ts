@@ -26,6 +26,24 @@ export function haptic(kind: HapticKind): void {
 }
 
 /**
+ * Android back button. Sheets and dialogs close first (`lib/backStack`);
+ * otherwise `fallback` runs — return 'minimize' to background the app.
+ * No-op on Electron and iOS. Returns an unsubscribe.
+ */
+export function onAndroidBack(fallback: () => 'minimize' | void): () => void {
+  if (__PLATFORM__ !== 'mobile') return () => {};
+  let off: (() => void) | null = null;
+  let cancelled = false;
+  void import('./mobile/androidBack').then((m) => {
+    if (!cancelled) off = m.listenForBack(fallback);
+  });
+  return () => {
+    cancelled = true;
+    off?.();
+  };
+}
+
+/**
  * (Re)schedules the phone's repeating reminders (daily log, new month, weekly
  * report). No-op on Electron — the desktop has its own once-a-day scheduler.
  */
