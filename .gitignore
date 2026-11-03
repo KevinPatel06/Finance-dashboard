@@ -16,3 +16,8 @@ ios/App/Pods/
 ios/App/App/public/
 ios/App/Podfile.lock
 ios/DerivedData/
+
+# Android signing keys never live in the repo (it is public).
+*.p12
+*.jks
+*.keystore

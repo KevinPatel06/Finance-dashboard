@@ -25,6 +25,18 @@ export function haptic(kind: HapticKind): void {
   void hapticsModule.then((m) => m.haptic(kind)).catch(() => {});
 }
 
+let statusBarModule: Promise<typeof import('./mobile/statusBar')> | null = null;
+
+/**
+ * Matches Android's status bar to the light/dark page colour. No-op on
+ * Electron and iOS.
+ */
+export function setStatusBar(theme: 'light' | 'dark'): void {
+  if (__PLATFORM__ !== 'mobile') return;
+  statusBarModule ??= import('./mobile/statusBar');
+  void statusBarModule.then((m) => m.setStatusBar(theme)).catch(() => {});
+}
+
 /**
  * Android back button. Sheets and dialogs close first (`lib/backStack`);
  * otherwise `fallback` runs — return 'minimize' to background the app.

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AccentColor, AppSettings, MobileHomeLayout } from '@shared/types';
+import { setStatusBar } from '@/platform';
 import { ACCENTS } from './accents';
 
 type Theme = 'light' | 'dark';
@@ -28,6 +29,7 @@ function applyTheme(t: Theme) {
   const root = document.documentElement;
   if (t === 'dark') root.classList.add('dark');
   else root.classList.remove('dark');
+  setStatusBar(t);
 }
 
 function applyAccent(theme: Theme, accent: AccentColor) {

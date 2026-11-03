@@ -10,6 +10,13 @@ const config: CapacitorConfig = {
   // scroll view, so they double-count — content starts offset and rubber-banding
   // reads as broken.
   ios: { contentInset: 'never' },
+  // The phone theme's Beige page, shown before the web view paints.
+  android: { backgroundColor: '#EEE5D5' },
+  plugins: {
+    // Android draws the status-bar icon as a white silhouette, so it needs its
+    // own (android/app/src/main/res/drawable/ic_stat_notify.xml). iOS ignores this.
+    LocalNotifications: { smallIcon: 'ic_stat_notify', iconColor: '#3F7A55' },
+  },
 };
 
 export default config;
