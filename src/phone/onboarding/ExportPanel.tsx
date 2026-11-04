@@ -13,7 +13,7 @@ import { buildBudgetMarkdown } from '@shared/budgetExport';
 import { useTheme } from '@/lib/theme';
 import { useToast } from '@/lib/ui';
 import { todayIso } from '../dates';
-import { PCard } from '../ui/kit';
+import { EmojiIcon, PCard } from '../ui/kit';
 
 /** Gathers everything the AI needs and builds the Markdown file. */
 export async function buildExport(userName: string): Promise<string> {
@@ -91,7 +91,9 @@ export default function ExportPanel() {
   return (
     <div className="space-y-4">
       <PCard className="p-5">
-        <div className="text-4xl mb-3">✨</div>
+        <div className="mb-3 text-brand">
+          <EmojiIcon emoji="✨" size={36} strokeWidth={1.7} />
+        </div>
         <p className="text-[15px] leading-relaxed text-content-muted">
           This app doesn't use AI itself. Instead, it can hand your numbers to the AI you already use —
           <span className="text-content font-medium"> ChatGPT, Claude or Gemini</span>. You get one file with your

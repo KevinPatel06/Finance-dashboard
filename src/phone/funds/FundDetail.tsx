@@ -81,7 +81,7 @@ export default function FundDetail() {
         <div className="mt-5 text-left">
           <HatchedBar pct={p} color={g.color} badge={`${Math.floor(p)}%`} />
           <div className="mt-2 flex justify-between text-sm">
-            <span className="font-semibold">{toGo > 0 ? `${money(toGo)} to go` : 'Goal reached 🎉'}</span>
+            <span className="font-semibold">{toGo > 0 ? `${money(toGo)} to go` : 'Goal reached'}</span>
             {monthsLeft != null && toGo > 0 && (
               <span className="text-content-muted">
                 {monthsLeft <= 0 ? 'Due now' : `${monthsLeft} month${monthsLeft === 1 ? '' : 's'} left`}
@@ -234,7 +234,7 @@ export default function FundDetail() {
 
       <Sheet open={menu} onClose={() => setMenu(false)} title={g.name}>
         <Group>
-          <Row title="Edit fund" subtitle="Name, emoji, target, deadline" chevron onClick={() => { setMenu(false); setEditing(true); }} />
+          <Row title="Edit fund" subtitle="Name, icon, target, deadline" chevron onClick={() => { setMenu(false); setEditing(true); }} />
           {completed ? (
             <Row
               title="Restore"

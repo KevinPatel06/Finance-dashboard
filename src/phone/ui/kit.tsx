@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/lib/theme';
-import { fillTint, pastel } from './pastel';
+import { fillTint, iconInk, pastel } from './pastel';
+import { iconFor } from './icons';
 
 /**
- * The phone's visual vocabulary, after DaTrack: emoji on pastel circles,
+ * The phone's visual vocabulary, after DaTrack: line icons on pastel circles,
  * hatched progress tracks with a % badge, soft rounded cards, circle nav
  * buttons and full-width pill CTAs. Everything reads the theme tokens, so
  * light/dark and the accent picker keep working.
@@ -15,13 +16,18 @@ import { fillTint, pastel } from './pastel';
 // ---------------------------------------------------------------- avatar
 
 const AVATAR = {
-  xs: 'w-7 h-7 text-sm',
-  sm: 'w-9 h-9 text-lg',
-  md: 'w-11 h-11 text-[22px]',
-  lg: 'w-14 h-14 text-[28px]',
-  xl: 'w-24 h-24 text-5xl',
+  xs: 'w-7 h-7',
+  sm: 'w-9 h-9',
+  md: 'w-11 h-11',
+  lg: 'w-14 h-14',
+  xl: 'w-24 h-24',
 } as const;
+const GLYPH = { xs: 14, sm: 17, md: 20, lg: 26, xl: 44 } as const;
 
+/**
+ * An item's line icon on its pastel circle. Takes the stored emoji and draws
+ * the matching icon (ui/icons.ts); the emoji itself is never shown.
+ */
 export function EmojiAvatar({
   emoji,
   color,
@@ -34,15 +40,32 @@ export function EmojiAvatar({
   className?: string;
 }) {
   const { theme } = useTheme();
+  const Icon = iconFor(emoji);
   return (
     <span
       className={cn('rounded-full grid place-items-center shrink-0 select-none leading-none', AVATAR[size], className)}
-      style={{ backgroundColor: pastel(color, theme) }}
+      style={{ backgroundColor: pastel(color, theme), color: iconInk(color) }}
       aria-hidden
     >
-      {emoji || '📦'}
+      <Icon size={GLYPH[size]} strokeWidth={size === 'xl' ? 1.6 : 1.9} />
     </span>
   );
+}
+
+/** A bare line icon for a stored emoji, sized to sit in a line of text. */
+export function EmojiIcon({
+  emoji,
+  size = 16,
+  className,
+  strokeWidth = 2,
+}: {
+  emoji: string | null | undefined;
+  size?: number;
+  className?: string;
+  strokeWidth?: number;
+}) {
+  const Icon = iconFor(emoji);
+  return <Icon size={size} strokeWidth={strokeWidth} className={cn('shrink-0', className)} aria-hidden />;
 }
 
 // ---------------------------------------------------------------- bar
@@ -105,6 +128,60 @@ export function HatchedBar({
   );
 }
 
+/**
+ * The hero of a category screen: how much of the budget is left, as a ring in
+ * the category's tint. Same footprint as the xl avatar it replaced (96px).
+ * `pct` null = no budget this month; `over` paints the whole ring danger.
+ */
+export function PercentRing({ pct, color, over }: { pct: number | null; color: string; over?: boolean }) {
+  const { theme } = useTheme();
+  const SIZE = 96;
+  const STROKE = 9;
+  const r = (SIZE - STROKE) / 2;
+  const c = 2 * Math.PI * r;
+  const w = over ? 100 : Math.max(0, Math.min(100, pct ?? 0));
+  // Start empty and fill on the next frame, like HatchedBar.
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => setShown(true));
+    return () => window.cancelAnimationFrame(id);
+  }, []);
+  return (
+    <div
+      className="relative w-24 h-24 shrink-0"
+      role="progressbar"
+      aria-valuenow={Math.round(w)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={pct === null ? 'No budget this month' : over ? 'Over budget' : `${Math.round(w)}% left`}
+    >
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90">
+        <circle cx={SIZE / 2} cy={SIZE / 2} r={r} fill="none" stroke="rgb(var(--surface-3))" strokeWidth={STROKE} />
+        {w > 0 && (
+          <circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={r}
+            fill="none"
+            stroke={over ? 'rgb(var(--danger) / 0.55)' : fillTint(color, theme)}
+            strokeWidth={STROKE}
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={shown ? c * (1 - w / 100) : c}
+            className="transition-[stroke-dashoffset] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 grid place-content-center text-center leading-none">
+        <span className={cn('text-[22px] font-display font-bold num', over && 'text-danger')}>
+          {pct === null ? '—' : over ? 'Over' : `${Math.round(w)}%`}
+        </span>
+        <span className="text-[11px] text-content-subtle mt-1">{pct === null ? 'no budget' : over ? 'budget' : 'left'}</span>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- surfaces
 
 export function PCard({
@@ -145,7 +222,7 @@ export function Group({ children, className }: { children: ReactNode; className?
   );
 }
 
-/** Emoji + title/subtitle + trailing value, the row shape used everywhere. */
+/** Icon + title/subtitle + trailing value, the row shape used everywhere. */
 export function Row({
   emoji,
   color,
@@ -367,6 +444,12 @@ const BANNER_TONE = {
   danger: 'bg-danger/10 border-danger/30',
   neutral: 'bg-surface-2 border-border/70',
 } as const;
+const BANNER_ICON = {
+  brand: 'text-brand',
+  warning: 'text-warning',
+  danger: 'text-danger',
+  neutral: 'text-content-muted',
+} as const;
 
 export function Banner({
   tone = 'neutral',
@@ -389,7 +472,12 @@ export function Banner({
       onClick={onClick}
       className={cn('w-full text-left rounded-[20px] border px-4 py-3.5 flex gap-3 items-start', onClick && 'press [--dip:0.98]', BANNER_TONE[tone])}
     >
-      {icon && <div className="text-xl leading-none pt-0.5 shrink-0">{icon}</div>}
+      {icon && (
+        // w-7: the width the emoji used to take, so banner text wraps exactly as before.
+        <div className={cn('w-7 flex justify-center text-xl leading-none pt-0.5 shrink-0', BANNER_ICON[tone])}>
+          {typeof icon === 'string' ? <EmojiIcon emoji={icon} size={20} /> : icon}
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <div className="text-[15px] font-semibold leading-snug">{title}</div>
         {children && <div className="text-sm text-content-muted mt-0.5 leading-snug">{children}</div>}

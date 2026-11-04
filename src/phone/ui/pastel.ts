@@ -30,6 +30,15 @@ export function pastel(hex: string, theme: 'light' | 'dark'): string {
   return wash(hex, theme, theme === 'dark' ? 0.28 : 0.24);
 }
 
+/**
+ * The line icon on a pastel circle: the item's colour pulled toward the ink, so
+ * it reads on its own wash. Both card colours are light, so one ink serves both.
+ */
+export function iconInk(hex: string): string {
+  const [r, g, b] = parseHex(hex);
+  return `rgb(${mix(r, 43, 0.38)} ${mix(g, 34, 0.38)} ${mix(b, 25, 0.38)})`;
+}
+
 /** A stronger tint for progress fills (bars), still soft. */
 export function fillTint(hex: string, theme: 'light' | 'dark'): string {
   return wash(hex, theme, theme === 'dark' ? 0.5 : 0.44);

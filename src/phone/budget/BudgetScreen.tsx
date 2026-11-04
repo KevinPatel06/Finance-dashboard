@@ -10,7 +10,7 @@ import { money, moneyWhole } from '../format';
 import CountUp from '../ui/CountUp';
 import Gauge from '../ui/Gauge';
 import Sheet from '../ui/Sheet';
-import { Banner, BigButton, Chip, LargeHeader, PCard } from '../ui/kit';
+import { Banner, BigButton, Chip, EmojiIcon, LargeHeader, PCard } from '../ui/kit';
 import PaydayCard from './PaydayCard';
 import PlanEditor from './PlanEditor';
 import SavingTab from './SavingTab';
@@ -38,7 +38,9 @@ export default function BudgetScreen() {
       <div className="space-y-5">
         <LargeHeader title="Budget" subtitle={<span className="text-content-muted">{monthLabel(v.month)}</span>} />
         <PCard className="p-6 text-center">
-          <div className="text-5xl mb-3">🗓️</div>
+          <div className="mb-3 flex justify-center text-brand">
+            <EmojiIcon emoji="🗓️" size={48} strokeWidth={1.6} />
+          </div>
           <h2 className="text-xl font-display font-bold">Set up your monthly budget</h2>
           <p className="text-sm text-content-muted mt-2 mb-6">
             Tell us your pay, your recurring costs and any debts, then give every dollar a job. It takes a

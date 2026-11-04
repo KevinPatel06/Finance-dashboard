@@ -14,7 +14,7 @@ import { currentMonth, friendlyDate, monthLabel, monthName, shiftMonth, todayIso
 import { money } from '../format';
 import { useQuickAdd } from '../PhoneLayout';
 import Sheet from '../ui/Sheet';
-import { CircleButton, Group, LargeHeader, PCard, Row, SectionTitle } from '../ui/kit';
+import { CircleButton, EmojiIcon, Group, LargeHeader, PCard, Row, SectionTitle } from '../ui/kit';
 import CategoryDonut from './CategoryDonut';
 import ExpenseEditor from './ExpenseEditor';
 import ExpenseRow from './ExpenseRow';
@@ -205,7 +205,7 @@ export default function ExpensesScreen() {
       )}
 
       <PCard onClick={() => navigate(`/expenses/week/${lastWeekStart}`)} className="px-4 py-3.5 flex items-center gap-3">
-        <span className="text-2xl">🗞️</span>
+        <EmojiIcon emoji="🗞️" size={24} strokeWidth={1.8} className="text-brand" />
         <div className="flex-1 min-w-0">
           <div className="text-[15px] font-semibold">Your weekly report is ready</div>
           <div className="text-xs text-content-subtle">

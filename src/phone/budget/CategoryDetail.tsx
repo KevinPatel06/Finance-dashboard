@@ -10,7 +10,7 @@ import { money, pct } from '../format';
 import { useQuickAdd } from '../PhoneLayout';
 import MoneySheet from '../ui/MoneySheet';
 import Sheet from '../ui/Sheet';
-import { CircleButton, EmojiAvatar, Group, HatchedBar, NavHeader, PCard, Row, SectionTitle, StatTrio } from '../ui/kit';
+import { CircleButton, Group, HatchedBar, NavHeader, PCard, PercentRing, Row, SectionTitle, StatTrio } from '../ui/kit';
 import ExpenseEditor from '../expenses/ExpenseEditor';
 import ExpenseRow from '../expenses/ExpenseRow';
 import CategoryEditor from './CategoryEditor';
@@ -54,7 +54,7 @@ export default function CategoryDetail() {
 
       <PCard className="p-5">
         <div className="flex justify-center mb-5">
-          <EmojiAvatar emoji={cat.emoji} color={cat.color} size="xl" />
+          <PercentRing pct={line ? leftPct : null} color={cat.color} over={over} />
         </div>
         <StatTrio
           items={[
@@ -133,7 +133,7 @@ export default function CategoryDetail() {
       <Sheet open={menu} onClose={() => setMenu(false)} title={cat.name}>
         <Group>
           <Row title="Edit budget" subtitle="This month's amount" chevron onClick={() => { setMenu(false); setEditBudget(true); }} />
-          <Row title="Edit category" subtitle="Name, emoji, colour, need or want" chevron onClick={() => { setMenu(false); setEditCat(true); }} />
+          <Row title="Edit category" subtitle="Name, icon, colour, need or want" chevron onClick={() => { setMenu(false); setEditCat(true); }} />
           <Row
             title={<span className="text-danger">Delete category</span>}
             subtitle="Its expenses stay, uncategorized"
@@ -156,7 +156,7 @@ export default function CategoryDetail() {
 
       {editBudget && (
         <MoneySheet
-          title={`${cat.emoji ?? ''} ${cat.name} budget`}
+          title={`${cat.name} budget`}
           subtitle={`How much to spend on ${cat.name.toLowerCase()} this month. Spent so far: ${money(spent)}.`}
           initial={line?.amount ?? null}
           allowZero

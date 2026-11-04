@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { useApi, useRefresh } from '../data';
 import { todayIso } from '../dates';
 import Sheet from '../ui/Sheet';
-import { BigButton, MoneyInput, parseMoney } from '../ui/kit';
+import { BigButton, EmojiIcon, MoneyInput, parseMoney } from '../ui/kit';
 
 type PaidFrom = 'budget' | 'fund' | 'card';
 
@@ -152,7 +152,7 @@ export default function ExpenseEditor({
                     : 'bg-surface-2 border-border text-content'
                 )}
               >
-                <span>{c.emoji}</span>
+                <EmojiIcon emoji={c.emoji} size={15} />
                 {c.name}
               </button>
             ))}
@@ -174,7 +174,8 @@ export default function ExpenseEditor({
             <div className="flex flex-wrap gap-2 mt-3">
               {(funds ?? []).map((f) => (
                 <Pick key={f.id} active={fundId === f.id} onClick={() => setFundId(f.id)}>
-                  {f.emoji} {f.name}
+                  <EmojiIcon emoji={f.emoji} size={15} />
+                  {f.name}
                 </Pick>
               ))}
             </div>
@@ -183,7 +184,8 @@ export default function ExpenseEditor({
             <div className="flex flex-wrap gap-2 mt-3">
               {cards.map((d) => (
                 <Pick key={d.id} active={cardId === d.id} onClick={() => setCardId(d.id)}>
-                  💳 {d.name}
+                  <EmojiIcon emoji="💳" size={15} />
+                  {d.name}
                 </Pick>
               ))}
             </div>
@@ -225,7 +227,7 @@ function Pick({ active, onClick, children }: { active: boolean; onClick: () => v
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-full px-3 py-1.5 text-sm border transition',
+        'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border transition',
         active ? 'bg-brand-soft border-brand text-content' : 'bg-surface-2 border-border text-content'
       )}
     >

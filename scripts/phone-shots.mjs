@@ -171,6 +171,11 @@ if (fresh) {
   await shot('03-plan-editor');
   await go(`#/category/${ids.groceries}`);
   await shot('04-category');
+  await click('[aria-label="Options"]');
+  await sleep(600);
+  await click('Edit category');
+  await sleep(900);
+  await shot('04b-category-editor');
   await go(`#/fund/${ids.japan}`);
   await shot('05-fund');
   await go('#/expenses', 1500);

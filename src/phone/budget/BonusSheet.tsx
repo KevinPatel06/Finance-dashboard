@@ -43,7 +43,7 @@ export default function BonusSheet({
     <Sheet
       open
       onClose={onClose}
-      title="Bonus paycheck 🎉"
+      title="Bonus paycheck"
       footer={
         <BigButton tone="outline" onClick={onClose} disabled={busy}>
           Decide later

@@ -1,6 +1,7 @@
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { useTheme } from '@/lib/theme';
-import { fillTint } from '../ui/pastel';
+import { fillTint, iconInk } from '../ui/pastel';
+import { iconFor } from '../ui/icons';
 import { money } from '../format';
 
 export interface DonutSlice {
@@ -12,7 +13,7 @@ export interface DonutSlice {
 
 const RAD = Math.PI / 180;
 
-/** Spending by category as a rounded donut with each slice's emoji on it. */
+/** Spending by category as a rounded donut with each slice's icon on it. */
 export default function CategoryDonut({ slices, total }: { slices: DonutSlice[]; total: number }) {
   const { theme } = useTheme();
   const data = slices.filter((s) => s.total > 0);
@@ -38,16 +39,15 @@ export default function CategoryDonut({ slices, total }: { slices: DonutSlice[];
               const s = data[p.index];
               if (!s || p.percent < 0.045) return null;
               const r = (p.innerRadius + p.outerRadius) / 2;
+              const Icon = iconFor(s.emoji ?? '❔');
               return (
-                <text
-                  x={p.cx + r * Math.cos(-p.midAngle * RAD)}
-                  y={p.cy + r * Math.sin(-p.midAngle * RAD)}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fontSize={17}
-                >
-                  {s.emoji ?? '❔'}
-                </text>
+                <Icon
+                  x={p.cx + r * Math.cos(-p.midAngle * RAD) - 9}
+                  y={p.cy + r * Math.sin(-p.midAngle * RAD) - 9}
+                  size={18}
+                  strokeWidth={2}
+                  color={iconInk(s.color)}
+                />
               );
             }}
           >

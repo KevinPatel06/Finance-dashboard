@@ -1,50 +1,32 @@
 import { cn } from '@/lib/utils';
+import { iconFor, PICKABLE, sameIcon } from './icons';
 
-const CHOICES = [
-  '🏠', '🛒', '🍔', '☕', '🛵', '⛽', '🚌', '🚗', '📱', '🌐', '💡', '🛡️',
-  '💊', '🧘', '💆', '🛍️', '🎬', '📺', '✈️', '🎁', '🐶', '📚', '🧸', '🍷',
-  '💳', '💰', '🆘', '💻', '💍', '🏖️', '🎮', '🎵', '👕', '🧾', '💝', '📦',
-];
-
-/** Last grapheme of a string — so pasting or typing replaces the emoji. */
-function lastGrapheme(v: string): string {
-  const Seg = (Intl as unknown as { Segmenter?: new () => { segment(s: string): Iterable<{ segment: string }> } })
-    .Segmenter;
-  if (!Seg) return Array.from(v).pop() ?? '';
-  let last = '';
-  for (const s of new Seg().segment(v)) last = s.segment;
-  return last;
-}
-
-/** Pick an emoji from a grid, or type any emoji into the box. */
+/**
+ * Pick an item's icon from a grid. Stores the emoji the icon stands for
+ * (ui/icons.ts), so the data, suggestions and export are unchanged.
+ */
 export default function EmojiField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-2">
-        <input
-          className="input w-16 text-center text-2xl py-1.5"
-          value={value}
-          onChange={(e) => onChange(lastGrapheme(e.target.value.trim()))}
-          aria-label="Emoji"
-          data-no-autofocus
-        />
-        <span className="text-xs text-content-subtle">Tap one below or type any emoji.</span>
-      </div>
-      <div className="grid grid-cols-9 gap-1">
-        {CHOICES.map((e) => (
+    <div className="grid grid-cols-9 gap-1">
+      {PICKABLE.map((e) => {
+        const Icon = iconFor(e);
+        const on = sameIcon(value, e);
+        return (
           <button
             key={e}
             type="button"
             onClick={() => onChange(e)}
+            aria-pressed={on}
+            aria-label={Icon.displayName}
             className={cn(
-              'aspect-square rounded-xl text-xl grid place-items-center press [--dip:0.88]',
-              value === e ? 'bg-brand-soft ring-2 ring-brand' : 'bg-surface-3/70'
+              'aspect-square rounded-xl grid place-items-center press [--dip:0.88]',
+              on ? 'bg-brand-soft ring-2 ring-brand' : 'bg-surface-3/70'
             )}
           >
-            {e}
+            <Icon size={19} strokeWidth={1.9} />
           </button>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

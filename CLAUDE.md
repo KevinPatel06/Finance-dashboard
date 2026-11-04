@@ -256,6 +256,12 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   `<body>`, springs in, drags down to dismiss, and animates out by cloning its last frame (callers
   usually unmount it, leaving React nothing to animate). Segmented control + tab bar use one
   sliding thumb; the gauge lights segment by segment (`CountUp` for the amount); bars fill on mount.
+- **Icons, not emoji**: the phone never shows emoji. Categories, funds and recurring items still
+  STORE an emoji (`emoji` columns, `shared/emoji.ts` suggestions, the AI export, desktop all
+  unchanged); `src/phone/ui/icons.ts` maps each to a lucide icon, drawn by `EmojiAvatar` (pastel
+  circle, icon tinted by `iconInk()`), `EmojiIcon` (bare) and `Banner` (string `icon`). The picker
+  (`EmojiField`) offers only `PICKABLE`; an unknown stored emoji draws a package. New app-owned
+  rows pass an emoji that has an entry in `icons.ts`.
 - **Haptics**: `haptic()` in `src/platform` (`@capacitor/haptics`, iOS-only branch). Clicks on
   `.press` / `[role=switch]` tap; success/error toasts buzz (`lib/ui.tsx`).
 - First run: one welcome screen (app icon, three points, name box) → `SetupFlow` (pay →
@@ -310,7 +316,8 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
 - **Status bar** follows the theme (`setStatusBar()`, called from `applyTheme`): Beige
   `#EEE5D5` / Charcoal `#1D1E1C`. Portrait-only activity; Beige launch screen. Reminder icon
   `res/drawable/ic_stat_notify.xml` (`capacitor.config.ts` → `LocalNotifications.smallIcon`).
-  App icon = the iOS 1024px PNG as an adaptive-icon background (`res/drawable-nodpi`).
+  App icon = a full-bleed 1024px PNG as the adaptive-icon background (`res/drawable-nodpi`), its
+  mark scaled to 0.8 because the launcher shows only the middle ~2/3. See "App icon" below.
 - **Signing: never regenerate or lose the key.** One PKCS#12 keystore signs every APK, which is
   what lets a new build install over the old one and keep the friend's data. It lives ONLY in
   repo secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
@@ -324,6 +331,15 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   → unzip → send `FinanceDashboard.apk` (chat app, email, Drive). On first install Android asks
   to allow "Install unknown apps" for whatever opened the file. Updates: same steps; the phone
   says "Update" and keeps their data.
+
+## App icon
+- **The gauge** (the Budget screen's left-to-spend gauge, green on Ivory). ONE source:
+  `shared/appIcon.ts` → `appIconSvg()`. The welcome screen inlines it (`src/phone/ui/AppIcon.tsx`);
+  `node scripts/render-icons.mjs` (headless Edge, no image libs) writes `build/icon.svg` + `.png`
+  (desktop, rounded), the iOS `AppIcon-512@2x.png` and Android `ic_launcher_full.png` (square,
+  RGB with NO alpha: iOS paints transparency black), and `branding/app-icon.png` (rounded) +
+  `app-icon-square.png` for sharing. Change the TS, re-run the script, commit the PNGs. The Android
+  notification icon `ic_stat_notify.xml` is a hand-made white gauge silhouette to match.
 
 ## Conventions / gotchas
 - **Currency is CAD**, `en-CA` locale (`src/lib/format.ts`). Dates `en-CA`.

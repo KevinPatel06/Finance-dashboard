@@ -8,7 +8,7 @@ import { useApi, useRefresh } from '../data';
 import { todayIso } from '../dates';
 import EmojiField from '../ui/EmojiField';
 import Sheet from '../ui/Sheet';
-import { BigButton, EmojiAvatar, MoneyInput, parseMoney } from '../ui/kit';
+import { BigButton, EmojiAvatar, EmojiIcon, MoneyInput, parseMoney } from '../ui/kit';
 import { nextOccurrence, weeksPerStep } from './schedule';
 
 type Unit = 'weeks' | 'months' | 'years';
@@ -172,7 +172,7 @@ export default function RecurringEditor({
                   categoryId === c.id ? 'bg-content text-surface border-transparent' : 'bg-surface-2 border-border'
                 )}
               >
-                <span>{c.emoji}</span>
+                <EmojiIcon emoji={c.emoji} size={15} />
                 {c.name}
               </button>
             ))}
@@ -191,7 +191,7 @@ export default function RecurringEditor({
         )}
 
         <div>
-          <label className="label">Emoji</label>
+          <label className="label">Icon</label>
           <EmojiField
             value={shownEmoji}
             onChange={(e) => {

@@ -105,7 +105,7 @@ export default function CategoryEditor({
           />
         </div>
         <div>
-          <label className="label">Emoji</label>
+          <label className="label">Icon</label>
           <EmojiField
             value={shownEmoji}
             onChange={(e) => {

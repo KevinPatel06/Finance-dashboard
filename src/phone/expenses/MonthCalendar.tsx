@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { monthBounds } from '@shared/paydays';
 import { todayIso } from '../dates';
 import { moneyCompact } from '../format';
+import { EmojiIcon } from '../ui/kit';
 
 export type CalendarMode = 'amount' | 'upcoming';
 
@@ -74,7 +75,7 @@ export default function MonthCalendar({
               )}
               {mode === 'upcoming' && cell && cell.upcoming.length > 0 && (
                 <span className="leading-none">
-                  <span className="block text-sm">{cell.upcoming[0].emoji ?? '🔁'}</span>
+                  <EmojiIcon emoji={cell.upcoming[0].emoji ?? '🔁'} size={14} className="block text-content-muted" />
                   <span className="block text-[11px] font-semibold num text-content-muted mt-0.5">
                     {moneyCompact(upcomingTotal)}
                   </span>

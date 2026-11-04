@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import AppIcon from '../ui/AppIcon';
-import { BigButton } from '../ui/kit';
+import { BigButton, EmojiIcon } from '../ui/kit';
 import FlowShell from './FlowShell';
 import SetupFlow from './SetupFlow';
 
@@ -56,8 +56,8 @@ export default function PhoneOnboarding() {
       <div className="mt-8 space-y-4">
         {POINTS.map((p, i) => (
           <div key={p.title} className="flex items-start gap-4" style={rise(3 + i)}>
-            <span className="w-12 h-12 rounded-2xl bg-surface-2 border border-border grid place-items-center text-2xl shrink-0">
-              {p.emoji}
+            <span className="w-12 h-12 rounded-2xl bg-surface-2 border border-border grid place-items-center text-brand shrink-0">
+              <EmojiIcon emoji={p.emoji} size={22} strokeWidth={1.9} />
             </span>
             <div className="pt-0.5">
               <div className="text-[17px] font-semibold">{p.title}</div>

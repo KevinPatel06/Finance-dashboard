@@ -123,7 +123,7 @@ export default function WeeklyReport() {
         </>
       )}
       {r.fundsAdded > 0 && (
-        <p className="text-sm text-content-muted text-center">You also added {money(r.fundsAdded)} to your funds. 💪</p>
+        <p className="text-sm text-content-muted text-center">You also added {money(r.fundsAdded)} to your funds.</p>
       )}
     </div>
   );

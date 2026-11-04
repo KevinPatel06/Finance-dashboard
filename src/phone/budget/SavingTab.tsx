@@ -107,7 +107,7 @@ export function FundCard({
           <span className="text-content-muted"> of {money(g.target_amount)}</span>
         </span>
         <span className="text-sm text-content-muted text-right">
-          {g.archived ? 'Completed' : reached ? 'Goal reached 🎉' : g.target_date ? `by ${fmtDate(g.target_date, 'd MMM yyyy')}` : 'no deadline'}
+          {g.archived ? 'Completed' : reached ? 'Goal reached' : g.target_date ? `by ${fmtDate(g.target_date, 'd MMM yyyy')}` : 'no deadline'}
         </span>
       </div>
     </PCard>

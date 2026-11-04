@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { useApi } from '../data';
 import { currentMonth, monthLabel } from '../dates';
 import { money } from '../format';
-import { Banner, BigButton, Chip, Group, MoneyInput, PCard, parseMoney, Row } from '../ui/kit';
+import { Banner, BigButton, Chip, EmojiIcon, Group, MoneyInput, PCard, parseMoney, Row } from '../ui/kit';
 import CategoryEditor from '../budget/CategoryEditor';
 import PlanForm, { draftToLines, draftSum, emptyDraft, draftFromView, type PlanDraft } from '../budget/PlanForm';
 import FundEditor from '../funds/FundEditor';
@@ -132,7 +132,7 @@ export default function SetupFlow({
     try {
       await window.api.budget.savePlan(month, draftToLines(draft), true);
       if (fresh) completeOnboarding();
-      toast.success('Your budget is set. 🎉');
+      toast.success('Your budget is set.');
       onDone();
     } finally {
       setBusy(false);
@@ -169,7 +169,9 @@ export default function SetupFlow({
         }
       >
         <div className="text-center pt-6">
-          <div className="text-6xl">👏</div>
+          <div className="flex justify-center text-brand">
+            <EmojiIcon emoji="🎉" size={60} strokeWidth={1.5} />
+          </div>
           <h1 className="text-[28px] font-display font-bold mt-4">You're all set up!</h1>
           <p className="text-content-muted mt-2">You can change any of this later.</p>
         </div>
@@ -196,7 +198,8 @@ export default function SetupFlow({
           <h1 className="text-[26px] font-display font-bold">How much do you take home?</h1>
           <p className="text-content-muted mt-2">Your average paycheck after tax. An estimate is fine.</p>
           <p className="text-sm text-content-subtle mt-1.5">
-            🗓️ Your budget runs from the 1st to the last day of the month, starting with {monthLabel(month)}.
+            <EmojiIcon emoji="🗓️" size={14} className="inline align-[-2px] mr-1" />
+            Your budget runs from the 1st to the last day of the month, starting with {monthLabel(month)}.
           </p>
           <PCard className="mt-6 p-5">
             <MoneyInput big value={amount} onChange={setAmount} autoFocus ariaLabel="Take-home per paycheck" />
