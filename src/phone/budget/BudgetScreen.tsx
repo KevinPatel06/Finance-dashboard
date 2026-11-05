@@ -22,6 +22,47 @@ const PACE: Record<PaceStatus, { label: string; className: string; tone: 'succes
   over: { label: 'Over budget', className: 'text-danger', tone: 'danger' },
 };
 
+/** One line of the "how we got this number" sheet: income down to what's left. */
+function BreakdownRow({
+  label,
+  amount,
+  minus,
+  plus,
+  total,
+  hero,
+}: {
+  label: string;
+  amount: number;
+  minus?: boolean;
+  plus?: boolean;
+  total?: boolean;
+  hero?: 'brand' | 'danger';
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-baseline justify-between gap-4 py-[7px]',
+        total ? 'mt-0.5 border-t border-border pt-[9px] font-semibold text-content' : 'text-content-muted'
+      )}
+    >
+      <span>
+        {minus ? '− ' : plus ? '+ ' : ''}
+        {label}
+      </span>
+      <span
+        className={cn(
+          'num',
+          minus || plus ? 'font-medium' : 'font-semibold text-content',
+          hero === 'brand' && 'text-[17px] text-brand',
+          hero === 'danger' && 'text-[17px] text-danger'
+        )}
+      >
+        {money(amount)}
+      </span>
+    </div>
+  );
+}
+
 /** The phone's home: how much is safe to spend this month, and where it's going. */
 export default function BudgetScreen() {
   const navigate = useNavigate();
@@ -121,19 +162,28 @@ export default function BudgetScreen() {
       </div>
 
       <div className="pt-1">
-        <Gauge
-          fraction={fraction}
-          tone={pace.tone}
-          label={v.leftToSpend < 0 ? 'Over by' : 'Left to spend'}
-          value={<CountUp value={Math.abs(v.leftToSpend)} format={moneyWhole} />}
-        />
+        <button
+          onClick={() => setInfo(true)}
+          aria-label={`${v.leftToSpend < 0 ? 'Over by' : 'Left to spend'} ${money(Math.abs(v.leftToSpend))}. Show the breakdown`}
+          className="press [--dip:0.98] block w-full"
+        >
+          <Gauge
+            fraction={fraction}
+            tone={pace.tone}
+            label={v.leftToSpend < 0 ? 'Over by' : 'Left to spend'}
+            value={<CountUp value={Math.abs(v.leftToSpend)} format={moneyWhole} />}
+            sub={v.planned.spend > 0 ? `of ${moneyWhole(v.planned.spend)} spending plan` : undefined}
+          />
+        </button>
         <button
           onClick={() => setInfo(true)}
           className="press mx-auto -mt-1 flex items-center gap-3 rounded-full bg-surface-2 border border-border/70 shadow-card px-5 py-2.5"
         >
           <span className="text-center leading-tight">
             <span className="block text-[15px] font-semibold num">{money(v.safePerDay)} / day safe to spend</span>
-            <span className="block text-xs text-content-subtle">Next budget {nextBudgetLabel(v.month)}</span>
+            <span className="block text-xs text-content-subtle">
+              Tap for the breakdown · Next budget {nextBudgetLabel(v.month)}
+            </span>
           </span>
           <Info size={18} className="text-content-muted" />
         </button>
@@ -165,16 +215,34 @@ export default function BudgetScreen() {
         />
       )}
 
-      <Sheet open={info} onClose={() => setInfo(false)} title="Safe to spend">
-        <div className="space-y-3 text-[15px] leading-relaxed text-content-muted pb-2">
-          <p>
-            <span className="text-content font-semibold">{money(v.safePerDay)} a day</span> is what's left of your
-            spending money ({money(Math.max(0, v.leftToSpend))}) spread over the {v.daysLeft} day
-            {v.daysLeft === 1 ? '' : 's'} left in {monthName(v.month)}.
-          </p>
-          <p>
-            Recurring costs, debt payments and savings are already taken off the top, so this number is money you
-            can actually use. Purchases paid from a fund don't count against it.
+      <Sheet
+        open={info}
+        onClose={() => setInfo(false)}
+        title={v.leftToSpend < 0 ? `Why you're over by ${money(-v.leftToSpend)}` : `How we got ${money(v.leftToSpend)}`}
+      >
+        <div className="pb-2 text-[15px]">
+          <BreakdownRow label={`Income in ${monthName(v.month)}`} amount={v.income} />
+          <BreakdownRow label="Recurring costs" amount={v.recurring.total} minus />
+          <BreakdownRow label="Debt payments" amount={v.planned.debt} minus />
+          <BreakdownRow label="Savings funds" amount={v.planned.fund} minus />
+          {unassigned >= 0.01 && <BreakdownRow label="Not assigned yet" amount={unassigned} minus />}
+          {unassigned <= -0.01 && <BreakdownRow label="Planned beyond income" amount={-unassigned} plus />}
+          <BreakdownRow label="Spending plan" amount={v.planned.spend} total />
+          <BreakdownRow label="Spent so far" amount={v.spent.total} minus />
+          <BreakdownRow
+            label={v.leftToSpend < 0 ? 'Over by' : 'Left to spend'}
+            amount={Math.abs(v.leftToSpend)}
+            total
+            hero={v.leftToSpend < 0 ? 'danger' : 'brand'}
+          />
+          <p className="mt-3 text-[13px] leading-relaxed text-content-subtle">
+            {v.daysLeft > 0 && v.leftToSpend > 0 && (
+              <>
+                That's {money(v.safePerDay)} a day for the {v.daysLeft} day{v.daysLeft === 1 ? '' : 's'} left in{' '}
+                {monthName(v.month)}.{' '}
+              </>
+            )}
+            Recurring charges and purchases paid from a fund don't count as spending here. They're already covered above.
           </p>
         </div>
       </Sheet>

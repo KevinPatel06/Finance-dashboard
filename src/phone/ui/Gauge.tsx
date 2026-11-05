@@ -17,11 +17,14 @@ export default function Gauge({
   tone,
   label,
   value,
+  sub,
 }: {
   fraction: number;
   tone: keyof typeof TONE;
   label: ReactNode;
   value: ReactNode;
+  /** Optional quiet line under the amount (e.g. "of $750 spending plan"). */
+  sub?: ReactNode;
 }) {
   const lit = Math.round(Math.max(0, Math.min(1, fraction)) * SEGMENTS);
   const cx = 150;
@@ -54,6 +57,7 @@ export default function Gauge({
       <div className="absolute inset-x-0 top-[47%] text-center">
         <div className="text-sm text-content-muted">{label}</div>
         <div className="mt-0.5 text-[42px] leading-none font-display font-bold num-display">{value}</div>
+        {sub && <div className="mt-1.5 text-[13px] text-content-subtle">{sub}</div>}
       </div>
     </div>
   );

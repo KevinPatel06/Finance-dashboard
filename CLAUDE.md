@@ -214,6 +214,9 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
 - **Budget is the calendar month, zero-based**: income − recurring − debt lines − fund lines =
   spending money, split into Needs/Wants category lines. `repo.budgetMonth(m)` returns the whole
   `BudgetMonthView` (gauge, safe/day, pace, lines with spent/left, unbudgeted spend, paydays).
+  The gauge's **Left to spend** = sum of spend lines − everyday spend (unbudgeted categories
+  included); it shows "of $X spending plan" under it, and tapping it opens a breakdown sheet
+  (income − recurring − debt − funds ∓ unassigned = plan − spent = left).
 - **Income** = scheduled paydays (`shared/paydays.ts`, from `next_paycheck_date` +
   `pay_frequency`): confirmed amount, else `pay_amount` for *regular* paydays; *bonus* paydays
   (beyond `guaranteedPerMonth`: weekly 4, biweekly 2, semi-monthly 2, monthly 1) count only

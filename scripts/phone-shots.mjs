@@ -163,6 +163,11 @@ if (fresh) {
   const ids = await evaluate(`window.__ids`);
   await go('#/', 1800);
   await shot('01-budget');
+  await click('[aria-label$="Show the breakdown"]');
+  await sleep(700);
+  await shot('01b-left-to-spend-breakdown');
+  await click('[aria-label="Close"]');
+  await sleep(600);
   await click('Saving');
   await sleep(500);
   await shot('02-saving');
