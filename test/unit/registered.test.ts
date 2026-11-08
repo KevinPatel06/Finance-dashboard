@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   monthlyLine,
+  splitPreview,
   monthsLeft,
   rrspDeadline,
   scheduleRows,
@@ -126,5 +127,17 @@ describe('scheduleRows', () => {
       currentPlanned: 3000,
     });
     expect(rows.map((r) => r.month)).toEqual(['2026-05', '2026-06']);
+  });
+});
+
+describe('splitPreview', () => {
+  const deposits = [{ date: '2026-03-20', amount: 3600 }, { date: '2026-11-03', amount: 300 }];
+  it('starts this month while it is still a draft', () => {
+    expect(splitPreview({ goal: 6000, deposits, yearStart: '2026-03-03', currentMonth: '2026-11', currentConfirmed: false, deadline: '2027-03-01' }))
+      .toEqual({ perMonth: 600, from: '2026-11', months: 4 });
+  });
+  it('starts next month once this month is confirmed, counting this month’s deposits', () => {
+    expect(splitPreview({ goal: 6000, deposits, yearStart: '2026-03-03', currentMonth: '2026-11', currentConfirmed: true, deadline: '2027-03-01' }))
+      .toEqual({ perMonth: 700, from: '2026-12', months: 3 });
   });
 });

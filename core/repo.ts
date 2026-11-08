@@ -1558,9 +1558,14 @@ function registeredView(db: Db, a: RegisteredRow, todayIso: string): RegisteredA
   const inYear = contributions.filter((c) => c.date >= start && c.date <= end);
   const contributed = r2(inYear.reduce((s, c) => s + c.amount, 0));
   const lifetime = r2(contributions.reduce((s, c) => s + c.amount, 0));
-  const pastYears = db
-    .prepare('SELECT * FROM registered_years WHERE account_id = ? ORDER BY tax_year DESC')
-    .all(a.id) as RegisteredYear[];
+  // A closed year's total is worked out from deposits by date every time, so
+  // a deposit logged (or removed) after the year closed still lands in it.
+  const pastYears = (
+    db.prepare('SELECT * FROM registered_years WHERE account_id = ? ORDER BY tax_year DESC').all(a.id) as RegisteredYear[]
+  ).map((y) => {
+    const b = yearBounds(a.kind, y.tax_year);
+    return { ...y, contributed: depositsBetween(db, a.id, b.start, b.end) };
+  });
 
   const formula = contributionFormula(db, a, currentMonth);
   const planned =
@@ -1600,8 +1605,12 @@ function registeredView(db: Db, a: RegisteredRow, todayIso: string): RegisteredA
             contributed: last.contributed,
             goal: a.goal,
             budgeted: !!a.budgeted,
-            lifetimeContributed: lifetime,
+            lifetimeContributed: r2(contributions.filter((c) => c.date < start).reduce((s, c) => s + c.amount, 0)),
             lifetimeMaxReached: !!a.fhsa_lifetime_max,
+            skippedContributed:
+              openYear - 1 > a.tax_year
+                ? depositsBetween(db, a.id, yearBounds(a.kind, a.tax_year + 1).start, yearBounds(a.kind, openYear - 1).end)
+                : 0,
           },
           a.tax_year,
           openYear
@@ -2128,16 +2137,22 @@ function syncContributionLines(db: Db, month: string) {
   }
 }
 
-/** Deposits into any open (non-archived) account dated inside the month. */
+/**
+ * An account's deposits inside the month that belong to its open CRA year —
+ * an RRSP deposit on Mar 1 counts for last year, so it can't pay this year's
+ * March line.
+ */
+function depositsForLine(db: Db, a: RegisteredRow, start: string, end: string): number {
+  const year = yearBounds(a.kind, a.waiting ? taxYearFor(a.kind, today()) : a.tax_year);
+  const from = start > year.start ? start : year.start;
+  const to = end < year.end ? end : year.end;
+  return from > to ? 0 : depositsBetween(db, a.id, from, to);
+}
+
+/** Deposits into any open (non-archived) account dated inside the month, within its year. */
 function depositsInMonth(db: Db, start: string, end: string): number {
-  const row = db
-    .prepare(
-      `SELECT COALESCE(SUM(c.amount), 0) AS s FROM registered_contributions c
-         JOIN registered_accounts a ON a.id = c.account_id
-        WHERE a.archived = 0 AND c.date BETWEEN ? AND ?`
-    )
-    .get(start, end) as { s: number };
-  return row.s;
+  const accounts = db.prepare('SELECT * FROM registered_accounts WHERE archived = 0').all() as RegisteredRow[];
+  return accounts.reduce((s, a) => s + depositsForLine(db, a, start, end), 0);
 }
 
 /**
@@ -2160,11 +2175,9 @@ function contributionLineViews(
       : rawLines.filter((l) => l.kind === 'contribution');
   const out: ContributionLineView[] = [];
   for (const l of lines) {
-    const a = db.prepare('SELECT id, kind, label FROM registered_accounts WHERE id = ?').get(l.ref_id) as
-      | { id: number; kind: RegisteredKind; label: string }
-      | undefined;
+    const a = db.prepare('SELECT * FROM registered_accounts WHERE id = ?').get(l.ref_id) as RegisteredRow | undefined;
     if (!a) continue;
-    const deposited = depositsBetween(db, a.id, start, end);
+    const deposited = depositsForLine(db, a, start, end);
     out.push({
       account_id: a.id,
       kind: a.kind,

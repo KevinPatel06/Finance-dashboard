@@ -68,6 +68,30 @@ export function monthlyLine(goal: number, contributedBefore: number, fromMonth: 
   return Math.round(rem / n) / 100;
 }
 
+/**
+ * The add/edit form's "$X a month · Nov – Feb" preview. A confirmed month's
+ * plan is fixed, so budgeting then starts next month and this month's
+ * deposits already count toward the goal.
+ */
+export function splitPreview(input: {
+  goal: number;
+  deposits: { date: string; amount: number }[];
+  yearStart: string;
+  currentMonth: string;
+  currentConfirmed: boolean;
+  deadline: string;
+}): { perMonth: number; from: string; months: number } {
+  const from = input.currentConfirmed ? nextMonth(input.currentMonth) : input.currentMonth;
+  const before = input.deposits
+    .filter((d) => d.date >= input.yearStart && d.date < monthStart(from))
+    .reduce((s, d) => s + d.amount, 0);
+  return {
+    perMonth: monthlyLine(input.goal, before, from, input.deadline),
+    from,
+    months: monthsLeft(from, input.deadline),
+  };
+}
+
 export function tfsaLimit(year: number): { amount: number; known: boolean } {
   if (TFSA_LIMITS[year] != null) return { amount: TFSA_LIMITS[year], known: true };
   const years = Object.keys(TFSA_LIMITS).map(Number);
@@ -82,20 +106,25 @@ export function suggestNewYear(
     contributed: number;
     goal: number | null;
     budgeted: boolean;
+    /** FHSA: deposits dated before the new year starts (the cap counts only those). */
     lifetimeContributed: number;
     lifetimeMaxReached: boolean;
+    /** Deposits dated in years skipped while waiting; they used up that room. */
+    skippedContributed?: number;
   },
   lastTaxYear: number,
   newTaxYear: number
 ): NewYearSuggestion {
   const unused = Math.max(0, last.room - last.contributed);
+  const usedWhileSkipped = last.skippedContributed ?? 0;
   let room: number | null;
   if (last.kind === 'tfsa') {
-    room = unused;
+    room = unused - usedWhileSkipped;
     for (let y = lastTaxYear + 1; y <= newTaxYear; y++) room += tfsaLimit(y).amount;
+    room = Math.max(0, room);
   } else if (last.kind === 'fhsa') {
     const skipped = Math.max(0, newTaxYear - lastTaxYear - 1);
-    const carry = Math.min(FHSA_CARRY_MAX, unused + FHSA_ANNUAL * skipped);
+    const carry = Math.min(FHSA_CARRY_MAX, Math.max(0, unused + FHSA_ANNUAL * skipped - usedWhileSkipped));
     room = last.lifetimeMaxReached
       ? 0
       : Math.max(0, Math.min(carry + FHSA_ANNUAL, FHSA_LIFETIME - last.lifetimeContributed));

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
 import type { RegisteredAccount, RegisteredKind } from '@shared/types';
-import { FHSA_LIFETIME, monthlyLine, monthsLeft, taxYearFor, tfsaLimit, yearBounds } from '@shared/registered';
+import { FHSA_LIFETIME, splitPreview, taxYearFor, tfsaLimit, yearBounds } from '@shared/registered';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { useConfirm } from '@/lib/ui';
 import { cn } from '@/lib/utils';
-import { useRefresh } from '../data';
+import { useMonth, useRefresh } from '../data';
 import { shiftMonth, todayIso } from '../dates';
 import Sheet from '../ui/Sheet';
 import { BigButton, EmojiAvatar, MoneyInput, parseMoney } from '../ui/kit';
@@ -59,6 +59,7 @@ export default function AccountEditor({
 }) {
   const { bump } = useRefresh();
   const confirm = useConfirm();
+  const { data: monthView } = useMonth();
   const today = todayIso();
   const sug = mode === 'newYear' ? account?.suggestion ?? null : null;
 
@@ -87,16 +88,20 @@ export default function AccountEditor({
   const roomValue = parseMoney(room);
   const goalValue = goal === '' ? null : parseMoney(goal);
 
-  // What's already in this year, for the live "$X a month" preview.
+  // What's already in this year, for the live "$X a month" preview. A
+  // confirmed month's plan is fixed, so budgeting then starts next month.
   const month = today.slice(0, 7);
-  const before =
-    mode === 'add'
-      ? parseMoney(already)
-      : (account?.contributions ?? [])
-          .filter((c) => c.date >= bounds.start && c.date < `${month}-01`)
-          .reduce((s, c) => s + c.amount, 0);
-  const n = monthsLeft(month, effDeadline);
-  const perMonth = goalValue ? monthlyLine(goalValue, before, month, effDeadline) : 0;
+  const { perMonth, from, months: n } = splitPreview({
+    goal: goalValue ?? 0,
+    deposits:
+      mode === 'add'
+        ? [{ date: bounds.start, amount: parseMoney(already) }]
+        : (account?.contributions ?? []).map((c) => ({ date: c.date, amount: c.amount })),
+    yearStart: bounds.start,
+    currentMonth: month,
+    currentConfirmed: monthView?.status === 'confirmed',
+    deadline: effDeadline,
+  });
   const preview = !budgeted
     ? 'Track room and deposits only'
     : !goalValue
@@ -105,7 +110,7 @@ export default function AccountEditor({
         ? 'The deadline has passed'
         : perMonth === 0
           ? 'Goal already reached'
-          : `${cash(perMonth)} a month · ${monthShort(month)} – ${monthShort(shiftMonth(month, n - 1))} (${n} month${n === 1 ? '' : 's'})`;
+          : `${cash(perMonth)} a month · ${monthShort(from)} – ${monthShort(shiftMonth(from, n - 1))} (${n} month${n === 1 ? '' : 's'})`;
 
   const overGoal = goalValue != null && room !== '' && goalValue > roomValue;
   const valid = room !== '' && roomValue >= 0 && (!budgeted || (goalValue ?? 0) > 0);

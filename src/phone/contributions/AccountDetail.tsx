@@ -43,7 +43,8 @@ export default function AccountDetail() {
   const toGo = Math.max(0, (a.goal ?? 0) - a.contributed);
   const over = a.waiting ? null : overRoom(a.kind, a.contribution_room, a.contributed);
   const nextYear = taxYearFor(a.kind, a.year_start);
-  const history = a.contributions.filter((c) => c.date >= a.year_start && c.date <= a.year_end);
+  // Every deposit, all years — a mistyped date must still be findable and removable.
+  const history = a.contributions;
 
   return (
     <div className="space-y-4">
@@ -184,14 +185,14 @@ export default function AccountDetail() {
 
       <SectionTitle>Contribution history</SectionTitle>
       {history.length === 0 ? (
-        <p className="text-sm text-content-subtle px-1">No deposits this year yet.</p>
+        <p className="text-sm text-content-subtle px-1">No deposits yet.</p>
       ) : (
         <Group>
           {history.map((c) => (
             <Row
               key={c.id}
               title={c.note || 'Deposit'}
-              subtitle={friendlyDate(c.date)}
+              subtitle={shortDate(c.date)}
               value={`+${money(c.amount)}`}
               valueTone="success"
               trailing={

@@ -857,6 +857,36 @@ export function runRepoContract(
         expect([va.summary_pending?.tax_year, vb.summary_pending]).toEqual([2026, null]);
       });
 
+      it('a deposit logged after its year closed still counts for that year', () => {
+        const a = repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000 });
+        repo.addRegisteredContribution({ account_id: a.id, amount: 5000, date: '2026-11-10' });
+        vi.setSystemTime(new Date(2027, 0, 2, 12));
+        repo.listRegisteredAccounts();
+        repo.addRegisteredContribution({ account_id: a.id, amount: 2000, date: '2026-12-30' });
+        const v = repo.listRegisteredAccounts()[0];
+        expect(v.past_years[0].contributed).toBe(7000);
+        expect(v.suggestion?.room).toBe(7000);
+        expect(v.contributions.some((c) => c.date === '2026-12-30')).toBe(true);
+      });
+
+      it('deposits made in a skipped year come off the suggested room', () => {
+        const a = repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000 });
+        repo.addRegisteredContribution({ account_id: a.id, amount: 7000, date: '2026-06-01' });
+        vi.setSystemTime(new Date(2027, 0, 2, 12));
+        repo.listRegisteredAccounts();
+        repo.addRegisteredContribution({ account_id: a.id, amount: 7000, date: '2027-06-01' });
+        vi.setSystemTime(new Date(2028, 1, 1, 12));
+        expect(repo.listRegisteredAccounts()[0].suggestion?.room).toBe(7000);
+      });
+
+      it("the FHSA lifetime cap ignores the new year's own deposits", () => {
+        const a = repo.createRegisteredAccount({ kind: 'fhsa', label: 'FHSA', contribution_room: 8000 });
+        repo.addRegisteredContribution({ account_id: a.id, amount: 32000, date: '2026-05-01' });
+        vi.setSystemTime(new Date(2027, 0, 3, 12));
+        repo.addRegisteredContribution({ account_id: a.id, amount: 8000, date: '2027-01-02' });
+        expect(repo.listRegisteredAccounts()[0].suggestion?.room).toBe(8000);
+      });
+
       it('delete archives and hides the account', () => {
         const a = repo.createRegisteredAccount({ kind: 'fhsa', label: 'FHSA', contribution_room: 8000 });
         repo.deleteRegisteredAccount(a.id);
@@ -928,6 +958,34 @@ export function runRepoContract(
         repo.addRegisteredContribution({ account_id: a.id, amount: 1000, date: '2026-11-05' });
         vi.setSystemTime(new Date(2026, 11, 1, 12));
         expect(repo.budgetMonth('2026-12').lines.contribution[0].amount).toBe(466.67);
+      });
+
+      it('a short month raises the next', () => {
+        const a = rrsp();
+        draftMonth('2026-11');
+        repo.confirmBudgetMonth('2026-11');
+        repo.addRegisteredContribution({ account_id: a.id, amount: 300, date: '2026-11-05' });
+        vi.setSystemTime(new Date(2026, 11, 1, 12));
+        expect(repo.budgetMonth('2026-12').lines.contribution[0].amount).toBe(700);
+      });
+
+      it('an early deadline: no lines after it, deposits still count', () => {
+        const a = repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000, goal: 7000, goal_deadline: '2026-06-30', budgeted: true });
+        repo.addRegisteredContribution({ account_id: a.id, amount: 1000, date: '2026-11-10' });
+        expect(draftMonth('2026-11').lines.contribution).toEqual([]);
+        expect(repo.listRegisteredAccounts()[0]).toMatchObject({ contributed: 1000, waiting: 0 });
+      });
+
+      it("a deposit for last year's RRSP doesn't pay this year's line", () => {
+        const a = repo.createRegisteredAccount({ kind: 'rrsp', label: 'RRSP', contribution_room: 14200 });
+        vi.setSystemTime(new Date(2027, 2, 5, 12));
+        repo.addRegisteredContribution({ account_id: a.id, amount: 3000, date: '2027-03-01' });
+        repo.listRegisteredAccounts();
+        repo.startRegisteredYear(a.id, { contribution_room: 15000, goal: 12000, goal_deadline: '2028-02-29', budgeted: true });
+        repo.saveBudgetPlan('2027-02', [], true);
+        const v = repo.budgetMonth('2027-03');
+        expect(v.lines.contribution[0]).toMatchObject({ amount: 1000, deposited: 0, left: 1000 });
+        expect(v.saving.putAway).toBe(0);
       });
 
       it('no line without a positive remaining goal', () => {
