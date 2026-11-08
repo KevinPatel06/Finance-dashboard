@@ -73,6 +73,9 @@ export const IPC = {
   DELETE_REGISTERED: 'registered:delete',
   ADD_REGISTERED_CONTRIBUTION: 'registered:addContribution',
   DELETE_REGISTERED_CONTRIBUTION: 'registered:deleteContribution',
+  REGISTERED_START_YEAR: 'registered:startYear',
+  REGISTERED_SNOOZE_NEW_YEAR: 'registered:snoozeNewYear',
+  REGISTERED_ACK_SUMMARY: 'registered:ackSummary',
 
   // Budgets (legacy per-category monthly caps)
   LIST_BUDGETS: 'budgets:list',

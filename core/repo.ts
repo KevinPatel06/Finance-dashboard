@@ -41,6 +41,8 @@ import type {
   PayFrequency,
   RegisteredContribution,
   RegisteredContributionInput,
+  RegisteredYear,
+  StartYearInput,
   SavingsGoal,
   SavingsGoalInput,
 } from '../shared/types';
@@ -63,6 +65,7 @@ import { periodRate } from '../shared/debtMath';
 import { suggestEmoji, suggestKind } from '../shared/emoji';
 import { latestOccurrenceOnOrBefore, occurrencesInRange } from '../shared/recurrence';
 import { monthBounds, monthOf, nextPaydayAfter, paydaysInMonth } from '../shared/paydays';
+import { monthlyLine, monthsLeft, scheduleRows, suggestNewYear, taxYearFor, yearBounds } from '../shared/registered';
 
 // ---------- helpers ----------
 const today = () => formatISO(new Date(), { representation: 'date' });
@@ -1470,35 +1473,205 @@ export function materializeRecurringExpenses(): void {
 }
 
 // ---------- Registered accounts (RRSP / TFSA / FHSA) ----------
+//
+// Each account has a CRA year (tax_year). Its bounds always come from
+// shared/registered.ts; the goal deadline only says when the goal is due.
+// Deposits belong to a year by their date and nothing else. A year closes
+// lazily on the first read after its CRA end: it's recorded in
+// registered_years and the account WAITS until the user starts the next one.
+
+type RegisteredRow = Pick<
+  RegisteredAccount,
+  | 'id'
+  | 'kind'
+  | 'label'
+  | 'contribution_room'
+  | 'notes'
+  | 'archived'
+  | 'created_at'
+  | 'tax_year'
+  | 'goal'
+  | 'goal_deadline'
+  | 'budgeted'
+  | 'waiting'
+  | 'fhsa_lifetime_max'
+>;
+
+const OPENING_NOTE = 'Already in when you set it up';
+
+const addDaysIso = (iso: string, n: number) =>
+  formatISO(addDays(parseISO(iso), n), { representation: 'date' });
+
+function depositsBetween(db: Db, accountId: number, start: string, end: string): number {
+  const row = db
+    .prepare(
+      'SELECT COALESCE(SUM(amount), 0) AS s FROM registered_contributions WHERE account_id = ? AND date BETWEEN ? AND ?'
+    )
+    .get(accountId, start, end) as { s: number };
+  return r2(row.s);
+}
+
+/** A goal deadline can move earlier than the CRA year's end, never later. */
+const clampDeadline = (deadline: string | undefined | null, yearEnd: string) =>
+  !deadline || deadline > yearEnd ? yearEnd : deadline;
+
+/** Closes every open year whose CRA end has passed. Idempotent. */
+function closeRegisteredYears(db: Db, todayIso: string) {
+  const rows = db
+    .prepare('SELECT * FROM registered_accounts WHERE archived = 0 AND waiting = 0')
+    .all() as RegisteredRow[];
+  for (const a of rows) {
+    const { start, end } = yearBounds(a.kind, a.tax_year);
+    if (todayIso <= end) continue;
+    db.prepare(
+      `INSERT INTO registered_years (account_id, tax_year, room, goal, goal_deadline, contributed)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(a.id, a.tax_year, a.contribution_room, a.goal, a.goal_deadline, depositsBetween(db, a.id, start, end));
+    db.prepare('UPDATE registered_accounts SET waiting = 1 WHERE id = ?').run(a.id);
+  }
+}
+
+/** This account's stored plan line for `month`, or null. */
+function storedContributionLine(db: Db, month: string, accountId: number): number | null {
+  const row = db
+    .prepare("SELECT amount FROM budget_lines WHERE month = ? AND kind = 'contribution' AND ref_id = ?")
+    .get(month, accountId) as { amount: number } | undefined;
+  return row ? row.amount : null;
+}
+
+/** What the monthly split asks of the account in `month` (0 when not budgeted, waiting or done). */
+function contributionFormula(db: Db, a: RegisteredRow, month: string): number {
+  if (a.waiting || !a.budgeted || a.goal == null || a.goal <= 0) return 0;
+  const { start } = yearBounds(a.kind, a.tax_year);
+  const before = depositsBetween(db, a.id, start, addDaysIso(`${month}-01`, -1));
+  return monthlyLine(a.goal, before, month, a.goal_deadline);
+}
+
+function registeredView(db: Db, a: RegisteredRow, todayIso: string): RegisteredAccount {
+  const currentMonth = monthOf(todayIso);
+  const openYear = a.waiting ? taxYearFor(a.kind, todayIso) : a.tax_year;
+  const { start, end } = yearBounds(a.kind, openYear);
+  const contributions = db
+    .prepare('SELECT * FROM registered_contributions WHERE account_id = ? ORDER BY date DESC, id DESC')
+    .all(a.id) as RegisteredContribution[];
+  const inYear = contributions.filter((c) => c.date >= start && c.date <= end);
+  const contributed = r2(inYear.reduce((s, c) => s + c.amount, 0));
+  const lifetime = r2(contributions.reduce((s, c) => s + c.amount, 0));
+  const pastYears = db
+    .prepare('SELECT * FROM registered_years WHERE account_id = ? ORDER BY tax_year DESC')
+    .all(a.id) as RegisteredYear[];
+
+  const formula = contributionFormula(db, a, currentMonth);
+  const planned =
+    monthStatus(db, currentMonth) === 'confirmed'
+      ? storedContributionLine(db, currentMonth, a.id) ?? 0
+      : formula;
+  const depositedThisMonth = r2(
+    inYear.filter((c) => c.date.slice(0, 7) === currentMonth).reduce((s, c) => s + c.amount, 0)
+  );
+  const thisMonth = !a.waiting && a.budgeted ? { planned, deposited: depositedThisMonth } : null;
+
+  let schedule: RegisteredAccount['schedule'] = [];
+  if (!a.waiting) {
+    const lineRows = db
+      .prepare("SELECT month, amount FROM budget_lines WHERE kind = 'contribution' AND ref_id = ?")
+      .all(a.id) as { month: string; amount: number }[];
+    schedule = scheduleRows({
+      yearStart: start,
+      yearEnd: end,
+      goalDeadline: a.goal_deadline,
+      goal: a.goal,
+      budgeted: !!a.budgeted,
+      deposits: inYear,
+      lines: Object.fromEntries(lineRows.map((l) => [l.month, l.amount])),
+      currentMonth,
+      currentPlanned: thisMonth?.planned ?? 0,
+    });
+  }
+
+  const last = pastYears[0];
+  const suggestion =
+    a.waiting && last
+      ? suggestNewYear(
+          {
+            kind: a.kind,
+            room: last.room ?? a.contribution_room,
+            contributed: last.contributed,
+            goal: a.goal,
+            budgeted: !!a.budgeted,
+            lifetimeContributed: lifetime,
+            lifetimeMaxReached: !!a.fhsa_lifetime_max,
+          },
+          a.tax_year,
+          openYear
+        )
+      : null;
+  const summaryPending = last && getMeta(`reg_summary_ack:${a.id}:${last.tax_year}`) !== '1' ? last : null;
+
+  return {
+    ...a,
+    year_start: start,
+    year_end: end,
+    contributed,
+    remaining: r2(a.contribution_room - contributed),
+    lifetime_contributed: lifetime,
+    contributions,
+    monthly_plan: formula > 0 ? formula : null,
+    months_left: a.waiting ? 0 : monthsLeft(currentMonth, a.goal_deadline),
+    this_month: thisMonth,
+    schedule,
+    past_years: pastYears,
+    suggestion,
+    new_year_snoozed: getMeta(`reg_newyear_snooze:${a.id}`) === todayIso,
+    summary_pending: summaryPending,
+  };
+}
+
+/** Lists the user's accounts. Closes any year whose CRA end has passed, so it writes. */
 export function listRegisteredAccounts(): RegisteredAccount[] {
   const db = getDb();
-  const accounts = db
-    .prepare('SELECT * FROM registered_accounts WHERE archived = 0 ORDER BY created_at')
-    .all() as Omit<RegisteredAccount, 'contributed' | 'remaining' | 'contributions'>[];
-  const contribStmt = db.prepare(
-    'SELECT * FROM registered_contributions WHERE account_id = ? ORDER BY date DESC, id DESC'
-  );
-  return accounts.map((a) => {
-    const contributions = contribStmt.all(a.id) as RegisteredContribution[];
-    const contributed = contributions.reduce((sum, c) => sum + c.amount, 0);
-    return {
-      ...a,
-      contributions,
-      contributed,
-      remaining: a.contribution_room - contributed,
-    };
-  });
+  const todayIso = today();
+  db.transaction(() => closeRegisteredYears(db, todayIso))();
+  const rows = db
+    .prepare('SELECT * FROM registered_accounts WHERE archived = 0 ORDER BY created_at, id')
+    .all() as RegisteredRow[];
+  return rows.map((a) => registeredView(db, a, todayIso));
 }
 
 export function createRegisteredAccount(input: RegisteredAccountInput): RegisteredAccount {
   const db = getDb();
-  const info = db
-    .prepare(
-      `INSERT INTO registered_accounts (kind, label, contribution_room, notes)
-       VALUES (?, ?, ?, ?)`
-    )
-    .run(input.kind, input.label, input.contribution_room, input.notes ?? null);
-  return getRegisteredAccount(info.lastInsertRowid as number);
+  const taxYear = taxYearFor(input.kind, today());
+  const { start, end } = yearBounds(input.kind, taxYear);
+  const id = db.transaction(() => {
+    const info = db
+      .prepare(
+        `INSERT INTO registered_accounts
+           (kind, label, contribution_room, notes, tax_year, goal, goal_deadline, budgeted, fhsa_lifetime_max)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        input.kind,
+        input.label,
+        input.contribution_room,
+        input.notes ?? null,
+        taxYear,
+        input.goal ?? null,
+        clampDeadline(input.goal_deadline, end),
+        input.budgeted ? 1 : 0,
+        input.fhsa_lifetime_max ? 1 : 0
+      );
+    const newId = Number(info.lastInsertRowid);
+    if ((input.already_contributed ?? 0) > 0) {
+      db.prepare('INSERT INTO registered_contributions (account_id, amount, date, note) VALUES (?, ?, ?, ?)').run(
+        newId,
+        input.already_contributed!,
+        start,
+        OPENING_NOTE
+      );
+    }
+    return newId;
+  })() as number;
+  return getRegisteredAccount(id);
 }
 
 export function updateRegisteredAccount(
@@ -1506,37 +1679,111 @@ export function updateRegisteredAccount(
   input: Partial<RegisteredAccountInput>
 ): RegisteredAccount {
   const db = getDb();
-  const cur = db.prepare('SELECT * FROM registered_accounts WHERE id = ?').get(id) as
-    | RegisteredAccount
-    | undefined;
+  const cur = db.prepare('SELECT * FROM registered_accounts WHERE id = ?').get(id) as RegisteredRow | undefined;
   if (!cur) throw new Error('Registered account not found');
+  const kind = input.kind ?? cur.kind;
+  // Switching kind (the desktop allows it) puts the account in that kind's current year.
+  const switched = kind !== cur.kind;
+  const taxYear = switched ? taxYearFor(kind, today()) : cur.tax_year;
+  const { end } = yearBounds(kind, taxYear);
+  const deadline = clampDeadline(switched ? input.goal_deadline : input.goal_deadline ?? cur.goal_deadline, end);
   db.prepare(
-    `UPDATE registered_accounts SET kind = ?, label = ?, contribution_room = ?, notes = ?
-       WHERE id = ?`
+    `UPDATE registered_accounts
+        SET kind = ?, label = ?, contribution_room = ?, notes = ?, tax_year = ?, goal = ?, goal_deadline = ?,
+            budgeted = ?, fhsa_lifetime_max = ?
+      WHERE id = ?`
   ).run(
-    input.kind ?? cur.kind,
+    kind,
     input.label ?? cur.label,
     input.contribution_room ?? cur.contribution_room,
     input.notes === undefined ? cur.notes : input.notes,
+    taxYear,
+    input.goal === undefined ? cur.goal : input.goal,
+    deadline,
+    input.budgeted === undefined ? cur.budgeted : input.budgeted ? 1 : 0,
+    input.fhsa_lifetime_max === undefined ? cur.fhsa_lifetime_max : input.fhsa_lifetime_max ? 1 : 0,
     id
   );
   return getRegisteredAccount(id);
 }
 
+/**
+ * Archives the account (it disappears everywhere) instead of deleting it, so
+ * confirmed months that planned a contribution to it keep their numbers.
+ * Its lines in unconfirmed months from now on are dropped.
+ */
 export function deleteRegisteredAccount(id: number): { ok: true } {
-  // Contributions cascade-delete via the FK.
-  getDb().prepare('DELETE FROM registered_accounts WHERE id = ?').run(id);
+  const db = getDb();
+  db.transaction(() => {
+    db.prepare('UPDATE registered_accounts SET archived = 1 WHERE id = ?').run(id);
+    db.prepare(
+      `DELETE FROM budget_lines
+        WHERE kind = 'contribution' AND ref_id = ? AND month >= ?
+          AND month NOT IN (SELECT month FROM budget_months WHERE confirmed_at IS NOT NULL)`
+    ).run(id, monthOf(today()));
+  })();
   return { ok: true };
 }
 
-export function addRegisteredContribution(
-  input: RegisteredContributionInput
-): RegisteredAccount {
+/**
+ * Starts the year containing today for a waiting account (or just updates an
+ * open one). Years skipped while waiting are recorded with their deposits.
+ */
+export function startRegisteredYear(id: number, input: StartYearInput): RegisteredAccount {
   const db = getDb();
-  db.prepare(
-    `INSERT INTO registered_contributions (account_id, amount, date, note)
-     VALUES (?, ?, ?, ?)`
-  ).run(input.account_id, input.amount, input.date, input.note ?? null);
+  const todayIso = today();
+  db.transaction(() => closeRegisteredYears(db, todayIso))();
+  const cur = db.prepare('SELECT * FROM registered_accounts WHERE id = ?').get(id) as RegisteredRow | undefined;
+  if (!cur) throw new Error('Registered account not found');
+  const newYear = cur.waiting ? taxYearFor(cur.kind, todayIso) : cur.tax_year;
+  db.transaction(() => {
+    if (cur.waiting) {
+      setMeta(`reg_summary_ack:${id}:${cur.tax_year}`, '1');
+      for (let y = cur.tax_year + 1; y < newYear; y++) {
+        const { start, end } = yearBounds(cur.kind, y);
+        db.prepare(
+          `INSERT INTO registered_years (account_id, tax_year, room, goal, goal_deadline, contributed)
+           VALUES (?, ?, NULL, NULL, NULL, ?)`
+        ).run(id, y, depositsBetween(db, id, start, end));
+      }
+    }
+    db.prepare(
+      `UPDATE registered_accounts
+          SET tax_year = ?, waiting = 0, contribution_room = ?, goal = ?, goal_deadline = ?, budgeted = ?,
+              fhsa_lifetime_max = ?
+        WHERE id = ?`
+    ).run(
+      newYear,
+      input.contribution_room,
+      input.goal,
+      clampDeadline(input.goal_deadline, yearBounds(cur.kind, newYear).end),
+      input.budgeted ? 1 : 0,
+      input.fhsa_lifetime_max === undefined ? cur.fhsa_lifetime_max : input.fhsa_lifetime_max ? 1 : 0,
+      id
+    );
+  })();
+  return getRegisteredAccount(id);
+}
+
+/** "Not now" on the new-year banner: hide it until tomorrow. */
+export function snoozeRegisteredNewYear(id: number): { ok: true } {
+  setMeta(`reg_newyear_snooze:${id}`, today());
+  return { ok: true };
+}
+
+/** "Got it" on a closed year's summary. */
+export function ackRegisteredSummary(id: number): { ok: true } {
+  const row = getDb().prepare('SELECT tax_year FROM registered_accounts WHERE id = ?').get(id) as
+    | { tax_year: number }
+    | undefined;
+  if (row) setMeta(`reg_summary_ack:${id}:${row.tax_year}`, '1');
+  return { ok: true };
+}
+
+export function addRegisteredContribution(input: RegisteredContributionInput): RegisteredAccount {
+  getDb()
+    .prepare('INSERT INTO registered_contributions (account_id, amount, date, note) VALUES (?, ?, ?, ?)')
+    .run(input.account_id, input.amount, input.date, input.note ?? null);
   return getRegisteredAccount(input.account_id);
 }
 
@@ -1546,9 +1793,10 @@ export function deleteRegisteredContribution(id: number): { ok: true } {
 }
 
 function getRegisteredAccount(id: number): RegisteredAccount {
-  const acc = listRegisteredAccounts().find((a) => a.id === id);
-  if (!acc) throw new Error('Registered account not found');
-  return acc;
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM registered_accounts WHERE id = ?').get(id) as RegisteredRow | undefined;
+  if (!row) throw new Error('Registered account not found');
+  return registeredView(db, row, today());
 }
 
 // ============================================================================

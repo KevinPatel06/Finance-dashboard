@@ -95,13 +95,16 @@ export const REPO_API: RepoApiEntry[] = [
   w(IPC.DELETE_RECURRING, (id) => repo.deleteRecurringExpense(id)),
   w(IPC.IMPORT_BILLS_RECURRING, () => repo.importBillsAsRecurring()),
 
-  // Registered accounts
-  r(IPC.LIST_REGISTERED, () => repo.listRegisteredAccounts()),
+  // Registered accounts — listing closes years whose CRA end has passed, so it writes.
+  w(IPC.LIST_REGISTERED, () => repo.listRegisteredAccounts()),
   w(IPC.CREATE_REGISTERED, (input) => repo.createRegisteredAccount(input)),
   w(IPC.UPDATE_REGISTERED, (id, input) => repo.updateRegisteredAccount(id, input)),
   w(IPC.DELETE_REGISTERED, (id) => repo.deleteRegisteredAccount(id)),
   w(IPC.ADD_REGISTERED_CONTRIBUTION, (input) => repo.addRegisteredContribution(input)),
   w(IPC.DELETE_REGISTERED_CONTRIBUTION, (id) => repo.deleteRegisteredContribution(id)),
+  w(IPC.REGISTERED_START_YEAR, (id, input) => repo.startRegisteredYear(id, input)),
+  w(IPC.REGISTERED_SNOOZE_NEW_YEAR, (id) => repo.snoozeRegisteredNewYear(id)),
+  w(IPC.REGISTERED_ACK_SUMMARY, (id) => repo.ackRegisteredSummary(id)),
 
   // Budgets
   r(IPC.LIST_BUDGETS, () => repo.listExpenseBudgets()),

@@ -18,7 +18,7 @@ runMigrations(seed);
 const template = seed.export();
 seed.close();
 
-const POOL_SIZE = 100;
+const POOL_SIZE = 150;
 const pool: SqlJsDb[] = [];
 for (let i = 0; i < POOL_SIZE; i++) pool.push(await createSqlJsDb(template, WASM));
 let next = 0;

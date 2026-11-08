@@ -114,6 +114,9 @@ export async function installMobileApi(): Promise<void> {
       remove: (id: number) => invoke(IPC.DELETE_REGISTERED, id),
       addContribution: (input: unknown) => invoke(IPC.ADD_REGISTERED_CONTRIBUTION, input),
       removeContribution: (id: number) => invoke(IPC.DELETE_REGISTERED_CONTRIBUTION, id),
+      startYear: (id: number, input: unknown) => invoke(IPC.REGISTERED_START_YEAR, id, input),
+      snoozeNewYear: (id: number) => invoke(IPC.REGISTERED_SNOOZE_NEW_YEAR, id),
+      ackSummary: (id: number) => invoke(IPC.REGISTERED_ACK_SUMMARY, id),
     },
     budgets: {
       list: () => invoke(IPC.LIST_BUDGETS),

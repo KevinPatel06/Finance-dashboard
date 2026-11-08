@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { Bill } from '../../shared/types';
 import { differenceInCalendarDays, formatISO, parseISO, subMonths } from 'date-fns';
 import { periodRate } from '../../shared/debtMath';
@@ -789,6 +789,81 @@ export function runRepoContract(
       expect(first).toBeGreaterThan(0);
       repo.materializeRecurringExpenses();
       expect(repo.listExpenses()).toHaveLength(first);
+    });
+    // ---------- Contributions: registered accounts and their CRA years ----------
+
+    describe('contributions — accounts', () => {
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 10, 8, 12));
+      });
+      afterEach(() => vi.useRealTimers());
+
+      it('creates an account in the current CRA year with an opening deposit', () => {
+        const a = repo.createRegisteredAccount({ kind: 'rrsp', label: 'RRSP', contribution_room: 14200, goal: 6000, budgeted: true, already_contributed: 3600 });
+        expect([a.tax_year, a.year_start, a.year_end, a.goal_deadline]).toEqual([2026, '2026-03-03', '2027-03-01', '2027-03-01']);
+        expect([a.contributed, a.remaining, a.monthly_plan, a.months_left]).toEqual([3600, 10600, 600, 4]);
+        expect(a.contributions[0]).toMatchObject({ date: '2026-03-03', amount: 3600 });
+      });
+
+      it('clamps a deadline past the CRA year end', () => {
+        const a = repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000 });
+        expect(repo.updateRegisteredAccount(a.id, { goal_deadline: '2027-06-30' }).goal_deadline).toBe('2026-12-31');
+      });
+
+      it('deposits are assigned to years by date', () => {
+        const a = repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000 });
+        repo.addRegisteredContribution({ account_id: a.id, amount: 500, date: '2025-12-31' });
+        repo.addRegisteredContribution({ account_id: a.id, amount: 200, date: '2027-01-02' });
+        const v = repo.listRegisteredAccounts()[0];
+        expect([v.contributed, v.lifetime_contributed]).toEqual([0, 700]);
+      });
+
+      it('closes the year at the CRA end, not the goal deadline', () => {
+        repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000, goal: 7000, goal_deadline: '2026-06-30', budgeted: true });
+        vi.setSystemTime(new Date(2026, 11, 31, 12));
+        expect(repo.listRegisteredAccounts()[0].waiting).toBe(0);
+        vi.setSystemTime(new Date(2027, 0, 1, 12));
+        const v = repo.listRegisteredAccounts()[0];
+        expect([v.waiting, v.past_years[0].tax_year, v.suggestion?.room, v.suggestion?.goal_deadline]).toEqual([1, 2026, 14000, '2027-12-31']);
+      });
+
+      it('RRSP waits for the user; deposits while waiting count toward the new year', () => {
+        const a = repo.createRegisteredAccount({ kind: 'rrsp', label: 'RRSP', contribution_room: 14200, goal: 6000, budgeted: true });
+        vi.setSystemTime(new Date(2027, 2, 10, 12));
+        repo.addRegisteredContribution({ account_id: a.id, amount: 500, date: '2027-03-05' });
+        let v = repo.listRegisteredAccounts()[0];
+        expect([v.waiting, v.suggestion?.room, v.contributed, v.summary_pending?.tax_year]).toEqual([1, null, 500, 2026]);
+        v = repo.startRegisteredYear(a.id, { contribution_room: 15000, goal: 6000, goal_deadline: '2028-02-29', budgeted: true });
+        expect([v.tax_year, v.waiting, v.contributed, v.summary_pending]).toEqual([2027, 0, 500, null]);
+      });
+
+      it('a skipped year gets a past-years row and starts in the year containing today', () => {
+        const a = repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000 });
+        vi.setSystemTime(new Date(2028, 4, 1, 12));
+        repo.listRegisteredAccounts();
+        const v = repo.startRegisteredYear(a.id, { contribution_room: 21000, goal: null, goal_deadline: '2028-12-31', budgeted: false });
+        expect([v.tax_year, v.past_years.map((y) => y.tax_year)]).toEqual([2028, [2027, 2026]]);
+      });
+
+      it('snooze and acknowledge are per account', () => {
+        const a = repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000 });
+        const b = repo.createRegisteredAccount({ kind: 'fhsa', label: 'FHSA', contribution_room: 8000 });
+        vi.setSystemTime(new Date(2027, 0, 2, 12));
+        repo.snoozeRegisteredNewYear(a.id);
+        repo.ackRegisteredSummary(b.id);
+        const [va, vb] = repo.listRegisteredAccounts();
+        expect([va.new_year_snoozed, vb.new_year_snoozed]).toEqual([true, false]);
+        expect([va.summary_pending?.tax_year, vb.summary_pending]).toEqual([2026, null]);
+      });
+
+      it('delete archives and hides the account', () => {
+        const a = repo.createRegisteredAccount({ kind: 'fhsa', label: 'FHSA', contribution_room: 8000 });
+        repo.deleteRegisteredAccount(a.id);
+        expect(repo.listRegisteredAccounts()).toHaveLength(0);
+        const row = getDb().prepare('SELECT archived FROM registered_accounts WHERE id = ?').get(a.id) as { archived: number };
+        expect(row.archived).toBe(1);
+      });
     });
   });
 }
