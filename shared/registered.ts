@@ -21,7 +21,23 @@ export const RRSP_BUFFER = 2000;
 /** Hint text only — the user's real room comes from their Notice of Assessment. */
 export const RRSP_DOLLAR_LIMITS: Record<number, number> = { 2026: 33810, 2027: 35390 };
 
-export const KIND_LABEL: Record<RegisteredKind, string> = { rrsp: 'RRSP', tfsa: 'TFSA', fhsa: 'FHSA' };
+/**
+ * How far deposits are past the room, and how much of that CRA charges 1% a
+ * month on. An RRSP may go $2,000 over with no charge, so only what's above
+ * that buffer is taxed; TFSA and FHSA are taxed on the whole excess.
+ */
+export function overRoomBy(
+  kind: RegisteredKind,
+  room: number,
+  contributed: number
+): { over: number; taxed: number } | null {
+  const over = Math.round((contributed - room) * 100) / 100;
+  if (over <= 0) return null;
+  const taxed = kind === 'rrsp' ? Math.max(0, Math.round((over - RRSP_BUFFER) * 100) / 100) : over;
+  return { over, taxed };
+}
+
+export const KIND_LABEL: Record<RegisteredKind, string> ={ rrsp: 'RRSP', tfsa: 'TFSA', fhsa: 'FHSA' };
 
 const iso = (d: Date) => format(d, 'yyyy-MM-dd');
 const monthStart = (m: string) => `${m}-01`;
@@ -89,6 +105,50 @@ export function splitPreview(input: {
     perMonth: monthlyLine(input.goal, before, from, input.deadline),
     from,
     months: monthsLeft(from, input.deadline),
+  };
+}
+
+/**
+ * What logging a deposit does to the months ahead, for the deposit sheet. A
+ * month's line counts deposits dated before it, so the first month to change
+ * is the one after the deposit — or next month when the deposit is dated in
+ * the past. Uses `monthlyLine`, the same rule the budget plans with.
+ * Null when there's no monthly split to change.
+ */
+export function depositEffect(input: {
+  goal: number | null;
+  budgeted: boolean;
+  deposits: { date: string; amount: number }[];
+  yearStart: string;
+  yearEnd: string;
+  deadline: string;
+  currentMonth: string;
+  /** This month's planned line; "before" assumes it gets deposited in full, as the budget does. */
+  currentPlanned: number;
+  date: string;
+  amount: number;
+}): { from: string; months: number; before: number; after: number } | null {
+  if (!input.budgeted || !input.goal || input.goal <= 0 || !(input.amount > 0)) return null;
+  if (input.date < input.yearStart || input.date > input.yearEnd) return null;
+  const afterDeposit = nextMonth(input.date.slice(0, 7));
+  const nextCurrent = nextMonth(input.currentMonth);
+  const from = afterDeposit > nextCurrent ? afterDeposit : nextCurrent;
+  const months = monthsLeft(from, input.deadline);
+  if (months <= 0) return null;
+  const sumBefore = (extra: { date: string; amount: number }[]) =>
+    [...input.deposits, ...extra]
+      .filter((d) => d.date >= input.yearStart && d.date < monthStart(from))
+      .reduce((s, d) => s + d.amount, 0);
+  // What this month's plan still asks for, assumed deposited in the baseline.
+  const inCurrent = input.deposits
+    .filter((d) => d.date.slice(0, 7) === input.currentMonth && d.date >= input.yearStart)
+    .reduce((s, d) => s + d.amount, 0);
+  const topUp = { date: monthStart(input.currentMonth), amount: Math.max(0, input.currentPlanned - inCurrent) };
+  return {
+    from,
+    months,
+    before: monthlyLine(input.goal, sumBefore([topUp]), from, input.deadline),
+    after: monthlyLine(input.goal, sumBefore([{ date: input.date, amount: input.amount }]), from, input.deadline),
   };
 }
 

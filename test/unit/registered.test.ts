@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  depositEffect,
   monthlyLine,
   splitPreview,
   monthsLeft,
+  overRoomBy,
   rrspDeadline,
   scheduleRows,
   suggestNewYear,
@@ -139,5 +141,73 @@ describe('splitPreview', () => {
   it('starts next month once this month is confirmed, counting this month’s deposits', () => {
     expect(splitPreview({ goal: 6000, deposits, yearStart: '2026-03-03', currentMonth: '2026-11', currentConfirmed: true, deadline: '2027-03-01' }))
       .toEqual({ perMonth: 700, from: '2026-12', months: 3 });
+  });
+});
+
+describe('overRoomBy', () => {
+  it('is null at or under the room', () => {
+    expect(overRoomBy('tfsa', 7000, 7000)).toBeNull();
+    expect(overRoomBy('rrsp', 14200, 9000)).toBeNull();
+  });
+  it('lets an RRSP go $2,000 over with nothing taxed', () => {
+    expect(overRoomBy('rrsp', 10000, 11500)).toEqual({ over: 1500, taxed: 0 });
+    expect(overRoomBy('rrsp', 10000, 12000)).toEqual({ over: 2000, taxed: 0 });
+  });
+  it('taxes only the RRSP part above the buffer', () => {
+    expect(overRoomBy('rrsp', 10000, 12600.5)).toEqual({ over: 2600.5, taxed: 600.5 });
+  });
+  it('taxes the whole TFSA and FHSA excess', () => {
+    expect(overRoomBy('tfsa', 7000, 7500)).toEqual({ over: 500, taxed: 500 });
+    expect(overRoomBy('fhsa', 8000, 8100)).toEqual({ over: 100, taxed: 100 });
+  });
+});
+
+describe('depositEffect', () => {
+  // The RRSP from the budget tests: $6,000 goal, $3,600 already in → $600 a month
+  // Nov–Feb. These numbers match "an extra deposit lowers next month" (466.67)
+  // and "a short month raises the next" (700) in the repo contract.
+  const base = {
+    goal: 6000,
+    budgeted: true,
+    deposits: [{ date: '2026-03-01', amount: 3600 }],
+    yearStart: '2026-03-02',
+    yearEnd: '2027-03-01',
+    deadline: '2027-03-01',
+    currentMonth: '2026-11',
+    currentPlanned: 600,
+    date: '2026-11-05',
+  };
+  it('an extra deposit lowers the months ahead', () => {
+    expect(depositEffect({ ...base, deposits: [{ date: '2026-04-01', amount: 3600 }], amount: 1000 })).toMatchObject({
+      from: '2026-12',
+      before: 600,
+      after: 466.67,
+    });
+  });
+  it('a short deposit raises them', () => {
+    expect(depositEffect({ ...base, deposits: [{ date: '2026-04-01', amount: 3600 }], amount: 300 })).toMatchObject({
+      before: 600,
+      after: 700,
+    });
+  });
+  it('reports a goal met once the deposit covers what is left', () => {
+    expect(depositEffect({ ...base, deposits: [{ date: '2026-04-01', amount: 3600 }], amount: 2400 })?.after).toBe(0);
+  });
+  it('treats what is already in this month as part of its plan', () => {
+    // 350 already in of 600; logging 250 completes the plan, so nothing moves.
+    const e = depositEffect({
+      ...base,
+      deposits: [{ date: '2026-04-01', amount: 3600 }, { date: '2026-11-03', amount: 350 }],
+      amount: 250,
+    });
+    expect(e?.before).toBe(e?.after);
+  });
+  it('has nothing to say without a monthly split, outside the year, or after the deadline', () => {
+    const d = [{ date: '2026-04-01', amount: 3600 }];
+    expect(depositEffect({ ...base, deposits: d, budgeted: false, amount: 100 })).toBeNull();
+    expect(depositEffect({ ...base, deposits: d, goal: null, amount: 100 })).toBeNull();
+    expect(depositEffect({ ...base, deposits: d, amount: 0 })).toBeNull();
+    expect(depositEffect({ ...base, deposits: d, date: '2027-03-02', amount: 100 })).toBeNull();
+    expect(depositEffect({ ...base, deposits: d, deadline: '2026-11-30', amount: 100 })).toBeNull();
   });
 });

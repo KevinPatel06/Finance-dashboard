@@ -4,6 +4,7 @@ import { differenceInCalendarDays, formatISO, parseISO, subMonths } from 'date-f
 import { periodRate } from '../../shared/debtMath';
 import { occurrencesInRange } from '../../shared/recurrence';
 import { addMonthsToMonth } from '../../shared/paydays';
+import { depositEffect } from '../../shared/registered';
 import { getDb } from '../../core/db';
 import * as repo from '../../core/repo';
 
@@ -958,6 +959,37 @@ export function runRepoContract(
         repo.addRegisteredContribution({ account_id: a.id, amount: 1000, date: '2026-11-05' });
         vi.setSystemTime(new Date(2026, 11, 1, 12));
         expect(repo.budgetMonth('2026-12').lines.contribution[0].amount).toBe(466.67);
+      });
+
+      it("the deposit sheet's preview is the line the budget then plans", () => {
+        for (const amount of [1000, 300, 2400]) {
+          const a = rrsp();
+          draftMonth('2026-11');
+          repo.confirmBudgetMonth('2026-11');
+          const acct = repo.listRegisteredAccounts()[0];
+          const preview = depositEffect({
+            goal: acct.goal,
+            budgeted: !!acct.budgeted,
+            deposits: acct.contributions,
+            yearStart: acct.year_start,
+            yearEnd: acct.year_end,
+            deadline: acct.goal_deadline,
+            currentMonth: '2026-11',
+            currentPlanned: acct.this_month!.planned,
+            date: '2026-11-05',
+            amount,
+          });
+          repo.addRegisteredContribution({ account_id: a.id, amount, date: '2026-11-05' });
+          vi.setSystemTime(new Date(2026, 11, 1, 12));
+          const planned = repo.budgetMonth('2026-12').lines.contribution[0]?.amount ?? 0;
+          expect(preview?.before).toBe(600);
+          expect(preview?.after).toBe(planned);
+          // reset for the next amount
+          repo.deleteRegisteredAccount(a.id);
+          getDb().prepare('DELETE FROM budget_lines').run();
+          getDb().prepare('DELETE FROM budget_months').run();
+          vi.setSystemTime(new Date(2026, 10, 8, 12));
+        }
       });
 
       it('a short month raises the next', () => {

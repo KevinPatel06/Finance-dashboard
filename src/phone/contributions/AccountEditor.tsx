@@ -9,7 +9,7 @@ import { useMonth, useRefresh } from '../data';
 import { shiftMonth, todayIso } from '../dates';
 import Sheet from '../ui/Sheet';
 import { BigButton, EmojiAvatar, MoneyInput, parseMoney } from '../ui/kit';
-import { cash, KIND_META, monthShort, shortDate } from './meta';
+import { cash, KIND_META, monthShort, overRoom, shortDate } from './meta';
 
 type Mode = 'add' | 'edit' | 'newYear';
 
@@ -80,7 +80,7 @@ export default function AccountEditor({
   const [budgeted, setBudgeted] = useState(
     mode === 'edit' ? !!account!.budgeted : mode === 'newYear' ? sug?.budgeted ?? true : true
   );
-  const [lifetimeMax, setLifetimeMax] = useState(!!account?.fhsa_lifetime_max);
+  const [lifetimeMaxSet, setLifetimeMax] = useState(!!account?.fhsa_lifetime_max);
   const [busy, setBusy] = useState(false);
 
   const meta = KIND_META[kind];
@@ -112,7 +112,19 @@ export default function AccountEditor({
           ? 'Goal already reached'
           : `${cash(perMonth)} a month · ${monthShort(from)} – ${monthShort(shiftMonth(from, n - 1))} (${n} month${n === 1 ? '' : 's'})`;
 
-  const overGoal = goalValue != null && room !== '' && goalValue > roomValue;
+  // FHSA: what's been deposited across every year decides whether the lifetime
+  // cap is reached; the box only matters for money put in outside the app.
+  const lifetimeDeposited = mode === 'add' ? parseMoney(already) : account?.lifetime_contributed ?? 0;
+  const lifetimeReached = lifetimeDeposited >= FHSA_LIFETIME;
+  const lifetimeMax = lifetimeMaxSet || lifetimeReached;
+
+  // What's already deposited in the year being set up (add mode types it in).
+  const depositedThisYear = mode === 'add' ? parseMoney(already) : account?.contributed ?? 0;
+  const afterDeposits = room !== '' ? roomValue - depositedThisYear : null;
+  const depositsOver = room !== '' ? overRoom(kind, roomValue, depositedThisYear) : null;
+
+  const overGoalMsg =
+    goalValue != null && room !== '' && goalValue > roomValue ? overRoom(kind, roomValue, goalValue) : null;
   const valid = room !== '' && roomValue >= 0 && (!budgeted || (goalValue ?? 0) > 0);
 
   const save = async () => {
@@ -222,6 +234,12 @@ export default function AccountEditor({
                 ? `${ROOM_HINT.tfsa} The ${year} limit is ${cash(tfsa.amount)}${tfsa.known ? '' : ' (expected)'}.`
                 : ROOM_HINT[kind]}
           </p>
+          {mode !== 'add' && depositedThisYear > 0 && (
+            <p className={cn('text-xs mt-1.5', depositsOver ? 'font-medium text-warning' : 'text-content-muted')}>
+              Already deposited for {year}: <span className="font-semibold num">{cash(depositedThisYear)}</span>.{' '}
+              {depositsOver ?? (afterDeposits != null ? `${cash(afterDeposits)} of room left after that.` : '')}
+            </p>
+          )}
         </div>
 
         {mode === 'add' && (
@@ -242,12 +260,7 @@ export default function AccountEditor({
             )}
           </div>
           <MoneyInput value={goal} onChange={setGoal} ariaLabel="Goal" />
-          {overGoal && (
-            <p className="text-xs font-medium text-warning mt-1.5">
-              That's more than your room.{' '}
-              {kind === 'rrsp' ? 'Up to $2,000 over is allowed before CRA charges 1% a month.' : 'CRA charges 1% a month on the excess.'}
-            </p>
-          )}
+          {overGoalMsg && <p className="text-xs font-medium text-warning mt-1.5">Your goal is {overGoalMsg}</p>}
         </div>
 
         <div>
@@ -282,11 +295,16 @@ export default function AccountEditor({
               type="checkbox"
               className="mt-0.5 h-5 w-5 accent-[rgb(var(--brand))]"
               checked={lifetimeMax}
+              disabled={lifetimeReached}
               onChange={(e) => setLifetimeMax(e.target.checked)}
             />
             <span>
               I've reached the {cash(FHSA_LIFETIME)} lifetime limit
-              <span className="block text-xs text-content-subtle">New years then suggest $0 of room.</span>
+              <span className="block text-xs text-content-subtle">
+                {lifetimeReached
+                  ? `Ticked for you: your deposits add up to ${cash(lifetimeDeposited)}. New years suggest $0 of room.`
+                  : `${cash(lifetimeDeposited)} of ${cash(FHSA_LIFETIME)} put in so far. Tick it if you've put more in elsewhere; new years then suggest $0 of room.`}
+              </span>
             </span>
           </label>
         )}

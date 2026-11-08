@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import type { RegisteredKind } from '@shared/types';
-import { RRSP_BUFFER } from '@shared/registered';
+import { overRoomBy, RRSP_BUFFER } from '@shared/registered';
 import { money, moneyWhole } from '../format';
 
 /** How each kind looks on the phone. The emoji is stored/looked up in ui/icons.ts, never drawn. */
@@ -18,10 +18,16 @@ export const cash = (n: number) => (Number.isInteger(Math.round(n * 100) / 100) 
 export const shortDate = (iso: string) => format(parseISO(iso), 'MMM d, yyyy');
 export const monthShort = (month: string) => format(parseISO(`${month}-01`), 'MMM');
 
-/** The amber over-room line, or null. */
+/**
+ * The amber over-room message, or null. One sentence that says whether CRA
+ * charges anything: an RRSP can be $2,000 over for free, and past that only
+ * the part above the buffer is charged 1% a month.
+ */
 export function overRoom(kind: RegisteredKind, room: number, contributed: number): string | null {
-  const over = Math.round((contributed - room) * 100) / 100;
-  if (over <= 0) return null;
-  if (kind === 'rrsp' && over <= RRSP_BUFFER) return `${cash(over)} over your room (up to $2,000 is allowed)`;
-  return `${cash(over)} over your room`;
+  const r = overRoomBy(kind, room, contributed);
+  if (!r) return null;
+  const head = `${cash(r.over)} over your room.`;
+  if (kind !== 'rrsp') return `${head} CRA charges 1% a month on the excess.`;
+  if (r.taxed === 0) return `${head} No penalty: CRA allows up to ${cash(RRSP_BUFFER)} over for an RRSP.`;
+  return `${head} CRA charges 1% a month on the ${cash(r.taxed)} above the ${cash(RRSP_BUFFER)} buffer.`;
 }

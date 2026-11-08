@@ -98,9 +98,7 @@ export default function AccountDetail() {
               </div>
             </div>
             {over && (
-              <p className="mt-3 text-xs font-medium text-warning text-left">
-                {over}. CRA charges 1% a month on the excess.
-              </p>
+              <p className="mt-3 text-xs font-medium text-warning text-left">{over}</p>
             )}
           </>
         )}

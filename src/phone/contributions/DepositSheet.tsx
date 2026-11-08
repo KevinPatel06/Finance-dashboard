@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type { RegisteredAccount } from '@shared/types';
+import { depositEffect } from '@shared/registered';
 import { useToast } from '@/lib/ui';
 import { useRefresh } from '../data';
 import { monthName, todayIso } from '../dates';
 import Sheet from '../ui/Sheet';
 import { BigButton, MoneyInput, parseMoney } from '../ui/kit';
-import { cash, KIND_META } from './meta';
+import { cash, KIND_META, monthShort } from './meta';
 
 /**
  * "I deposited it" — the only thing that counts money as contributed. The
@@ -33,6 +34,29 @@ export default function DepositSheet({
 
   const value = parseMoney(amount);
   const after = Math.round((a.contributed + value) * 100) / 100;
+
+  // How the months ahead move — same rule the budget uses, so it can't disagree.
+  const effect = a.waiting
+    ? null
+    : depositEffect({
+        goal: a.goal,
+        budgeted: !!a.budgeted,
+        deposits: a.contributions,
+        yearStart: a.year_start,
+        yearEnd: a.year_end,
+        deadline: a.goal_deadline,
+        currentMonth: month,
+        currentPlanned: a.this_month?.planned ?? 0,
+        date,
+        amount: value,
+      });
+  const effectText = !effect || (effect.before === 0 && effect.after === 0)
+    ? null
+    : effect.after === 0
+      ? 'That meets your goal, so no more monthly deposits.'
+      : effect.after === effect.before
+        ? null
+        : `From ${monthShort(effect.from)}: ${cash(effect.before)} → ${cash(effect.after)} a month.`;
 
   const save = async () => {
     setBusy(true);
@@ -90,7 +114,7 @@ export default function DepositSheet({
           <span className="font-semibold text-content">
             {a.goal != null && a.goal > 0 ? `${cash(after)} of ${cash(a.goal)}` : `${cash(after)} this year`}
           </span>
-          . Putting in more than planned lowers the months ahead.
+          .{effectText ? ` ${effectText}` : ''}
         </p>
       )}
     </Sheet>
