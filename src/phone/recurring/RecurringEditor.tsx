@@ -194,6 +194,8 @@ export default function RecurringEditor({
           <label className="label">Icon</label>
           <EmojiField
             value={shownEmoji}
+            name={description}
+            context="recurring"
             onChange={(e) => {
               setEmoji(e);
               setEmojiTouched(true);

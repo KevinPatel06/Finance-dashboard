@@ -112,6 +112,8 @@ export default function FundEditor({
           <label className="label">Icon</label>
           <EmojiField
             value={shownEmoji}
+            name={name}
+            context="fund"
             onChange={(e) => {
               setEmoji(e);
               setEmojiTouched(true);

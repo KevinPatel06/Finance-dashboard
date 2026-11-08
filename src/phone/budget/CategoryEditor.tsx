@@ -108,6 +108,8 @@ export default function CategoryEditor({
           <label className="label">Icon</label>
           <EmojiField
             value={shownEmoji}
+            name={name}
+            context="category"
             onChange={(e) => {
               setEmoji(e);
               setEmojiTouched(true);
