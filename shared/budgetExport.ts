@@ -1,6 +1,7 @@
 import { differenceInMonths, parseISO } from 'date-fns';
 import { PERIODS_PER_YEAR, periodRate } from './debtMath';
 import { guaranteedPerMonth } from './paydays';
+import { PLAN_STATUS_LABEL, type PlanStatus } from './registered';
 import type { CategoryKind, Debt, PayFrequency, RecurringFrequency, SavingsGoal } from './types';
 
 /**
@@ -37,6 +38,8 @@ export interface ExportRegistered {
   deadline: string;
   contributed: number;
   monthly: number | null;
+  /** Why there's no `monthly`; omitted means "Not budgeted". */
+  status?: Exclude<PlanStatus, 'monthly'>;
 }
 
 const money = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
@@ -184,7 +187,7 @@ export function buildBudgetMarkdown(input: BudgetExportInput): string {
               r.goal != null ? $(r.goal) : '—',
               r.deadline,
               $(r.contributed),
-              r.monthly != null ? $(r.monthly) : 'Not budgeted',
+              r.monthly != null ? $(r.monthly) : PLAN_STATUS_LABEL[r.status ?? 'not_budgeted'],
             ])
           ),
         ]

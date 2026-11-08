@@ -37,7 +37,30 @@ export function overRoomBy(
   return { over, taxed };
 }
 
-export const KIND_LABEL: Record<RegisteredKind, string> ={ rrsp: 'RRSP', tfsa: 'TFSA', fhsa: 'FHSA' };
+export type PlanStatus = 'monthly' | 'goal_met' | 'no_goal' | 'not_budgeted' | 'past_deadline';
+
+/** Why an account has (or has no) monthly amount, so the UI and export say the right thing. */
+export function planStatus(a: {
+  budgeted: boolean | number;
+  goal: number | null;
+  contributed: number;
+  monthly_plan: number | null;
+}): PlanStatus {
+  if (!a.budgeted) return 'not_budgeted';
+  if (a.goal == null || a.goal <= 0) return 'no_goal';
+  if (a.monthly_plan != null && a.monthly_plan > 0) return 'monthly';
+  return a.contributed >= a.goal ? 'goal_met' : 'past_deadline';
+}
+
+/** Plain words for each status that has no monthly amount. */
+export const PLAN_STATUS_LABEL: Record<Exclude<PlanStatus, 'monthly'>, string> = {
+  goal_met: 'Goal met',
+  no_goal: 'No goal set',
+  not_budgeted: 'Not budgeted',
+  past_deadline: 'Deadline passed',
+};
+
+export const KIND_LABEL: Record<RegisteredKind, string> = { rrsp: 'RRSP', tfsa: 'TFSA', fhsa: 'FHSA' };
 
 const iso = (d: Date) => format(d, 'yyyy-MM-dd');
 const monthStart = (m: string) => `${m}-01`;

@@ -11,6 +11,7 @@ import type {
   SavingsGoal,
 } from '@shared/types';
 import { buildBudgetMarkdown } from '@shared/budgetExport';
+import { planStatus } from '@shared/registered';
 import { useTheme } from '@/lib/theme';
 import { useToast } from '@/lib/ui';
 import { todayIso } from '../dates';
@@ -52,6 +53,10 @@ export async function buildExport(userName: string): Promise<string> {
         deadline: a.goal_deadline,
         contributed: a.contributed,
         monthly: a.budgeted ? a.monthly_plan : null,
+        status: (() => {
+          const st = planStatus(a);
+          return st === 'monthly' ? undefined : st;
+        })(),
       })),
   });
 }

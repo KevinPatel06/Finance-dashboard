@@ -15,6 +15,7 @@ import type {
 } from '@shared/types';
 import { guaranteedPerMonth } from '@shared/paydays';
 import { monthlyEquivalent } from '@shared/budgetExport';
+import { PLAN_STATUS_LABEL, planStatus } from '@shared/registered';
 import { interestPerMonth } from '@/lib/debtMath';
 import { fmtDate } from '@/lib/format';
 import { useTheme } from '@/lib/theme';
@@ -403,9 +404,7 @@ export default function SetupFlow({
                   color={KIND_META[a.kind].color}
                   title={a.label || KIND_META[a.kind].label}
                   subtitle={
-                    a.budgeted && a.goal
-                      ? `${cash(a.goal)} goal by ${shortDate(a.goal_deadline)}${a.monthly_plan ? ` · ${cash(a.monthly_plan)}/month` : ''}`
-                      : 'Not budgeted'
+                    registeredSubtitle(a)
                   }
                   onClick={() => setSheet({ kind: 'account', account: a })}
                   chevron
@@ -553,6 +552,16 @@ export default function SetupFlow({
         return continueBtn();
     }
   }
+}
+
+/** The setup row's second line: the plan, or the reason there isn't one. */
+function registeredSubtitle(a: RegisteredAccount): string {
+  const st = planStatus(a);
+  if (st === 'monthly') {
+    return `${cash(a.goal!)} goal by ${shortDate(a.goal_deadline)} · ${cash(a.monthly_plan!)}/month`;
+  }
+  if (st === 'goal_met') return `${cash(a.goal!)} goal met`;
+  return PLAN_STATUS_LABEL[st];
 }
 
 function EditHint() {

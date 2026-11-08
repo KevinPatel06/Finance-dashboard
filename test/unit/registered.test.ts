@@ -5,6 +5,7 @@ import {
   splitPreview,
   monthsLeft,
   overRoomBy,
+  planStatus,
   rrspDeadline,
   scheduleRows,
   suggestNewYear,
@@ -209,5 +210,17 @@ describe('depositEffect', () => {
     expect(depositEffect({ ...base, deposits: d, amount: 0 })).toBeNull();
     expect(depositEffect({ ...base, deposits: d, date: '2027-03-02', amount: 100 })).toBeNull();
     expect(depositEffect({ ...base, deposits: d, deadline: '2026-11-30', amount: 100 })).toBeNull();
+  });
+});
+
+describe('planStatus', () => {
+  const a = { budgeted: true, goal: 6000, contributed: 1000, monthly_plan: 500 as number | null };
+  it('names why there is no monthly amount', () => {
+    expect(planStatus(a)).toBe('monthly');
+    expect(planStatus({ ...a, budgeted: false })).toBe('not_budgeted');
+    expect(planStatus({ ...a, goal: null })).toBe('no_goal');
+    expect(planStatus({ ...a, goal: 0 })).toBe('no_goal');
+    expect(planStatus({ ...a, monthly_plan: null, contributed: 6000 })).toBe('goal_met');
+    expect(planStatus({ ...a, monthly_plan: null, contributed: 1000 })).toBe('past_deadline');
   });
 });

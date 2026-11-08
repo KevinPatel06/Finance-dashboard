@@ -109,6 +109,22 @@ describe('registered accounts in the export', () => {
     expect(md).toContain('| RRSP | 2026 | $14,200.00 | — | 2027-03-01 | $3,950.00 | Not budgeted |');
   });
 
+  it('says why an account has no monthly amount', () => {
+    const md = buildBudgetMarkdown({
+      ...base,
+      registered: [
+        { ...registered[1], label: 'A', status: 'goal_met' as const },
+        { ...registered[1], label: 'B', status: 'no_goal' as const },
+        { ...registered[1], label: 'C', status: 'past_deadline' as const },
+        { ...registered[1], label: 'D', status: 'not_budgeted' as const },
+      ],
+    });
+    expect(md).toContain('| A | 2026 | $14,200.00 | — | 2027-03-01 | $3,950.00 | Goal met |');
+    expect(md).toContain('| B | 2026 | $14,200.00 | — | 2027-03-01 | $3,950.00 | No goal set |');
+    expect(md).toContain('| C | 2026 | $14,200.00 | — | 2027-03-01 | $3,950.00 | Deadline passed |');
+    expect(md).toContain('| D | 2026 | $14,200.00 | — | 2027-03-01 | $3,950.00 | Not budgeted |');
+  });
+
   it('takes planned contributions off the top in the summary', () => {
     const md = buildBudgetMarkdown({ ...base, registered });
     expect(md).toContain('| Planned registered contributions | $600.00 |');
