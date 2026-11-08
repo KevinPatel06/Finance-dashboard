@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { iconFor, PICKABLE, sameIcon } from './icons';
-import { topIcons, type IconContext } from './iconChoices';
+import { topIcons, withPick, type IconContext } from './iconChoices';
 
 /**
  * Pick an item's icon. Shows five suggestions (the current pick, the one that
@@ -23,6 +23,9 @@ export default function EmojiField({
   context: IconContext;
 }) {
   const [all, setAll] = useState(false);
+  // The suggestions are worked out around the pick the picker opened with, so
+  // tapping one highlights it where it is instead of moving it to the front.
+  const [opened] = useState(value);
 
   const cell = (e: string, size: number) => {
     const Icon = iconFor(e);
@@ -61,7 +64,7 @@ export default function EmojiField({
 
   return (
     <div className="grid grid-cols-6 gap-1.5">
-      {topIcons(value, name, context).map((e) => cell(e, 21))}
+      {withPick(topIcons(opened, name, context), value).map((e) => cell(e, 21))}
       <button
         type="button"
         onClick={() => setAll(true)}

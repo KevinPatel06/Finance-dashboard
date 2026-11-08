@@ -28,3 +28,12 @@ export function topIcons(value: string, name: string, context: IconContext): str
   }
   return out;
 }
+
+/**
+ * Keeps the row steady while picking: a pick already in the row stays where
+ * it is, and one that isn't (chosen from "See all") takes the last slot.
+ */
+export function withPick(row: string[], pick: string): string[] {
+  if (!pick || row.some((e) => norm(e) === norm(pick))) return row;
+  return [...row.slice(0, 4), pick];
+}
