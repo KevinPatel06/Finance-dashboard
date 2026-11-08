@@ -102,7 +102,7 @@ autofocuses first field (`role="dialog"`), and docks as a bottom sheet below `md
 `src/platform/mobile/api.ts` → use `window.api.x.y()` in a page. `test/apiMap.test.ts` fails if
 a channel has no apiMap entry, so phone support can't be silently forgotten.
 
-## Data model (migrations v1–v13)
+## Data model (migrations v1–v14)
 - **v1**: `settings(key,value)`, `categories`, `bills`, `savings_goals`, `paychecks`,
   `paycheck_allocations`.
 - **v2**: `savings_goals.archived_at`.
@@ -132,6 +132,12 @@ a channel has no apiMap entry, so phone support can't be silently forgotten.
   ref, no FK — deletes of categories/funds/debts clean up in repo), `fund_transactions
   (goal_id,kind[deposit|withdrawal],amount,date,note)`. All three get v11 sync triggers via
   `addSyncTracking()`. `runMigrations(db, maxVersion)` — the ceiling is for upgrade tests.
+- **v14** (`contributions`, phone): **rebuilds `budget_lines`** (SQLite can't alter a CHECK) so
+  `kind` allows `'contribution'` — ids, uuids and `updated_at` are copied, the sync triggers are
+  dropped first and re-added, so no tombstones. `registered_accounts` gains `tax_year, goal,
+  goal_deadline, budgeted, waiting, fhsa_lifetime_max` (existing rows → current CRA year,
+  budgeting off). New `registered_years(account_id,tax_year,room,goal,goal_deadline,
+  contributed,closed_at)` for closed years. Setting `contributions_hidden` ("Not for me").
 
 Notification prefs are seeded each launch (`INSERT OR IGNORE`): `notify_enabled`,
 `notify_bill_lead_days`, `notify_paycheck`, `notify_budget`, plus (v13, phone) `pay_amount`,
@@ -150,7 +156,9 @@ Key tables:
 - `expense_budgets(category_id,monthly_limit)`
 - `recurring_expenses(description,amount,category_id,debt_id,frequency[weekly|biweekly|monthly|
   yearly],anchor_date,last_generated,archived,created_at)`
-- `registered_accounts(kind[rrsp|tfsa|fhsa],label,contribution_room,notes,archived,created_at)`
+- `registered_accounts(kind[rrsp|tfsa|fhsa],label,contribution_room,notes,archived,created_at,
+  tax_year,goal,goal_deadline,budgeted,waiting,fhsa_lifetime_max)` — `archived = 1` is how both
+  apps "delete" (confirmed months that planned a contribution keep their numbers)
 - `registered_contributions(account_id,amount,date,note,created_at)`
 
 ## Features
@@ -167,7 +175,9 @@ Key tables:
   localStorage), Mark-complete (archive→Accomplished section), restore, hard-delete.
 - **Registered** (nav between Goals & Payoff) — RRSP/TFSA/FHSA cards with MANUAL contribution
   room (user enters their CRA room — no tax math), contributed/remaining bars, over-contribution
-  warning, inline contribution ledger. Standalone — doesn't touch paycheck/dashboard math.
+  warning, inline contribution ledger. Standalone — doesn't touch paycheck/dashboard math. The
+  phone owns the richer version (Contributions, below); the desktop page only shows the current
+  CRA year and isn't developed further.
 - **Payoff** (nav label deliberately NOT "Debt") — typed debt cards, payoff date/interest
   projections, progress bars, expandable "what if I paid more?" line chart (base vs +extra).
   **Mark as paid off** (`debts.markPaidOff`) sets balance 0 + `archived = 1` → "Paid off"
@@ -234,6 +244,24 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   `expenses.fund_id` (FK `SET NULL`), turning purchases paid from it into everyday spending
   and rewriting past months. `hardDeleteGoal` drops only this and later months' fund lines.
 - **Payday check-in** replaces the wizard on the phone (`paydays.confirm/snooze`).
+- **Contributions (RRSP / TFSA / FHSA)** — spec `docs/superpowers/specs/2026-11-08-contributions-
+  design.md`. **Optional**: no accounts → the budget is exactly as before; "Not for me" hides the
+  section. CRA rules live in `shared/registered.ts` (limits, `rrspDeadline` = 60th day, weekend →
+  Monday; `yearBounds`, `monthlyLine`, `suggestNewYear`, `scheduleRows`). Each account has a **CRA
+  year** (`tax_year`; TFSA/FHSA calendar year, RRSP day-after-last-deadline → 60th day) and an
+  optional goal whose **deadline is only when the goal is due** (never later than the year's end).
+  Deposits belong to a year **by date**. With "Budget it monthly" a `'contribution'` budget line =
+  (goal − deposits before the month) ÷ months whose 1st is before the deadline; **draft months
+  recompute it on every read** (`syncContributionLines`, writes only on change), confirmed months
+  are frozen, so an extra/short deposit moves the following months. Lines come **off the top**
+  like funds (`leftToAllocate`), but **only logged deposits count as contributed**
+  ("I deposited it"). A year **closes lazily** after its CRA end (`closeRegisteredYears`, in
+  `listRegisteredAccounts`/`budgetMonth` → both write): row in `registered_years`, account
+  `waiting`; TFSA/FHSA get a "Start your <year>" banner with suggested room (snooze = meta
+  `reg_newyear_snooze:<id>`), the RRSP waits for the user's NOA number (summary ack = meta
+  `reg_summary_ack:<id>:<year>`). Saving tab: the gauge **swaps with the tab** ("Put away in
+  <Month>" = confirmed fund lines + deposits this month; button copy in `budget/savingCopy.ts`),
+  card per account, account screen `/account/:id`. The More entry and `/registered` route are gone.
 - **Quick add** (`shared/quickAdd.ts`, rules only — no AI) parses "coffee 5, gas 50 yesterday",
   learning categories from history. **Export** (`shared/budgetExport.ts`) builds one Markdown
   file for the user's own AI; platform channel `files:exportText`.
@@ -263,12 +291,16 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   STORE an emoji (`emoji` columns, `shared/emoji.ts` suggestions, the AI export, desktop all
   unchanged); `src/phone/ui/icons.ts` maps each to a lucide icon, drawn by `EmojiAvatar` (pastel
   circle, icon tinted by `iconInk()`), `EmojiIcon` (bare) and `Banner` (string `icon`). The picker
-  (`EmojiField`) offers only `PICKABLE`; an unknown stored emoji draws a package. New app-owned
-  rows pass an emoji that has an entry in `icons.ts`.
+  (`EmojiField`, needs `name` + `context`) shows **five suggestions** (`ui/iconChoices.ts`
+  `topIcons`: current pick, name match, common picks per editor) **+ "See all"** for the full
+  `PICKABLE` grid; an unknown stored emoji draws a package. New app-owned rows pass an emoji that
+  has an entry in `icons.ts` (RRSP 🏦, TFSA 🌱, FHSA 🏠).
+- **Sheets that hold a form don't autofocus** (`Sheet autoFocus={false}`): Log expense opens at the
+  top with the keyboard down. Quick add keeps focusing its text box on purpose.
 - **Haptics**: `haptic()` in `src/platform` (`@capacitor/haptics`, iOS-only branch). Clicks on
   `.press` / `[role=switch]` tap; success/error toasts buzz (`lib/ui.tsx`).
 - First run: one welcome screen (app icon, three points, name box) → `SetupFlow` (pay →
-  recurring → debts → funds → export → plan → done). There's no budget-period step; the pay
+  recurring → debts → funds → registered accounts → export → plan → done). There's no budget-period step; the pay
   step says the budget runs 1st to month-end. Every item added in setup is tappable to edit or
   delete (DebtSheet/FundEditor/CategoryEditor take an optional `onDeleted`; PlanForm takes
   optional `onEdit*`), and a delete also drops it from the plan draft.
@@ -277,8 +309,8 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   `node scripts/phone-shots.mjs <outDir> light|dark [fresh]`.
 
 ## iOS app
-- **Phone shell, not desktop parity** — the iPhone runs `PhoneApp`; Payoff, Registered,
-  Reports and Settings are the shared desktop pages under a back header. Bills, Paychecks/
+- **Phone shell, not desktop parity** — the iPhone runs `PhoneApp`; Payoff, Reports and
+  Settings are the shared desktop pages under a back header. Bills, Paychecks/
   Wizard, Calendar and the desktop Dashboard aren't reachable on the phone. Same `src/`.
 - **Storage**: sql.js holds the DB in memory and flushes `db.export()` to Capacitor Filesystem
   after every mutating call (per `apiMap`'s `mutates` flag) and on `appStateChange` when iOS
@@ -376,7 +408,7 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   from the bundle that doesn't need them — that's what keeps sql.js out of the desktop build.
 - **Responsive rule**: the desktop layout is `md` and above and must stay pixel-identical.
   Below `md` the app is `src/phone/` (its own shell). Shared desktop pages shown on the phone
-  (Payoff/Registered/Reports/Settings) keep their `md:hidden` / `hidden md:block` treatments.
+  (Payoff/Reports/Settings) keep their `md:hidden` / `hidden md:block` treatments.
 - **Tests**: `test/shared/repoContract.ts` is a driver-agnostic behavioural contract run
   against BOTH node:sqlite and sql.js. Both must pass identically — that's the iOS parity
   proof. If a change makes them disagree, fix the adapter, never weaken the contract.

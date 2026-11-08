@@ -149,7 +149,14 @@ if (fresh) {
       ['Coffee', 5.25, 'Dining', 17], ['Dollarama', 26.8, 'Groceries', 18], ['Uber', 18.4, 'Transport', 19], ['Lunch', 14.75, 'Dining', 20]];
     for (const [desc, amt, c, dd] of spend) await api.expenses.create({ description: desc, amount: amt, date: day(dd), category_id: cat(c) });
     await api.expenses.create({ description: 'Hotel deposit', amount: 220, date: day(9), category_id: null, fund_id: japan.id });
+    // Registered accounts: budgeted monthly, partway through the year; one deposit this month.
+    const rrsp = await api.registered.create({ kind: 'rrsp', label: 'RRSP', contribution_room: 14200, goal: 6000, budgeted: true, already_contributed: 3600 });
+    await api.registered.create({ kind: 'tfsa', label: 'TFSA', contribution_room: 19500, goal: 7000, budgeted: true, already_contributed: 5800 });
+    const suggested = (await api.budget.month(month)).lines.contribution
+      .map((l) => ({ kind: 'contribution', ref_id: l.account_id, amount: l.amount }));
+    await api.registered.addContribution({ account_id: rrsp.id, amount: 350, date: day(3) });
     await api.budget.savePlan(month, [
+      ...suggested,
       { kind: 'spend', ref_id: cat('Groceries'), amount: 350 }, { kind: 'spend', ref_id: cat('Gas'), amount: 120 },
       { kind: 'spend', ref_id: cat('Transport'), amount: 80 }, { kind: 'spend', ref_id: cat('Health'), amount: 60 },
       { kind: 'spend', ref_id: cat('Dining'), amount: 150 }, { kind: 'spend', ref_id: cat('Shopping'), amount: 120 },
@@ -157,7 +164,7 @@ if (fresh) {
       { kind: 'fund', ref_id: efund.id, amount: 200 }, { kind: 'fund', ref_id: japan.id, amount: 150 },
       { kind: 'fund', ref_id: laptop.id, amount: 100 }, { kind: 'debt', ref_id: visa.id, amount: 150 },
     ], true);
-    window.__ids = { groceries: cat('Groceries'), japan: japan.id };
+    window.__ids = { groceries: cat('Groceries'), japan: japan.id, rrsp: rrsp.id };
     return true;
   })()`);
   const ids = await evaluate(`window.__ids`);
@@ -171,6 +178,16 @@ if (fresh) {
   await click('Saving');
   await sleep(500);
   await shot('02-saving');
+  await evaluate(`(() => { const el = [...document.querySelectorAll('*')].find((e) => e.scrollHeight > e.clientHeight + 40 && getComputedStyle(e).overflowY !== 'visible' && e.clientHeight > 400) || document.scrollingElement; el.scrollTop = 640; return true; })()`);
+  await sleep(500);
+  await shot('02a-saving-cards');
+  await evaluate(`(() => { const el = [...document.querySelectorAll('*')].find((e) => e.scrollHeight > e.clientHeight + 40 && getComputedStyle(e).overflowY !== 'visible' && e.clientHeight > 400) || document.scrollingElement; el.scrollTop = 0; return true; })()`);
+  await sleep(300);
+  await click('[aria-label$="Show the breakdown"]');
+  await sleep(700);
+  await shot('02b-saving-breakdown');
+  await click('[aria-label="Close"]');
+  await sleep(600);
   await click('Edit plan');
   await sleep(700);
   await shot('03-plan-editor');
@@ -183,6 +200,11 @@ if (fresh) {
   await shot('04b-category-editor');
   await go(`#/fund/${ids.japan}`);
   await shot('05-fund');
+  await go(`#/account/${ids.rrsp}`, 1500);
+  await shot('05b-account');
+  await click('Log deposit');
+  await sleep(700);
+  await shot('05c-deposit');
   await go('#/expenses', 1500);
   await shot('06-expenses');
   await click('Categories');
@@ -199,6 +221,9 @@ if (fresh) {
   await type('textarea', 'coffee 5, gas 50 yesterday');
   await sleep(400);
   await shot('11-quick-add');
+  await click('Add manually instead');
+  await sleep(800);
+  await shot('11b-log-expense');
   await go('#/settings');
   await shot('12-settings');
 }

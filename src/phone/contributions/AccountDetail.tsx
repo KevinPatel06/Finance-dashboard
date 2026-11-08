@@ -13,7 +13,7 @@ import Sheet from '../ui/Sheet';
 import { Chip, CircleButton, EmojiAvatar, Group, HatchedBar, NavHeader, PCard, Row, SectionTitle } from '../ui/kit';
 import AccountEditor from './AccountEditor';
 import DepositSheet from './DepositSheet';
-import { cash, KIND_META, monthShort, overRoom } from './meta';
+import { cash, KIND_META, monthShort, overRoom, shortDate } from './meta';
 
 /**
  * One registered account (mockup 1, screen 4): the year's progress, this
@@ -71,7 +71,7 @@ export default function AccountDetail() {
               <span className="text-content-muted font-semibold">of {cash(target)}</span>
             </div>
             <div className="text-sm text-content-muted mt-1">
-              {a.goal ? `${a.tax_year} goal · by ${friendlyDate(a.goal_deadline)}` : `${a.tax_year} room`}
+              {a.goal ? `${a.tax_year} goal · by ${shortDate(a.goal_deadline)}` : `${a.tax_year} room`}
             </div>
             <div className="mt-5 text-left">
               <HatchedBar pct={pct(a.contributed, target)} color={meta.color} badge={`${Math.floor(pct(a.contributed, target))}%`} />
@@ -120,8 +120,8 @@ export default function AccountDetail() {
           <Row
             emoji="🗓️"
             color={meta.color}
-            title={`Planned for ${monthName(month)}`}
-            subtitle={confirmed ? 'Comes off the top of your budget' : `Set when you confirm ${monthName(month)}`}
+            title={`${monthName(month)} plan`}
+            subtitle={confirmed ? 'In your budget' : 'Set when you confirm'}
             value={`${cash(a.this_month.deposited)} / ${cash(a.this_month.planned)}`}
             chevron={confirmed}
             onClick={confirmed ? () => setSheet('plan') : undefined}
