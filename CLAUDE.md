@@ -262,6 +262,16 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   `reg_summary_ack:<id>:<year>`). Saving tab: the gauge **swaps with the tab** ("Put away in
   <Month>" = confirmed fund lines + deposits this month; button copy in `budget/savingCopy.ts`),
   card per account, account screen `/account/:id`. The More entry and `/registered` route are gone.
+  Small rules, all in `shared/registered.ts` so the UI, budget and export can't disagree:
+  `overRoomBy` (an RRSP may be $2,000 over with **no** charge; only the part above is taxed 1%/mo,
+  TFSA/FHSA the whole excess), `depositEffect` (the deposit sheet's "From Dec: $600 → $350 a month"
+  — built on `monthlyLine`, its "before" assumes this month's plan gets deposited; a contract test
+  pins it to the budget's real next line), `planStatus` + `PLAN_STATUS_LABEL` (why there's no
+  monthly amount: goal met / no goal / not budgeted / deadline passed — the AI export and setup
+  use it). The FHSA "$40,000 reached" box ticks itself when lifetime deposits reach the cap.
+  **Deleting an account** archives it; in a confirmed month its line keeps its number, its
+  deposits still count as put away, it is never "due" (`left` = 0), and the Saving gauge's
+  planned counts only what was deposited into it.
 - **Quick add** (`shared/quickAdd.ts`, rules only — no AI) parses "coffee 5, gas 50 yesterday",
   learning categories from history. **Export** (`shared/budgetExport.ts`) builds one Markdown
   file for the user's own AI; platform channel `files:exportText`.
@@ -292,8 +302,9 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   unchanged); `src/phone/ui/icons.ts` maps each to a lucide icon, drawn by `EmojiAvatar` (pastel
   circle, icon tinted by `iconInk()`), `EmojiIcon` (bare) and `Banner` (string `icon`). The picker
   (`EmojiField`, needs `name` + `context`) shows **five suggestions** (`ui/iconChoices.ts`
-  `topIcons`: current pick, name match, common picks per editor) **+ "See all"** for the full
-  `PICKABLE` grid; an unknown stored emoji draws a package. New app-owned rows pass an emoji that
+  `topIcons`: current pick, name match, common picks per editor — worked out around the pick the
+  picker OPENED with, so tapping one never reorders the row; a pick from the grid takes the last
+  slot via `withPick`) **+ "See all"** for the full `PICKABLE` grid; an unknown stored emoji draws a package. New app-owned rows pass an emoji that
   has an entry in `icons.ts` (RRSP 🏦, TFSA 🌱, FHSA 🏠).
 - **Sheets that hold a form don't autofocus** (`Sheet autoFocus={false}`): Log expense opens at the
   top with the keyboard down. Quick add keeps focusing its text box on purpose.
@@ -320,6 +331,9 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   lands late writes back pre-write state, silently reverting committed rows. That cost the
   first-run goals: `setUserName()` fires a settings write it never awaits, so its flush raced
   the awaited `goals.create` ones. `test/iosFlush.test.ts` pins both properties.
+  **A mutating call only flushes if it changed a row** (`flushIfChanged`, comparing SQLite's
+  `total_changes()` before/after): `registered.list` and `budget.month` are flagged mutating
+  because they may close a year or fill a draft, but usually write nothing.
   Each flush writes `finance.db.tmp`, copies the live file to `.bak` (only if the live file is
   known intact), then renames the temp over `finance.db`, because Capacitor's `writeFile` isn't
   atomic. `openDatabase()` NEVER writes: it tries `finance.db` → `.tmp` → `.bak`, each
