@@ -1015,6 +1015,28 @@ export function runRepoContract(
         expect(repo.budgetMonth('2026-12').lines.contribution).toHaveLength(0);
       });
 
+      it('deleting an account after a deposit keeps the Saving gauge in step with the confirmed month', () => {
+        const a = rrsp();
+        const tfsa = repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000, goal: 1200, budgeted: true });
+        draftMonth('2026-11');
+        repo.confirmBudgetMonth('2026-11');
+        repo.addRegisteredContribution({ account_id: a.id, amount: 350, date: '2026-11-03' });
+        repo.deleteRegisteredAccount(a.id);
+
+        const v = repo.budgetMonth('2026-11');
+        // The month keeps both lines, so what was set aside is unchanged…
+        expect(v.lines.contribution.map((l) => [l.label, l.amount])).toEqual([['RRSP', 600], ['TFSA', 600]]);
+        expect(v.planned.contribution).toBe(1200);
+        // …the deposit already made still counts as put away…
+        expect(v.saving.putAway).toBe(350);
+        // …but the gone account is never "due", and its line is settled at what was deposited.
+        expect(v.saving.due).toEqual(['TFSA']);
+        expect(v.saving.leftToDeposit).toBe(600);
+        expect(v.saving.planned).toBe(950);
+        expect(v.lines.contribution[0]).toMatchObject({ label: 'RRSP', left: 0 });
+        expect(tfsa.id).toBeGreaterThan(0);
+      });
+
       it('setup ("none") months return suggestions without storing them', () => {
         repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000, goal: 1200, budgeted: true });
         const v = repo.budgetMonth('2026-11');

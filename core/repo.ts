@@ -2149,9 +2149,19 @@ function depositsForLine(db: Db, a: RegisteredRow, start: string, end: string): 
   return from > to ? 0 : depositsBetween(db, a.id, from, to);
 }
 
-/** Deposits into any open (non-archived) account dated inside the month, within its year. */
-function depositsInMonth(db: Db, start: string, end: string): number {
-  const accounts = db.prepare('SELECT * FROM registered_accounts WHERE archived = 0').all() as RegisteredRow[];
+/**
+ * Deposits dated inside the month, within each account's year, for every open
+ * account and for any deleted one the month still holds a line for — a
+ * deposit made before the delete is still money put away that month.
+ */
+function depositsInMonth(db: Db, start: string, end: string, month: string): number {
+  const accounts = db
+    .prepare(
+      `SELECT * FROM registered_accounts
+        WHERE archived = 0
+           OR id IN (SELECT ref_id FROM budget_lines WHERE month = ? AND kind = 'contribution')`
+    )
+    .all(month) as RegisteredRow[];
   return accounts.reduce((s, a) => s + depositsForLine(db, a, start, end), 0);
 }
 
@@ -2184,7 +2194,8 @@ function contributionLineViews(
       label: a.label,
       amount: l.amount,
       deposited,
-      left: r2(Math.max(0, l.amount - deposited)),
+      // A deleted account's line keeps its number but can't be deposited into.
+      left: a.archived ? 0 : r2(Math.max(0, l.amount - deposited)),
     });
   }
   return out.sort((x, y) => KIND_ORDER[x.kind] - KIND_ORDER[y.kind] || x.account_id - y.account_id);
@@ -2268,6 +2279,9 @@ export function budgetMonth(month?: string): BudgetMonthView {
 
   const sum = <T,>(xs: T[], f: (x: T) => number) => r2(xs.reduce((s, x) => s + f(x), 0));
   const contribution = contributionLineViews(db, m, status, rawLines);
+  const archivedAccounts = new Set(
+    (db.prepare('SELECT id FROM registered_accounts WHERE archived = 1').all() as { id: number }[]).map((r) => r.id)
+  );
   const planned = {
     spend: sum(spend, (l) => l.amount),
     fund: sum(fund, (l) => l.amount),
@@ -2316,8 +2330,12 @@ export function budgetMonth(month?: string): BudgetMonthView {
     lines: { spend, fund, debt, contribution },
     planned,
     saving: {
-      planned: r2(planned.fund + planned.contribution),
-      putAway: r2((status === 'confirmed' ? planned.fund : 0) + depositsInMonth(db, start, end)),
+      // A deleted account's line counts only for what was deposited into it.
+      planned: r2(
+        planned.fund +
+          sum(contribution, (l) => (archivedAccounts.has(l.account_id) ? l.deposited : l.amount))
+      ),
+      putAway: r2((status === 'confirmed' ? planned.fund : 0) + depositsInMonth(db, start, end, m)),
       leftToDeposit: sum(contribution, (l) => l.left),
       due: contribution.filter((l) => l.left > 0).map((l) => l.label),
     },
