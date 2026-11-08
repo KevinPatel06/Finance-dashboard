@@ -105,6 +105,9 @@ export default function ExpenseEditor({
     <Sheet
       open
       full
+      // Open at the top with the keyboard down: focusing the amount here made
+      // iOS raise the keyboard and scroll the sheet to its bottom.
+      autoFocus={false}
       onClose={onClose}
       title={expense ? 'Edit expense' : onDraft ? 'Edit expense' : 'Log expense'}
       footer={
@@ -114,7 +117,10 @@ export default function ExpenseEditor({
       }
     >
       <div className="py-5">
-        <MoneyInput big value={amount} onChange={setAmount} autoFocus={!expense} ariaLabel="Amount" />
+        <MoneyInput big value={amount} onChange={setAmount} ariaLabel="Amount" />
+        {amount === '' && (
+          <p className="text-xs text-content-subtle text-center mt-1">Tap to enter the amount</p>
+        )}
       </div>
 
       <div className="space-y-4">
