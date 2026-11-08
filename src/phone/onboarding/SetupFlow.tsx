@@ -9,6 +9,8 @@ import type {
   ExpenseCategory,
   PayFrequency,
   RecurringExpense,
+  RegisteredAccount,
+  RegisteredKind,
   SavingsGoal,
 } from '@shared/types';
 import { guaranteedPerMonth } from '@shared/paydays';
@@ -25,6 +27,8 @@ import { Banner, BigButton, Chip, EmojiIcon, Group, MoneyInput, PCard, parseMone
 import CategoryEditor from '../budget/CategoryEditor';
 import PlanForm, { draftToLines, draftSum, emptyDraft, draftFromView, type PlanDraft } from '../budget/PlanForm';
 import FundEditor from '../funds/FundEditor';
+import AccountEditor from '../contributions/AccountEditor';
+import { cash, KIND_META, KIND_ORDER, shortDate } from '../contributions/meta';
 import RecurringEditor from '../recurring/RecurringEditor';
 import { scheduleLabel } from '../recurring/schedule';
 import { PAY_FREQUENCY_LABEL } from '../settings/PhoneSettingsExtras';
@@ -33,13 +37,14 @@ import DoneRing from './DoneRing';
 import ExportPanel from './ExportPanel';
 import FlowShell from './FlowShell';
 
-const STEPS = ['pay', 'recurring', 'debts', 'funds', 'export', 'plan', 'done'] as const;
+const STEPS = ['pay', 'recurring', 'debts', 'funds', 'registered', 'export', 'plan', 'done'] as const;
 type Step = (typeof STEPS)[number];
 const TITLES: Record<Step, string> = {
   pay: 'Your pay',
   recurring: 'Recurring',
   debts: 'Debts',
   funds: 'Savings',
+  registered: 'Registered accounts',
   export: 'Get advice',
   plan: 'Your plan',
   done: '',
@@ -88,6 +93,7 @@ export default function SetupFlow({
   const { data: debts, reload: reloadDebts } = useApi<Debt[]>(() => window.api.debts.list());
   const { data: funds, reload: reloadFunds } = useApi<SavingsGoal[]>(() => window.api.goals.list());
   const { data: categories, reload: reloadCats } = useApi<ExpenseCategory[]>(() => window.api.expenseCategories.list());
+  const { data: accounts, reload: reloadAccounts } = useApi<RegisteredAccount[]>(() => window.api.registered.list());
   // Each sheet adds a new item, or edits one already added (so mistakes can be fixed or removed).
   const [sheet, setSheet] = useState<
     | null
@@ -95,6 +101,7 @@ export default function SetupFlow({
     | { kind: 'debt'; debt?: Debt }
     | { kind: 'fund'; name?: string; fund?: SavingsGoal }
     | { kind: 'category'; category?: ExpenseCategory }
+    | { kind: 'account'; account?: RegisteredAccount; addKind?: RegisteredKind }
   >(null);
 
   // ---- plan
@@ -121,7 +128,12 @@ export default function SetupFlow({
       } else {
         // An existing user's old per-category caps make a sensible start.
         const caps = (await window.api.budgets.list()) as BudgetStatus[];
-        setDraft({ ...emptyDraft(), spend: Object.fromEntries(caps.map((c) => [c.category_id, String(c.monthly_limit)])) });
+        setDraft({
+          ...emptyDraft(),
+          spend: Object.fromEntries(caps.map((c) => [c.category_id, String(c.monthly_limit)])),
+          // Registered accounts budgeted monthly start with their split.
+          contribution: Object.fromEntries(v.lines.contribution.map((l) => [l.account_id, String(l.amount)])),
+        });
       }
     }
     setI(to);
@@ -153,7 +165,7 @@ export default function SetupFlow({
   if (step === 'done' && view) {
     const fixed = view.recurring.total;
     const debt = draftSum(draft.debt);
-    const savings = draftSum(draft.fund);
+    const savings = draftSum(draft.fund) + draftSum(draft.contribution);
     const spendNeeds = (categories ?? []).filter((c) => c.kind === 'need').reduce((s, c) => s + parseMoney(draft.spend[c.id] ?? ''), 0);
     const spendWants = draftSum(draft.spend) - spendNeeds;
     const remaining = view.income - fixed - debt - savings - spendNeeds - spendWants;
@@ -373,6 +385,47 @@ export default function SetupFlow({
         </div>
       )}
 
+      {step === 'registered' && (
+        <div className="space-y-4">
+          <div>
+            <h1 className="text-[26px] font-display font-bold">Registered accounts</h1>
+            <p className="text-content-muted mt-2">
+              Have an RRSP, TFSA or FHSA? Add it to plan this year's contributions. You can skip this and add them
+              later from Saving.
+            </p>
+          </div>
+          {(accounts ?? []).length > 0 && (
+            <Group>
+              {(accounts ?? []).map((a) => (
+                <Row
+                  key={a.id}
+                  emoji={KIND_META[a.kind].emoji}
+                  color={KIND_META[a.kind].color}
+                  title={a.label || KIND_META[a.kind].label}
+                  subtitle={
+                    a.budgeted && a.goal
+                      ? `${cash(a.goal)} goal by ${shortDate(a.goal_deadline)}${a.monthly_plan ? ` · ${cash(a.monthly_plan)}/month` : ''}`
+                      : 'Not budgeted'
+                  }
+                  onClick={() => setSheet({ kind: 'account', account: a })}
+                  chevron
+                />
+              ))}
+            </Group>
+          )}
+          {(accounts ?? []).length > 0 && <EditHint />}
+          {KIND_ORDER.filter((k) => !(accounts ?? []).some((a) => a.kind === k)).map((k) => (
+            <button
+              key={k}
+              onClick={() => setSheet({ kind: 'account', addKind: k })}
+              className="w-full py-3.5 rounded-[20px] border-2 border-dashed border-border text-[15px] font-semibold text-content-muted"
+            >
+              + Add {k === 'rrsp' ? 'an' : 'a'} {KIND_META[k].label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {step === 'export' && (
         <div className="space-y-4">
           <div>
@@ -401,6 +454,8 @@ export default function SetupFlow({
             onEditCategory={(c) => setSheet({ kind: 'category', category: c })}
             onEditFund={(f) => setSheet({ kind: 'fund', fund: f })}
             onEditDebt={(d) => setSheet({ kind: 'debt', debt: d })}
+            accounts={accounts ?? []}
+            onEditAccount={(a) => setSheet({ kind: 'account', account: a })}
           />
           <p className="text-center text-sm text-content-subtle mt-4">If you want to set this later, just tap Continue.</p>
         </div>
@@ -445,6 +500,23 @@ export default function SetupFlow({
           }}
         />
       )}
+      {sheet?.kind === 'account' && (
+        <AccountEditor
+          mode={sheet.account ? 'edit' : 'add'}
+          account={sheet.account}
+          kinds={sheet.addKind ? [sheet.addKind] : undefined}
+          onClose={() => setSheet(null)}
+          onSaved={() => {
+            setSheet(null);
+            void reloadAccounts();
+          }}
+          onDeleted={() => {
+            if (sheet.account) dropFromDraft('contribution', sheet.account.id);
+            setSheet(null);
+            void reloadAccounts();
+          }}
+        />
+      )}
       {sheet?.kind === 'category' && (
         <CategoryEditor
           category={sheet.category}
@@ -473,6 +545,8 @@ export default function SetupFlow({
         return continueBtn((debts ?? []).length ? 'Continue' : 'No debts');
       case 'funds':
         return continueBtn((funds ?? []).length ? 'Continue' : 'Skip for now');
+      case 'registered':
+        return continueBtn((accounts ?? []).length ? 'Continue' : 'Skip for now');
       case 'export':
         return continueBtn('Continue');
       default:

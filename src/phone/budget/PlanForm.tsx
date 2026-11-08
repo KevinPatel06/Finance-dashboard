@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import type { BudgetMonthView, Debt, ExpenseCategory, PlanLineInput, SavingsGoal } from '@shared/types';
+import type { BudgetMonthView, Debt, ExpenseCategory, PlanLineInput, RegisteredAccount, SavingsGoal } from '@shared/types';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { cn } from '@/lib/utils';
 import { money } from '../format';
 import { EmojiAvatar, Group, MoneyInput, parseMoney, SectionTitle } from '../ui/kit';
+import { cash, KIND_META, shortDate } from '../contributions/meta';
 
 /** Amount strings keyed by id; '' means "not in the plan". */
 export interface PlanDraft {
   spend: Record<number, string>;
   fund: Record<number, string>;
   debt: Record<number, string>;
+  /** RRSP / TFSA / FHSA lines, keyed by account id. */
+  contribution: Record<number, string>;
 }
 
-export const emptyDraft = (): PlanDraft => ({ spend: {}, fund: {}, debt: {} });
+export const emptyDraft = (): PlanDraft => ({ spend: {}, fund: {}, debt: {}, contribution: {} });
 
 const str = (n: number) => (Math.round(n * 100) / 100).toString();
 
@@ -22,12 +25,13 @@ export function draftFromView(v: BudgetMonthView): PlanDraft {
     spend: Object.fromEntries(v.lines.spend.map((l) => [l.category_id, str(l.amount)])),
     fund: Object.fromEntries(v.lines.fund.map((l) => [l.goal_id, str(l.amount)])),
     debt: Object.fromEntries(v.lines.debt.map((l) => [l.debt_id, str(l.amount)])),
+    contribution: Object.fromEntries(v.lines.contribution.map((l) => [l.account_id, str(l.amount)])),
   };
 }
 
 export function draftToLines(d: PlanDraft): PlanLineInput[] {
   const out: PlanLineInput[] = [];
-  for (const kind of ['spend', 'fund', 'debt'] as const) {
+  for (const kind of ['spend', 'fund', 'debt', 'contribution'] as const) {
     for (const [id, v] of Object.entries(d[kind])) {
       if (v !== '') out.push({ kind, ref_id: Number(id), amount: parseMoney(v) });
     }
@@ -51,11 +55,13 @@ export default function PlanForm({
   categories,
   funds,
   debts,
+  accounts = [],
   onAddCategory,
   onAddFund,
   onEditCategory,
   onEditFund,
   onEditDebt,
+  onEditAccount,
 }: {
   income: number;
   fixed: number;
@@ -64,15 +70,20 @@ export default function PlanForm({
   categories: ExpenseCategory[];
   funds: SavingsGoal[];
   debts: Debt[];
+  /** Registered accounts; waiting ones are left out. */
+  accounts?: RegisteredAccount[];
   onAddCategory?: () => void;
   onAddFund?: () => void;
   /** Make a row's name tappable to fix it (setup). */
   onEditCategory?: (c: ExpenseCategory) => void;
   onEditFund?: (f: SavingsGoal) => void;
   onEditDebt?: (d: Debt) => void;
+  onEditAccount?: (a: RegisteredAccount) => void;
 }) {
   const [side, setSide] = useState<'need' | 'want'>('need');
-  const left = income - fixed - draftSum(draft.debt) - draftSum(draft.fund) - draftSum(draft.spend);
+  const left =
+    income - fixed - draftSum(draft.debt) - draftSum(draft.fund) - draftSum(draft.contribution) - draftSum(draft.spend);
+  const openAccounts = accounts.filter((a) => !a.waiting);
   const set = (kind: keyof PlanDraft, id: number, v: string) =>
     onChange({ ...draft, [kind]: { ...draft[kind], [id]: v } });
 
@@ -141,6 +152,30 @@ export default function PlanForm({
             />
           ))}
         </Group>
+      )}
+
+      {openAccounts.length > 0 && (
+        <>
+          <SectionTitle>Contributions</SectionTitle>
+          <Group>
+            {openAccounts.map((a) => (
+              <AmountRow
+                key={a.id}
+                emoji={KIND_META[a.kind].emoji}
+                color={KIND_META[a.kind].color}
+                title={a.label || KIND_META[a.kind].label}
+                subtitle={
+                  a.goal
+                    ? `${cash(Math.max(0, a.goal - a.contributed))} to go by ${shortDate(a.goal_deadline)}`
+                    : 'No goal set'
+                }
+                value={draft.contribution[a.id] ?? ''}
+                onChange={(v) => set('contribution', a.id, v)}
+                onEdit={onEditAccount && (() => onEditAccount(a))}
+              />
+            ))}
+          </Group>
+        </>
       )}
 
       <SectionTitle>Set aside for spending</SectionTitle>

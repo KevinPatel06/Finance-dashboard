@@ -7,6 +7,7 @@ import type {
   ExpenseCategory,
   ExpenseReport,
   RecurringExpense,
+  RegisteredAccount,
   SavingsGoal,
 } from '@shared/types';
 import { buildBudgetMarkdown } from '@shared/budgetExport';
@@ -17,13 +18,14 @@ import { EmojiIcon, PCard } from '../ui/kit';
 
 /** Gathers everything the AI needs and builds the Markdown file. */
 export async function buildExport(userName: string): Promise<string> {
-  const [settings, recurring, debts, funds, categories] = (await Promise.all([
+  const [settings, recurring, debts, funds, categories, accounts] = (await Promise.all([
     window.api.settings.get(),
     window.api.recurringExpenses.list(),
     window.api.debts.list(),
     window.api.goals.list(),
     window.api.expenseCategories.list(),
-  ])) as [AppSettings, RecurringExpense[], Debt[], SavingsGoal[], ExpenseCategory[]];
+    window.api.registered.list(),
+  ])) as [AppSettings, RecurringExpense[], Debt[], SavingsGoal[], ExpenseCategory[], RegisteredAccount[]];
 
   // Average spend per category over the last three full months.
   const today = parseISO(todayIso());
@@ -40,6 +42,17 @@ export async function buildExport(userName: string): Promise<string> {
     debts,
     funds,
     categories: categories.map((c) => ({ name: c.name, kind: c.kind, avgMonthly: (byName.get(c.name) ?? 0) / 3 })),
+    registered: accounts
+      .filter((a) => !a.waiting)
+      .map((a) => ({
+        label: a.label,
+        taxYear: a.tax_year,
+        room: a.contribution_room,
+        goal: a.goal,
+        deadline: a.goal_deadline,
+        contributed: a.contributed,
+        monthly: a.budgeted ? a.monthly_plan : null,
+      })),
   });
 }
 

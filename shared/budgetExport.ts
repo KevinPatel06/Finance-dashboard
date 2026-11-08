@@ -25,6 +25,18 @@ export interface BudgetExportInput {
   debts: Debt[];
   funds: SavingsGoal[];
   categories: Array<{ name: string; kind: CategoryKind; avgMonthly: number }>;
+  /** RRSP / TFSA / FHSA. `monthly` is null when the account isn't budgeted. */
+  registered?: ExportRegistered[];
+}
+
+export interface ExportRegistered {
+  label: string;
+  taxYear: number;
+  room: number;
+  goal: number | null;
+  deadline: string;
+  contributed: number;
+  monthly: number | null;
 }
 
 const money = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
@@ -92,7 +104,9 @@ export function buildBudgetMarkdown(input: BudgetExportInput): string {
   const income = (pay.amount ?? 0) * perMonth;
   const fixed = input.recurring.reduce((s, r) => s + monthlyEquivalent(r), 0);
   const minDebt = input.debts.reduce((s, d) => s + debtPaymentPerMonth(d), 0);
-  const available = income - fixed - minDebt;
+  const registered = input.registered ?? [];
+  const contributions = registered.reduce((s, r) => s + (r.monthly ?? 0), 0);
+  const available = income - fixed - minDebt - contributions;
 
   const payLine =
     pay.amount != null
@@ -104,7 +118,9 @@ export function buildBudgetMarkdown(input: BudgetExportInput): string {
   const prompt = [
     `I use a monthly zero-based budget (1st to the end of the month). I live in Canada and amounts are in CAD.`,
     payLine,
-    `My recurring expenses below are already taken off the top.`,
+    contributions > 0
+      ? `My recurring expenses and my planned RRSP/TFSA/FHSA contributions below are already taken off the top.`
+      : `My recurring expenses below are already taken off the top.`,
     `Please suggest how to split the rest: an amount for each debt (at least its current payment), an amount ` +
       `for each savings goal, and a monthly budget for each spending category marked Need or Want. Assign every ` +
       `dollar so the total equals what's available.`,
@@ -155,6 +171,24 @@ export function buildBudgetMarkdown(input: BudgetExportInput): string {
         ];
       })
     ),
+    // Only when the caller knows about registered accounts (the phone always passes them).
+    ...(input.registered
+      ? [
+          `## Registered accounts`,
+          table(
+            ['Account', 'Year', 'Room', 'Goal', 'Deadline', 'Contributed so far', 'Monthly plan'],
+            registered.map((r) => [
+              r.label,
+              String(r.taxYear),
+              $(r.room),
+              r.goal != null ? $(r.goal) : '—',
+              r.deadline,
+              $(r.contributed),
+              r.monthly != null ? $(r.monthly) : 'Not budgeted',
+            ])
+          ),
+        ]
+      : []),
     `## Spending categories`,
     table(
       ['Category', 'Need/Want', 'Average spent per month (last 3 months)'],
@@ -167,7 +201,8 @@ export function buildBudgetMarkdown(input: BudgetExportInput): string {
         ['Income planned', $(income)],
         ['Recurring expenses', $(fixed)],
         ['Current debt payments', $(minDebt)],
-        ['Left for savings and spending', $(available)],
+        ...(contributions > 0 ? [['Planned registered contributions', $(contributions)]] : []),
+        [contributions > 0 ? 'Left for funds and spending' : 'Left for savings and spending', $(available)],
       ]
     ),
   ];

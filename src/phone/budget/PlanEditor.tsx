@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { BudgetMonthView, Debt, ExpenseCategory, Payday, SavingsGoal } from '@shared/types';
+import type { BudgetMonthView, Debt, ExpenseCategory, Payday, RegisteredAccount, SavingsGoal } from '@shared/types';
 import { useToast } from '@/lib/ui';
 import { useApi } from '../data';
 import { friendlyDate, monthLabel, monthName, todayIso } from '../dates';
@@ -40,6 +40,7 @@ export default function PlanEditor({
   );
   const { data: funds, reload: reloadFunds } = useApi<SavingsGoal[]>(() => window.api.goals.list());
   const { data: debts } = useApi<Debt[]>(() => window.api.debts.list());
+  const { data: accounts } = useApi<RegisteredAccount[]>(() => window.api.registered.list());
 
   const confirming = view.status !== 'confirmed';
   const refreshView = async () => setView((await window.api.budget.month(view.month)) as BudgetMonthView);
@@ -131,6 +132,7 @@ export default function PlanEditor({
           categories={categories}
           funds={funds}
           debts={debts}
+          accounts={accounts ?? []}
           onAddCategory={() => setAdding('category')}
           onAddFund={() => setAdding('fund')}
         />

@@ -95,3 +95,27 @@ describe('buildBudgetMarkdown', () => {
     expect(() => buildBudgetMarkdown({ ...base, pay: { amount: null, frequency: 'biweekly' } })).not.toThrow();
   });
 });
+
+describe('registered accounts in the export', () => {
+  const registered = [
+    { label: 'TFSA', taxYear: 2026, room: 19500, goal: 7000, deadline: '2026-12-31', contributed: 6400, monthly: 600 },
+    { label: 'RRSP', taxYear: 2026, room: 14200, goal: null, deadline: '2027-03-01', contributed: 3950, monthly: null },
+  ];
+
+  it('lists each account with its year, room, goal and monthly plan', () => {
+    const md = buildBudgetMarkdown({ ...base, registered });
+    expect(md).toContain('## Registered accounts');
+    expect(md).toContain('| TFSA | 2026 | $19,500.00 | $7,000.00 | 2026-12-31 | $6,400.00 | $600.00 |');
+    expect(md).toContain('| RRSP | 2026 | $14,200.00 | — | 2027-03-01 | $3,950.00 | Not budgeted |');
+  });
+
+  it('takes planned contributions off the top in the summary', () => {
+    const md = buildBudgetMarkdown({ ...base, registered });
+    expect(md).toContain('| Planned registered contributions | $600.00 |');
+    expect(md).toContain('| Left for funds and spending |');
+  });
+
+  it('says None when there are no accounts', () => {
+    expect(buildBudgetMarkdown({ ...base, registered: [] })).toContain('## Registered accounts\n\n_None_');
+  });
+});
