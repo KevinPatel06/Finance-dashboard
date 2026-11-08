@@ -147,6 +147,8 @@ export interface AppSettings {
   notify_daily_time: string; // 'HH:mm', local
   notify_new_month: boolean;
   notify_weekly_report: boolean;
+  /** The user tapped "Not for me" on the empty Contributions section (phone). */
+  contributions_hidden: boolean;
 }
 
 export interface BillToPay {
@@ -321,18 +323,58 @@ export interface RegisteredContribution {
   created_at: string;
 }
 
+/** A closed CRA year of a registered account. */
+export interface RegisteredYear {
+  id: number;
+  account_id: number;
+  tax_year: number;
+  room: number | null; // null for a year skipped while waiting
+  goal: number | null;
+  goal_deadline: string | null;
+  contributed: number;
+  closed_at: string;
+}
+
 export interface RegisteredAccount {
   id: number;
   kind: RegisteredKind;
   label: string;
+  /** The current year's room. */
   contribution_room: number;
   notes: string | null;
   archived: number;
   created_at: string;
+  /** The open CRA year — or, while `waiting`, the last one that closed. */
+  tax_year: number;
+  goal: number | null;
+  /** When the goal is due. Never later than the year's CRA end. */
+  goal_deadline: string;
+  budgeted: number; // 0 | 1
+  waiting: number; // 0 | 1 — the year closed and the next isn't started yet
+  fhsa_lifetime_max: number; // 0 | 1
   // Computed
+  /** The open year, or (waiting) the year containing today. */
+  year_start: string;
+  year_end: string;
+  /** Deposits inside [year_start, year_end]. */
   contributed: number;
   remaining: number;
+  lifetime_contributed: number;
+  /** Every deposit, all years, newest first. */
   contributions: RegisteredContribution[];
+  /** The formula's amount for the current month; null when not budgeted / waiting / nothing left. */
+  monthly_plan: number | null;
+  months_left: number;
+  /** null when not budgeted or waiting. */
+  this_month: { planned: number; deposited: number } | null;
+  schedule: RegisteredScheduleRow[];
+  /** Newest first. */
+  past_years: RegisteredYear[];
+  /** Only while waiting. */
+  suggestion: NewYearSuggestion | null;
+  new_year_snoozed: boolean;
+  /** The latest closed year, until the user acknowledges it. */
+  summary_pending: RegisteredYear | null;
 }
 
 export interface RegisteredAccountInput {
@@ -340,6 +382,31 @@ export interface RegisteredAccountInput {
   label: string;
   contribution_room: number;
   notes?: string | null;
+  goal?: number | null;
+  goal_deadline?: string;
+  budgeted?: boolean;
+  fhsa_lifetime_max?: boolean;
+  /** Create only: logged as one deposit dated the year's start. */
+  already_contributed?: number;
+}
+
+export interface StartYearInput {
+  contribution_room: number;
+  goal: number | null;
+  goal_deadline: string;
+  budgeted: boolean;
+  fhsa_lifetime_max?: boolean;
+}
+
+/** One registered account's line in a month's plan. */
+export interface ContributionLineView {
+  account_id: number;
+  kind: RegisteredKind;
+  label: string;
+  amount: number;
+  /** Deposits to this account dated inside the month. */
+  deposited: number;
+  left: number;
 }
 
 export interface RegisteredContributionInput {
@@ -387,7 +454,7 @@ export interface ExpenseReport {
 }
 
 // ---------- Monthly budget (phone) ----------
-export type BudgetLineKind = 'spend' | 'fund' | 'debt';
+export type BudgetLineKind = 'spend' | 'fund' | 'debt' | 'contribution';
 
 /** Money moved into or out of a fund from outside the budget. */
 export interface FundTransaction {
@@ -477,8 +544,15 @@ export interface BudgetMonthView {
   pendingPaydays: Payday[];
   income: number;
   recurring: { items: RecurringOccurrence[]; total: number };
-  lines: { spend: SpendLineView[]; fund: FundLineView[]; debt: DebtLineView[] };
-  planned: { spend: number; fund: number; debt: number; needs: number; wants: number };
+  lines: {
+    spend: SpendLineView[];
+    fund: FundLineView[];
+    debt: DebtLineView[];
+    contribution: ContributionLineView[];
+  };
+  planned: { spend: number; fund: number; debt: number; contribution: number; needs: number; wants: number };
+  /** The Saving tab's gauge: funds count once confirmed, contributions once deposited. */
+  saving: { planned: number; putAway: number; leftToDeposit: number; due: string[] };
   leftToAllocate: number;
   spent: { total: number; needs: number; wants: number };
   leftToSpend: number;

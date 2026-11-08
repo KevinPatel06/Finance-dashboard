@@ -5,6 +5,7 @@ import type {
   BillInput,
   BillMonthItem,
   BudgetLineKind,
+  ContributionLineView,
   BudgetMonthView,
   BudgetStatus,
   Category,
@@ -190,6 +191,7 @@ export function getSettings(): AppSettings {
       : '19:00',
     notify_new_month: map.notify_new_month !== 'false',
     notify_weekly_report: map.notify_weekly_report !== 'false',
+    contributions_hidden: map.contributions_hidden === 'true',
   };
 }
 
@@ -1918,10 +1920,12 @@ export function budgetMonth(month?: string): BudgetMonthView {
   }
 
   const sum = <T,>(xs: T[], f: (x: T) => number) => r2(xs.reduce((s, x) => s + f(x), 0));
+  const contribution: ContributionLineView[] = [];
   const planned = {
     spend: sum(spend, (l) => l.amount),
     fund: sum(fund, (l) => l.amount),
     debt: sum(debt, (l) => l.amount),
+    contribution: sum(contribution, (l) => l.amount),
     needs: sum(spend.filter((l) => l.kind === 'need'), (l) => l.amount),
     wants: sum(spend.filter((l) => l.kind === 'want'), (l) => l.amount),
   };
@@ -1962,8 +1966,14 @@ export function budgetMonth(month?: string): BudgetMonthView {
     pendingPaydays,
     income,
     recurring,
-    lines: { spend, fund, debt },
+    lines: { spend, fund, debt, contribution },
     planned,
+    saving: {
+      planned: r2(planned.fund + planned.contribution),
+      putAway: status === 'confirmed' ? planned.fund : 0,
+      leftToDeposit: 0,
+      due: [],
+    },
     leftToAllocate: r2(income - recurring.total - planned.debt - planned.fund - planned.spend),
     spent,
     leftToSpend,

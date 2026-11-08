@@ -1,5 +1,8 @@
+import { format } from 'date-fns';
 import type { DB } from './db';
 import { suggestEmoji, suggestKind } from '../shared/emoji';
+import { defaultDeadline, taxYearFor } from '../shared/registered';
+import type { RegisteredKind } from '../shared/types';
 
 interface Migration {
   version: number;
@@ -73,6 +76,80 @@ function addSyncTracking(db: DB, table: string) {
 }
 
 const migrations: Migration[] = [
+  {
+    version: 14,
+    name: 'contributions',
+    up: (db) => {
+      // budget_lines gains a 4th kind. SQLite can't alter a CHECK, so the
+      // table is rebuilt — keeping ids, uuids and updated_at. The sync
+      // triggers go first so the copy/drop records no tombstones, and come
+      // back via addSyncTracking afterwards.
+      db.exec(`
+        DROP TRIGGER IF EXISTS budget_lines_sync_ins;
+        DROP TRIGGER IF EXISTS budget_lines_sync_upd;
+        DROP TRIGGER IF EXISTS budget_lines_sync_del;
+        CREATE TABLE budget_lines_v14 (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          month      TEXT NOT NULL REFERENCES budget_months(month) ON DELETE CASCADE,
+          kind       TEXT NOT NULL CHECK (kind IN ('spend','fund','debt','contribution')),
+          ref_id     INTEGER NOT NULL,
+          amount     REAL NOT NULL CHECK (amount >= 0),
+          uuid       TEXT,
+          updated_at INTEGER,
+          UNIQUE (month, kind, ref_id)
+        );
+        INSERT INTO budget_lines_v14 (id, month, kind, ref_id, amount, uuid, updated_at)
+          SELECT id, month, kind, ref_id, amount, uuid, updated_at FROM budget_lines;
+        DROP TABLE budget_lines;
+        ALTER TABLE budget_lines_v14 RENAME TO budget_lines;
+        CREATE INDEX IF NOT EXISTS idx_budget_lines_month ON budget_lines(month);
+      `);
+      addSyncTracking(db, 'budget_lines');
+
+      // Registered accounts get a CRA year (tax_year) and an optional goal.
+      // The goal deadline only says when the goal is due; the year's bounds
+      // always come from shared/registered.ts.
+      const cols = (db.prepare('PRAGMA table_info(registered_accounts)').all() as { name: string }[]).map(
+        (c) => c.name
+      );
+      const add = (name: string, def: string) => {
+        if (!cols.includes(name)) db.exec(`ALTER TABLE registered_accounts ADD COLUMN ${name} ${def}`);
+      };
+      add('tax_year', 'INTEGER');
+      add('goal', 'REAL');
+      add('goal_deadline', 'TEXT');
+      add('budgeted', 'INTEGER NOT NULL DEFAULT 0');
+      add('waiting', 'INTEGER NOT NULL DEFAULT 0');
+      add('fhsa_lifetime_max', 'INTEGER NOT NULL DEFAULT 0');
+
+      const todayIso = format(new Date(), 'yyyy-MM-dd');
+      const rows = db.prepare('SELECT id, kind FROM registered_accounts WHERE tax_year IS NULL').all() as {
+        id: number;
+        kind: RegisteredKind;
+      }[];
+      const setYear = db.prepare('UPDATE registered_accounts SET tax_year = ?, goal_deadline = ? WHERE id = ?');
+      for (const r of rows) {
+        const y = taxYearFor(r.kind, todayIso);
+        setYear.run(y, defaultDeadline(r.kind, y), r.id);
+      }
+
+      // Closed years, for the summary, "Past years" and next year's suggestion.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS registered_years (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          account_id    INTEGER NOT NULL REFERENCES registered_accounts(id) ON DELETE CASCADE,
+          tax_year      INTEGER NOT NULL,
+          room          REAL,
+          goal          REAL,
+          goal_deadline TEXT,
+          contributed   REAL NOT NULL DEFAULT 0,
+          closed_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_registered_years_account ON registered_years(account_id);
+      `);
+      addSyncTracking(db, 'registered_years');
+    },
+  },
   {
     version: 13,
     name: 'budget_redesign',
