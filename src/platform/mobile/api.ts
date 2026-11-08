@@ -6,7 +6,7 @@ import { setDb } from '../../../core/db';
 import { runMigrations } from '../../../core/migrations';
 import { todayStr } from '../../../core/notifications';
 import { DAY_CHANGED } from '../events';
-import { openDatabase, flush } from './storage';
+import { openDatabase, flush, flushIfChanged } from './storage';
 import { exportCsv, exportText, backupDb } from './files';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -34,9 +34,8 @@ export async function installMobileApi(): Promise<void> {
   const invoke = async (channel: string, ...args: any[]): Promise<any> => {
     const fn = byChannel.get(channel);
     if (!fn) throw new Error(`Unhandled channel: ${channel}`);
-    const result = fn(...args);
-    if (mutating.has(channel)) await flush();
-    return result;
+    if (!mutating.has(channel)) return fn(...args);
+    return flushIfChanged(() => fn(...args));
   };
 
   // Namespace shape must match electron/preload.ts exactly — this is the

@@ -75,7 +75,7 @@ vi.mock('@capacitor/filesystem', () => ({
   },
 }));
 
-import { openDatabase, flush } from '../src/platform/mobile/storage';
+import { openDatabase, flush, flushIfChanged } from '../src/platform/mobile/storage';
 import { createSqlJsDb } from '../src/platform/mobile/db';
 import { setDb, type DB } from '../core/db';
 import { runMigrations } from '../core/migrations';
@@ -150,6 +150,18 @@ describe('iOS persistence', () => {
     await stale;
 
     expect(await goalsOnDisk()).toEqual(['Emergency fund', 'Vacation']);
+  });
+
+  it('skips the save when a "mutating" call changed nothing, and still saves a real write', async () => {
+    // Listing registered accounts is flagged as a write (it may close a year),
+    // but with nothing to close it touches no row.
+    dbWrites = 0;
+    await flushIfChanged(() => repo.listRegisteredAccounts());
+    expect(dbWrites).toBe(0);
+
+    await flushIfChanged(() => goal('A'));
+    expect(dbWrites).toBe(1);
+    expect(await goalsOnDisk()).toEqual(['A']);
   });
 
   it('writes through a temp file and keeps the previous copy as the backup', async () => {

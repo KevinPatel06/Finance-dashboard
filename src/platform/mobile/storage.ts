@@ -150,6 +150,25 @@ export function flush(): Promise<void> {
   return tail;
 }
 
+/** Rows changed since the database opened, triggers included (never goes down). */
+function totalChanges(): number {
+  return (getHandle().prepare('SELECT total_changes() AS n').get() as { n: number }).n;
+}
+
+/**
+ * Run a call that may write, then flush only if it actually changed a row.
+ * Some "mutating" calls (listing registered accounts closes finished years;
+ * opening a budget month fills in its draft) usually write nothing, and a
+ * flush exports and rewrites the whole file. Earlier writes already flushed
+ * themselves, so skipping here can't leave anything unsaved.
+ */
+export async function flushIfChanged<T>(run: () => T): Promise<T> {
+  const before = totalChanges();
+  const result = run();
+  if (totalChanges() !== before) await flush();
+  return result;
+}
+
 /** Read the live database file as base64 — used by backup/share. */
 export async function readDbBase64(): Promise<string> {
   const res = await Filesystem.readFile({ path: DB_FILE, directory: Directory.Data });
