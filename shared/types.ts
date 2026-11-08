@@ -349,6 +349,23 @@ export interface RegisteredContributionInput {
   note?: string | null;
 }
 
+/** One month of a registered account's year: planned line vs. deposits logged. */
+export interface RegisteredScheduleRow {
+  month: string; // 'YYYY-MM'
+  planned: number | null;
+  deposited: number;
+  state: 'past' | 'current' | 'future';
+}
+
+/** What the new-year sheet pre-fills. `room` is null for an RRSP (the user's NOA decides). */
+export interface NewYearSuggestion {
+  tax_year: number;
+  room: number | null;
+  goal: number | null;
+  goal_deadline: string;
+  budgeted: boolean;
+}
+
 export interface ExpenseReport {
   totalSpent: number;
   count: number;
