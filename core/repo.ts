@@ -41,6 +41,7 @@ import type {
   PayFrequency,
   RegisteredContribution,
   RegisteredContributionInput,
+  RegisteredKind,
   RegisteredYear,
   StartYearInput,
   SavingsGoal,
@@ -1904,6 +1905,7 @@ function changePlan(month: string, fn: (db: Db) => void): BudgetMonthView {
     if (ensureBudgetMonth(db, month) === 'none') {
       db.prepare('INSERT INTO budget_months (month) VALUES (?)').run(month);
     }
+    if (monthStatus(db, month) === 'draft') syncContributionLines(db, month);
     const before = appliedDebtLines(db, month);
     fn(db);
     const after = appliedDebtLines(db, month);
@@ -2096,6 +2098,85 @@ function monthRecurring(db: Db, month: string): BudgetMonthView['recurring'] {
   return { items, total: r2(items.reduce((s, i) => s + i.amount, 0)) };
 }
 
+// ---------- Contribution lines (RRSP / TFSA / FHSA) ----------
+
+const KIND_ORDER: Record<RegisteredKind, number> = { rrsp: 0, tfsa: 1, fhsa: 2 };
+
+/**
+ * A draft month's contribution lines always follow the monthly split; they're
+ * only written when the amount changes, so reading a draft doesn't churn sync
+ * timestamps or tombstones. Confirmed months are never touched here.
+ */
+function syncContributionLines(db: Db, month: string) {
+  const accounts = db.prepare('SELECT * FROM registered_accounts WHERE archived = 0').all() as RegisteredRow[];
+  const want = new Map<number, number>();
+  for (const a of accounts) {
+    const amount = contributionFormula(db, a, month);
+    if (amount > 0) want.set(a.id, amount);
+  }
+  const have = db
+    .prepare("SELECT ref_id, amount FROM budget_lines WHERE month = ? AND kind = 'contribution'")
+    .all(month) as { ref_id: number; amount: number }[];
+  for (const h of have) {
+    if (!want.has(h.ref_id)) {
+      db.prepare("DELETE FROM budget_lines WHERE month = ? AND kind = 'contribution' AND ref_id = ?").run(month, h.ref_id);
+    }
+  }
+  const haveBy = new Map(have.map((h) => [h.ref_id, h.amount]));
+  for (const [id, amount] of want) {
+    if (haveBy.get(id) !== amount) upsertLine(db, month, 'contribution', id, amount);
+  }
+}
+
+/** Deposits into any open (non-archived) account dated inside the month. */
+function depositsInMonth(db: Db, start: string, end: string): number {
+  const row = db
+    .prepare(
+      `SELECT COALESCE(SUM(c.amount), 0) AS s FROM registered_contributions c
+         JOIN registered_accounts a ON a.id = c.account_id
+        WHERE a.archived = 0 AND c.date BETWEEN ? AND ?`
+    )
+    .get(start, end) as { s: number };
+  return row.s;
+}
+
+/**
+ * The month's contribution lines. A setup ("none") month returns what the
+ * split would plan without storing anything; other months read their stored
+ * lines (archived accounts included, so confirmed months keep their numbers).
+ */
+function contributionLineViews(
+  db: Db,
+  month: string,
+  status: MonthStatus,
+  rawLines: { kind: BudgetLineKind; ref_id: number; amount: number }[]
+): ContributionLineView[] {
+  const { start, end } = monthBounds(month);
+  const lines: { ref_id: number; amount: number }[] =
+    status === 'none'
+      ? (db.prepare('SELECT * FROM registered_accounts WHERE archived = 0').all() as RegisteredRow[])
+          .map((a) => ({ ref_id: a.id, amount: contributionFormula(db, a, month) }))
+          .filter((l) => l.amount > 0)
+      : rawLines.filter((l) => l.kind === 'contribution');
+  const out: ContributionLineView[] = [];
+  for (const l of lines) {
+    const a = db.prepare('SELECT id, kind, label FROM registered_accounts WHERE id = ?').get(l.ref_id) as
+      | { id: number; kind: RegisteredKind; label: string }
+      | undefined;
+    if (!a) continue;
+    const deposited = depositsBetween(db, a.id, start, end);
+    out.push({
+      account_id: a.id,
+      kind: a.kind,
+      label: a.label,
+      amount: l.amount,
+      deposited,
+      left: r2(Math.max(0, l.amount - deposited)),
+    });
+  }
+  return out.sort((x, y) => KIND_ORDER[x.kind] - KIND_ORDER[y.kind] || x.account_id - y.account_id);
+}
+
 export function budgetMonth(month?: string): BudgetMonthView {
   const db = getDb();
   const todayIso = today();
@@ -2104,7 +2185,12 @@ export function budgetMonth(month?: string): BudgetMonthView {
   materializeRecurringExpenses();
 
   const existed = monthStatus(db, m) != null;
-  const status = db.transaction(() => ensureBudgetMonth(db, m))() as MonthStatus;
+  const status = db.transaction(() => {
+    closeRegisteredYears(db, todayIso);
+    const s = ensureBudgetMonth(db, m);
+    if (s === 'draft') syncContributionLines(db, m);
+    return s;
+  })() as MonthStatus;
   if (!existed && status === 'draft') mirrorSpendLinesToLegacyBudgets(db, m);
 
   const { start, end, days } = monthBounds(m);
@@ -2168,7 +2254,7 @@ export function budgetMonth(month?: string): BudgetMonthView {
   }
 
   const sum = <T,>(xs: T[], f: (x: T) => number) => r2(xs.reduce((s, x) => s + f(x), 0));
-  const contribution: ContributionLineView[] = [];
+  const contribution = contributionLineViews(db, m, status, rawLines);
   const planned = {
     spend: sum(spend, (l) => l.amount),
     fund: sum(fund, (l) => l.amount),
@@ -2218,11 +2304,13 @@ export function budgetMonth(month?: string): BudgetMonthView {
     planned,
     saving: {
       planned: r2(planned.fund + planned.contribution),
-      putAway: status === 'confirmed' ? planned.fund : 0,
-      leftToDeposit: 0,
-      due: [],
+      putAway: r2((status === 'confirmed' ? planned.fund : 0) + depositsInMonth(db, start, end)),
+      leftToDeposit: sum(contribution, (l) => l.left),
+      due: contribution.filter((l) => l.left > 0).map((l) => l.label),
     },
-    leftToAllocate: r2(income - recurring.total - planned.debt - planned.fund - planned.spend),
+    leftToAllocate: r2(
+      income - recurring.total - planned.debt - planned.fund - planned.contribution - planned.spend
+    ),
     spent,
     leftToSpend,
     needsLeft: r2(planned.needs - spent.needs),

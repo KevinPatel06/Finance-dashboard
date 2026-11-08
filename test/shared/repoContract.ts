@@ -865,5 +865,114 @@ export function runRepoContract(
         expect(row.archived).toBe(1);
       });
     });
+    describe('contributions — budget', () => {
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 10, 8, 12));
+      });
+      afterEach(() => vi.useRealTimers());
+
+      /** Confirms an empty October so November opens as a draft copy. */
+      const draftMonth = (m: string) => {
+        repo.saveBudgetPlan('2026-10', [], true);
+        return repo.budgetMonth(m);
+      };
+      const rrsp = () =>
+        repo.createRegisteredAccount({ kind: 'rrsp', label: 'RRSP', contribution_room: 14200, goal: 6000, budgeted: true, already_contributed: 3600 });
+      const contributionLineCount = () =>
+        (getDb().prepare("SELECT COUNT(*) AS n FROM budget_lines WHERE kind = 'contribution'").get() as { n: number }).n;
+
+      it('no accounts leaves the budget unchanged', () => {
+        const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+        repo.saveBudgetPlan('2026-11', [{ kind: 'fund', ref_id: fund.id, amount: 100 }], true);
+        const v = repo.budgetMonth('2026-11');
+        expect([v.lines.contribution, v.planned.contribution, v.saving.leftToDeposit, v.saving.due]).toEqual([[], 0, 0, []]);
+        expect(v.saving).toMatchObject({ planned: 100, putAway: 100 });
+      });
+
+      it('a draft month gets the monthly split and it comes off the top', () => {
+        const a = rrsp();
+        const v = draftMonth('2026-11');
+        expect(v.status).toBe('draft');
+        expect(v.lines.contribution).toEqual([{ account_id: a.id, kind: 'rrsp', label: 'RRSP', amount: 600, deposited: 0, left: 600 }]);
+        expect(v.planned.contribution).toBe(600);
+        expect(v.leftToAllocate).toBeCloseTo(v.income - v.recurring.total - v.planned.debt - v.planned.fund - 600 - v.planned.spend, 6);
+      });
+
+      it('only logged deposits count toward put away and left to deposit', () => {
+        const a = rrsp();
+        draftMonth('2026-11');
+        repo.confirmBudgetMonth('2026-11');
+        expect(repo.budgetMonth('2026-11').saving).toMatchObject({ putAway: 0, leftToDeposit: 600, due: ['RRSP'] });
+        repo.addRegisteredContribution({ account_id: a.id, amount: 350, date: '2026-11-03' });
+        const v = repo.budgetMonth('2026-11');
+        expect(v.saving).toMatchObject({ planned: 600, putAway: 350, leftToDeposit: 250, due: ['RRSP'] });
+        expect(v.lines.contribution[0]).toMatchObject({ amount: 600, deposited: 350, left: 250 });
+      });
+
+      it('confirmed lines are frozen', () => {
+        const a = rrsp();
+        draftMonth('2026-11');
+        repo.confirmBudgetMonth('2026-11');
+        const withExtra = repo.addRegisteredContribution({ account_id: a.id, amount: 1000, date: '2026-11-05' });
+        expect(repo.budgetMonth('2026-11').lines.contribution[0].amount).toBe(600);
+        repo.deleteRegisteredContribution(withExtra.contributions[0].id);
+        expect(repo.budgetMonth('2026-11').lines.contribution[0].amount).toBe(600);
+        expect(repo.listRegisteredAccounts()[0].schedule.find((r) => r.month === '2026-12')?.planned).toBe(600);
+      });
+
+      it('an extra deposit lowers next month', () => {
+        const a = rrsp();
+        draftMonth('2026-11');
+        repo.confirmBudgetMonth('2026-11');
+        repo.addRegisteredContribution({ account_id: a.id, amount: 1000, date: '2026-11-05' });
+        vi.setSystemTime(new Date(2026, 11, 1, 12));
+        expect(repo.budgetMonth('2026-12').lines.contribution[0].amount).toBe(466.67);
+      });
+
+      it('no line without a positive remaining goal', () => {
+        repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000, budgeted: true });
+        repo.createRegisteredAccount({ kind: 'fhsa', label: 'FHSA', contribution_room: 8000, goal: 0, budgeted: true });
+        repo.createRegisteredAccount({ kind: 'rrsp', label: 'RRSP', contribution_room: 9000, goal: 500, budgeted: true, already_contributed: 500 });
+        expect(draftMonth('2026-11').lines.contribution).toEqual([]);
+        expect(contributionLineCount()).toBe(0);
+      });
+
+      it('budgeting switched on after confirming starts next month', () => {
+        draftMonth('2026-11');
+        repo.confirmBudgetMonth('2026-11');
+        repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000, goal: 7000, budgeted: true });
+        expect(repo.budgetMonth('2026-11').lines.contribution).toEqual([]);
+        vi.setSystemTime(new Date(2026, 11, 1, 12));
+        expect(repo.budgetMonth('2026-12').lines.contribution[0].amount).toBe(7000);
+      });
+
+      it('archiving keeps confirmed months and drops unconfirmed ones', () => {
+        const a = rrsp();
+        draftMonth('2026-11');
+        repo.confirmBudgetMonth('2026-11');
+        expect(repo.budgetMonth('2026-12').lines.contribution[0].amount).toBe(800);
+        repo.deleteRegisteredAccount(a.id);
+        expect(repo.budgetMonth('2026-11').lines.contribution).toHaveLength(1);
+        expect(repo.budgetMonth('2026-12').lines.contribution).toHaveLength(0);
+      });
+
+      it('setup ("none") months return suggestions without storing them', () => {
+        repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000, goal: 1200, budgeted: true });
+        const v = repo.budgetMonth('2026-11');
+        expect([v.status, v.lines.contribution[0]?.amount, v.planned.contribution]).toEqual(['none', 600, 600]);
+        expect(contributionLineCount()).toBe(0);
+      });
+
+      it('lists lines RRSP, TFSA, FHSA and names who is due', () => {
+        repo.createRegisteredAccount({ kind: 'fhsa', label: 'FHSA', contribution_room: 8000, goal: 2000, budgeted: true });
+        repo.createRegisteredAccount({ kind: 'tfsa', label: 'TFSA', contribution_room: 7000, goal: 1200, budgeted: true });
+        rrsp();
+        draftMonth('2026-11');
+        const v = repo.confirmBudgetMonth('2026-11');
+        expect(v.lines.contribution.map((l) => l.kind)).toEqual(['rrsp', 'tfsa', 'fhsa']);
+        expect(v.saving.due).toEqual(['RRSP', 'TFSA', 'FHSA']);
+      });
+    });
   });
 }
