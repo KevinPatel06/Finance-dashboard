@@ -6,7 +6,6 @@ import { Group, LargeHeader, PCard, Row, SectionTitle } from '../ui/kit';
 const LINKS: Array<{ to: string; emoji: string; color: string; title: string; subtitle: string }> = [
   { to: '/recurring', emoji: '🔁', color: '#64748b', title: 'Recurring expenses', subtitle: 'Rent, subscriptions, insurance' },
   { to: '/payoff', emoji: '💳', color: '#ef4444', title: 'Payoff', subtitle: 'Debts, interest and payoff dates' },
-  { to: '/registered', emoji: '🏦', color: '#3b82f6', title: 'Registered accounts', subtitle: 'RRSP, TFSA and FHSA room' },
   { to: '/reports', emoji: '📊', color: '#8b5cf6', title: 'Reports', subtitle: 'Charts across months' },
   { to: '/expenses/week', emoji: '🗞️', color: '#f59e0b', title: 'Weekly report', subtitle: 'Last week at a glance' },
   { to: '/pay-history', emoji: '💵', color: '#10b981', title: 'Pay history', subtitle: 'Every paycheck you’ve confirmed' },

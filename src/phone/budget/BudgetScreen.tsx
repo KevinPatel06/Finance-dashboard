@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info } from 'lucide-react';
-import type { AppSettings, PaceStatus } from '@shared/types';
+import { Info, PiggyBank } from 'lucide-react';
+import type { AppSettings, PaceStatus, RegisteredAccount } from '@shared/types';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { cn } from '@/lib/utils';
-import { useApi, useMonth } from '../data';
+import { useApi, useMonth, useRefresh } from '../data';
 import { monthLabel, monthName, nextBudgetLabel } from '../dates';
 import { money, moneyWhole } from '../format';
 import CountUp from '../ui/CountUp';
@@ -13,7 +13,11 @@ import Sheet from '../ui/Sheet';
 import { Banner, BigButton, Chip, EmojiIcon, LargeHeader, PCard } from '../ui/kit';
 import PaydayCard from './PaydayCard';
 import PlanEditor from './PlanEditor';
+import AccountEditor from '../contributions/AccountEditor';
+import { cash, KIND_META } from '../contributions/meta';
+import SavingGauge from './SavingGauge';
 import SavingTab from './SavingTab';
+import { depositBanner } from './savingCopy';
 import SpendingTab from './SpendingTab';
 
 const PACE: Record<PaceStatus, { label: string; className: string; tone: 'success' | 'warning' | 'danger' }> = {
@@ -67,12 +71,16 @@ function BreakdownRow({
 export default function BudgetScreen() {
   const navigate = useNavigate();
   const { data: v, reload } = useMonth();
+  const { bump } = useRefresh();
   const { data: settings } = useApi<AppSettings>(() => window.api.settings.get());
   const [tab, setTab] = useState<'spending' | 'saving'>('spending');
   const [editor, setEditor] = useState<null | 'edit' | 'review'>(null);
   const [info, setInfo] = useState(false);
+  const { data: accounts } = useApi<RegisteredAccount[]>(() => window.api.registered.list());
+  const [newYear, setNewYear] = useState<RegisteredAccount | null>(null);
 
   if (!v) return <div className="pt-24 text-center text-content-subtle">Loading…</div>;
+  const deposit = depositBanner(v);
 
   if (v.status === 'none') {
     return (
@@ -133,6 +141,61 @@ export default function BudgetScreen() {
         {v.pendingPaydays.map((p) => (
           <PaydayCard key={p.date} payday={p} view={v} onDone={reload} />
         ))}
+        {deposit && (
+          <Banner
+            tone="brand"
+            icon={<PiggyBank size={20} />}
+            title={deposit.title}
+            action={
+              <Chip active onClick={() => setTab('saving')}>
+                Log deposits
+              </Chip>
+            }
+          >
+            {deposit.body}
+          </Banner>
+        )}
+        {(accounts ?? [])
+          .filter((a) => a.waiting && a.kind !== 'rrsp' && !a.new_year_snoozed && a.suggestion)
+          .map((a) => (
+            <Banner
+              key={`ny-${a.id}`}
+              tone="brand"
+              icon="🗓️"
+              title={`Start your ${a.suggestion!.tax_year} ${KIND_META[a.kind].label} year`}
+              onClick={() => setNewYear(a)}
+            >
+              Your new room is ready to check. It takes a few seconds.
+            </Banner>
+          ))}
+        {(accounts ?? [])
+          .filter((a) => a.kind === 'rrsp' && a.waiting && a.summary_pending)
+          .map((a) => {
+            const y = a.summary_pending!;
+            return (
+              <Banner
+                key={`sum-${a.id}`}
+                tone="brand"
+                icon="🏁"
+                title={`Your ${y.tax_year} RRSP year is done`}
+                action={
+                  <Chip
+                    active
+                    onClick={async () => {
+                      await window.api.registered.ackSummary(a.id);
+                      bump();
+                    }}
+                  >
+                    Got it
+                  </Chip>
+                }
+              >
+                You put in {cash(y.contributed)}
+                {y.goal ? ` of your ${cash(y.goal)} goal` : ''}. Add your {y.tax_year + 1} room when your Notice of
+                Assessment arrives.
+              </Banner>
+            );
+          })}
         {settings && settings.pay_amount == null && (
           <Banner tone="neutral" icon="💵" title="Add your pay" onClick={() => navigate('/settings')}>
             Your income is worked out from your paychecks. Add how much you get paid and how often.
@@ -161,6 +224,9 @@ export default function BudgetScreen() {
         )}
       </div>
 
+      {tab === 'saving' ? (
+        <SavingGauge view={v} />
+      ) : (
       <div className="pt-1">
         <button
           onClick={() => setInfo(true)}
@@ -188,6 +254,7 @@ export default function BudgetScreen() {
           <Info size={18} className="text-content-muted" />
         </button>
       </div>
+      )}
 
       <SegmentedControl
         className={cn('mt-2')}
@@ -215,6 +282,18 @@ export default function BudgetScreen() {
         />
       )}
 
+      {newYear && (
+        <AccountEditor
+          mode="newYear"
+          account={newYear}
+          onClose={() => setNewYear(null)}
+          onSaved={() => {
+            setNewYear(null);
+            void reload();
+          }}
+        />
+      )}
+
       <Sheet
         open={info}
         onClose={() => setInfo(false)}
@@ -225,6 +304,7 @@ export default function BudgetScreen() {
           <BreakdownRow label="Recurring costs" amount={v.recurring.total} minus />
           <BreakdownRow label="Debt payments" amount={v.planned.debt} minus />
           <BreakdownRow label="Savings funds" amount={v.planned.fund} minus />
+          {v.planned.contribution > 0 && <BreakdownRow label="Contributions" amount={v.planned.contribution} minus />}
           {unassigned >= 0.01 && <BreakdownRow label="Not assigned yet" amount={unassigned} minus />}
           {unassigned <= -0.01 && <BreakdownRow label="Planned beyond income" amount={-unassigned} plus />}
           <BreakdownRow label="Spending plan" amount={v.planned.spend} total />
@@ -242,7 +322,8 @@ export default function BudgetScreen() {
                 {monthName(v.month)}.{' '}
               </>
             )}
-            Recurring charges and purchases paid from a fund don't count as spending here. They're already covered above.
+            Recurring charges, purchases paid from a fund, and RRSP/TFSA/FHSA contributions don't count as spending
+            here. They're already covered above.
           </p>
         </div>
       </Sheet>

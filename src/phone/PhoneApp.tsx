@@ -4,7 +4,6 @@ import { useTheme } from '@/lib/theme';
 import { haptic, onAndroidBack } from '@/platform';
 import { TAB_PATHS } from './TabBar';
 import Payoff from '@/pages/Payoff';
-import Registered from '@/pages/Registered';
 import Reports from '@/pages/Reports';
 import Settings from '@/pages/Settings';
 import { RefreshProvider } from './data';
@@ -14,6 +13,7 @@ import CategoryDetail from './budget/CategoryDetail';
 import ExpensesScreen from './expenses/ExpensesScreen';
 import WeeklyReport from './expenses/WeeklyReport';
 import FundDetail from './funds/FundDetail';
+import AccountDetail from './contributions/AccountDetail';
 import MoreScreen from './more/MoreScreen';
 import PayHistory from './more/PayHistory';
 import ExportPanel from './onboarding/ExportPanel';
@@ -111,7 +111,7 @@ export default function PhoneApp() {
             <Route path="/pay-history" element={<PayHistory />} />
             <Route path="/export" element={<Subpage title="Get advice from your AI"><ExportPanel /></Subpage>} />
             <Route path="/payoff" element={<Subpage title="Payoff"><Payoff /></Subpage>} />
-            <Route path="/registered" element={<Subpage title="Registered accounts"><Registered /></Subpage>} />
+            <Route path="/account/:id" element={<AccountDetail />} />
             <Route path="/reports" element={<Subpage title="Reports"><Reports /></Subpage>} />
             <Route path="/settings" element={<Subpage title="Settings"><Settings /></Subpage>} />
             <Route path="*" element={<Navigate to="/" replace />} />

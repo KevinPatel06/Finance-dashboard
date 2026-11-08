@@ -1,40 +1,108 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Plus } from 'lucide-react';
-import type { BudgetMonthView, SavingsGoal } from '@shared/types';
+import type { AppSettings, BudgetMonthView, RegisteredAccount, SavingsGoal } from '@shared/types';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { fmtDate } from '@/lib/format';
-import { useApi } from '../data';
+import { useApi, useRefresh } from '../data';
 import { money, pct } from '../format';
-import { EmojiAvatar, HatchedBar, PCard } from '../ui/kit';
+import { Chip, EmojiAvatar, HatchedBar, PCard } from '../ui/kit';
 import FundEditor from '../funds/FundEditor';
+import AccountCard from '../contributions/AccountCard';
+import AccountEditor from '../contributions/AccountEditor';
+import DepositSheet from '../contributions/DepositSheet';
+import { KIND_ORDER } from '../contributions/meta';
 
 type Filter = 'active' | 'completed' | 'plan';
 
-/** Funds: total saved, filters, and a progress card per fund. */
+function Header({ title, right }: { title: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between px-1 pt-1">
+      <h2 className="text-[17px] font-display font-semibold">{title}</h2>
+      {right}
+    </div>
+  );
+}
+
+function AddButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="inline-flex items-center gap-1 text-[15px] font-medium">
+      <Plus size={17} /> {children}
+    </button>
+  );
+}
+
+/**
+ * Saving: registered-account contributions first (optional — "Not for me"
+ * hides them), then funds with their filters and progress cards.
+ */
 export default function SavingTab({ view }: { view: BudgetMonthView }) {
   const navigate = useNavigate();
+  const { bump } = useRefresh();
   const [filter, setFilter] = useState<Filter>('active');
   const [adding, setAdding] = useState(false);
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [depositFor, setDepositFor] = useState<RegisteredAccount | null>(null);
+  const [newYearFor, setNewYearFor] = useState<RegisteredAccount | null>(null);
   const { data: active, reload } = useApi<SavingsGoal[]>(() => window.api.goals.list());
   const { data: done } = useApi<SavingsGoal[]>(() => window.api.goals.listArchived());
+  const { data: accounts } = useApi<RegisteredAccount[]>(() => window.api.registered.list());
+  const { data: settings } = useApi<AppSettings>(() => window.api.settings.get());
 
-  if (!active || !done) return null;
+  if (!active || !done || !accounts || !settings) return null;
   const inPlan = new Set(view.lines.fund.map((l) => l.goal_id));
   const planned = new Map(view.lines.fund.map((l) => [l.goal_id, l.amount]));
   const shown =
     filter === 'completed' ? done : filter === 'plan' ? active.filter((g) => inPlan.has(g.id)) : active;
   const totalSaved = active.reduce((s, g) => s + g.current_amount, 0);
+  const missingKinds = KIND_ORDER.filter((k) => !accounts.some((a) => a.kind === k));
+  const hidden = settings.contributions_hidden && accounts.length === 0;
+
+  const setHidden = async (v: boolean) => {
+    await window.api.settings.update({ contributions_hidden: v });
+    bump();
+  };
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between px-1 pt-1">
-        <div className="text-[15px] text-content-muted">
-          Total saved: <span className="text-content font-semibold num">{money(totalSaved)}</span>
-        </div>
-        <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1 text-[15px] font-medium">
-          <Plus size={17} /> Add fund
-        </button>
+      {!hidden && (
+        <>
+          <Header
+            title="Contributions"
+            right={
+              accounts.length > 0 && missingKinds.length > 0 ? (
+                <AddButton onClick={() => setAddingAccount(true)}>Add account</AddButton>
+              ) : undefined
+            }
+          />
+          {accounts.length === 0 ? (
+            <PCard className="p-4">
+              <p className="text-[15px]">Have an RRSP, TFSA or FHSA? Add it to plan this year's contributions.</p>
+              <div className="flex gap-2 mt-3">
+                <Chip active icon={Plus} onClick={() => setAddingAccount(true)}>
+                  Add account
+                </Chip>
+                <Chip onClick={() => void setHidden(true)}>Not for me</Chip>
+              </div>
+            </PCard>
+          ) : (
+            accounts.map((a) => (
+              <AccountCard
+                key={a.id}
+                account={a}
+                onOpen={() => navigate(`/account/${a.id}`)}
+                onDeposit={() => setDepositFor(a)}
+                onStartYear={() => setNewYearFor(a)}
+              />
+            ))
+          )}
+          <div className="h-2" />
+        </>
+      )}
+
+      <Header title="Funds" right={<AddButton onClick={() => setAdding(true)}>Add fund</AddButton>} />
+      <div className="px-1 -mt-1 text-sm text-content-muted">
+        Total saved: <span className="text-content font-semibold num">{money(totalSaved)}</span>
       </div>
 
       <SegmentedControl
@@ -61,6 +129,15 @@ export default function SavingTab({ view }: { view: BudgetMonthView }) {
         <FundCard key={g.id} goal={g} planned={planned.get(g.id)} onClick={() => navigate(`/fund/${g.id}`)} />
       ))}
 
+      {hidden && (
+        <button
+          onClick={() => setAddingAccount(true)}
+          className="block w-full pt-3 text-center text-sm font-medium text-brand"
+        >
+          Add an RRSP, TFSA or FHSA
+        </button>
+      )}
+
       {adding && (
         <FundEditor
           onClose={() => setAdding(false)}
@@ -69,6 +146,27 @@ export default function SavingTab({ view }: { view: BudgetMonthView }) {
             void reload();
             navigate(`/fund/${g.id}`);
           }}
+        />
+      )}
+      {addingAccount && (
+        <AccountEditor
+          mode="add"
+          kinds={missingKinds}
+          onClose={() => setAddingAccount(false)}
+          onSaved={(a) => {
+            setAddingAccount(false);
+            if (settings.contributions_hidden) void setHidden(false);
+            navigate(`/account/${a.id}`);
+          }}
+        />
+      )}
+      {depositFor && <DepositSheet account={depositFor} onClose={() => setDepositFor(null)} />}
+      {newYearFor && (
+        <AccountEditor
+          mode="newYear"
+          account={newYearFor}
+          onClose={() => setNewYearFor(null)}
+          onSaved={() => setNewYearFor(null)}
         />
       )}
     </div>
