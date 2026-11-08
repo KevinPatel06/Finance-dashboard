@@ -1,0 +1,345 @@
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  .kp { --page:#EEE5D5; --card:#FBF7EF; --ink:rgb(43,34,25); --muted:rgb(104,89,68); --subtle:rgb(141,126,104);
+        --track:rgb(243,237,226); --line:rgb(234,225,210); --brand:rgb(63,122,85); --brandsoft:rgb(221,235,221);
+        --warn:rgb(184,120,0); --warnsoft:rgb(248,234,205); }
+  .kp-sec { margin: 30px 0 10px; }
+  .kp-sec h3 { margin: 0 0 4px; }
+  .kp-sec p { margin: 0; max-width: 780px; }
+  .kp-grid { display:flex; flex-wrap:wrap; gap:26px; align-items:flex-start; }
+  .kp-cap { width:330px; font-size:13px; line-height:1.45; margin-top:8px; opacity:.85; }
+  .kp-pick { display:inline-block; margin-top:8px; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; opacity:.7; }
+  .kp .option-like { cursor:pointer; border-radius:46px; padding:4px; border:3px solid transparent; transition:border-color .15s; }
+  .kp .option-like.selected { border-color:#3f7a55; }
+  .ph { width:330px; background:var(--page); border-radius:40px; border:9px solid #1d1e1c; overflow:hidden; position:relative;
+        font-family:Inter,system-ui,sans-serif; color:var(--ink); font-size:14px; line-height:1.35; box-shadow:0 12px 30px rgba(0,0,0,.22); }
+  .ph * { box-sizing:border-box; }
+  .ph .st { display:flex; justify-content:space-between; font-size:12px; font-weight:600; padding:12px 24px 2px; }
+  .ph .in { padding:6px 14px 18px; }
+  .ph .hd { display:flex; align-items:flex-start; justify-content:space-between; padding:6px 2px 6px; }
+  .ph .lt { font-family:'Hanken Grotesk',Inter,sans-serif; font-size:30px; font-weight:700; letter-spacing:-.01em; line-height:1.1; }
+  .ph .tb { width:34px; height:34px; border-radius:50%; background:var(--card); border:1px solid rgba(225,212,190,.8); display:grid; place-items:center; color:var(--muted); }
+  .ph .card { background:var(--card); border:1px solid rgba(225,212,190,.7); border-radius:22px; box-shadow:0 1px 2px rgba(60,40,10,.06),0 6px 16px rgba(60,40,10,.05); }
+  .ph .seg { background:rgb(226,214,193); border-radius:12px; padding:3px; display:flex; }
+  .ph .seg span { flex:1; text-align:center; padding:7px 0; font-size:13px; font-weight:600; border-radius:9px; color:var(--muted); }
+  .ph .seg .on { background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(60,40,10,.15); }
+  .ph .av { width:40px; height:40px; border-radius:50%; display:grid; place-items:center; flex-shrink:0; }
+  .ph .bar { position:relative; height:22px; border-radius:6px; overflow:hidden;
+             background:repeating-linear-gradient(90deg,rgba(141,126,104,.42) 0 1.5px,transparent 1.5px 5px); }
+  .ph .bar.sm { height:7px; border-radius:4px; background:repeating-linear-gradient(90deg,rgba(141,126,104,.3) 0 1.5px,transparent 1.5px 5px); }
+  .ph .bar i { position:absolute; top:0; bottom:0; left:0; border-radius:6px; }
+  .ph .bar b { position:absolute; left:4px; top:50%; transform:translateY(-50%); background:#fff; border-radius:5px; padding:0 6px;
+               font-size:11px; line-height:16px; font-weight:600; color:#0f172a; box-shadow:0 1px 2px rgba(0,0,0,.12); }
+  .ph .mu { color:var(--muted); } .ph .su { color:var(--subtle); } .ph .br { color:var(--brand); } .ph .wa { color:var(--warn); }
+  .ph .num { font-variant-numeric:tabular-nums; }
+  .ph .b { font-weight:600; } .ph .xs { font-size:12px; } .ph .sm { font-size:13px; }
+  .ph .ttl { font-size:17px; font-weight:600; }
+  .ph .disp { font-family:'Hanken Grotesk',Inter,sans-serif; font-weight:700; }
+  .ph .chip { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:500; background:var(--track); white-space:nowrap; }
+  .ph .chip.on { background:var(--ink); color:#FBF7EF; }
+  .ph .chip.sm { padding:4px 10px; font-size:12px; }
+  .ph .sect { display:flex; align-items:center; justify-content:space-between; padding:0 4px; margin:18px 0 8px; }
+  .ph .sect h4 { margin:0; font-family:'Hanken Grotesk',Inter,sans-serif; font-size:17px; font-weight:600; }
+  .ph .add { display:inline-flex; align-items:center; gap:4px; font-size:14px; font-weight:500; }
+  .ph .panel { background:var(--track); border-radius:14px; padding:9px 11px; }
+  .ph .panel.warn { background:var(--warnsoft); }
+  .ph .panel.ok { background:var(--brandsoft); }
+  .ph .gw { position:relative; margin:4px auto 0; max-width:300px; }
+  .ph .gw .c { position:absolute; left:0; right:0; top:47%; text-align:center; }
+  .ph .gw .c .l { font-size:14px; color:var(--muted); }
+  .ph .gw .c .v { font-family:'Hanken Grotesk',Inter,sans-serif; font-weight:700; font-size:42px; line-height:1; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .ph .gw .c .s { font-size:13px; color:var(--subtle); margin-top:6px; }
+  .ph .pillbtn { display:flex; align-items:center; gap:11px; border-radius:999px; padding:9px 16px 9px 18px; margin:-2px auto 0; width:max-content; max-width:100%; }
+  .ph .stats { display:grid; grid-template-columns:repeat(3,1fr); margin-top:11px; padding-top:10px; border-top:1px solid var(--line); }
+  .ph .stats > div { padding:0 8px; }
+  .ph .stats > div + div { border-left:1px solid var(--line); }
+  .ph .stats > div:first-child { padding-left:2px; }
+  .ph .stats .k { font-size:11px; color:var(--subtle); font-weight:500; }
+  .ph .stats .v { font-size:14.5px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:1px; }
+  .ph .dim { background:rgba(43,34,25,.38); height:70px; }
+  .ph .dimtxt { color:rgba(251,247,239,.75); font-size:12px; padding:26px 20px 0; }
+  .ph .sh { background:var(--card); border-radius:26px 26px 0 0; margin-top:-22px; position:relative; padding:8px 16px 20px; }
+  .ph .grab { width:38px; height:5px; border-radius:3px; background:rgb(209,193,164); margin:0 auto 12px; }
+  .ph .shh { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .ph .shh .t { font-family:'Hanken Grotesk',Inter,sans-serif; font-size:19px; font-weight:700; }
+  .ph .bd { display:flex; justify-content:space-between; align-items:center; padding:7px 0; font-size:14.5px; }
+  .ph .bd .v { font-variant-numeric:tabular-nums; }
+  .ph .bd.tot { border-top:1px solid var(--line); margin-top:2px; padding-top:9px; font-weight:600; }
+  .ph .bdh { font-size:11.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--subtle); margin:14px 0 2px; display:flex; justify-content:space-between; }
+  .ph .dot { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:8px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-landmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2 20 7H4z"/></symbol>
+    <symbol id="i-sprout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
+
+    <!-- The app's real gauge: 21 pill segments over a 200° sweep (src/phone/ui/Gauge.tsx). -->
+    <symbol id="seg" viewBox="0 0 300 186"><rect x="142.5" y="13" width="15" height="38" rx="7.5"/></symbol>
+  </defs>
+</svg>
+
+<div class="kp">
+
+<h2>Saving tab: the gauge and tidier contribution cards</h2>
+<p class="subtitle">Choosing Saving swaps the top gauge, the same way Spending has "Left to spend". Click the gauge you prefer and the card style you prefer, then tell me in the terminal.</p>
+
+<!-- ============================================================ gauge options -->
+<div class="kp-sec">
+  <h3>1 · Which gauge?</h3>
+  <p class="subtitle">A gauge showing only <i>this month's</i> fund money would always be full, because funds are added in full when you confirm the month. A uses your funds' running totals instead. B counts everything put away this month.</p>
+</div>
+
+<div class="kp-grid">
+
+<div class="option-like" data-choice="gauge-a" onclick="this.parentNode.querySelectorAll('.option-like').forEach(function(o){o.classList.remove('selected')});toggleSelect(this)">
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="in">
+    <div class="hd">
+      <div><div class="lt">Budget</div><div class="sm" style="margin-top:3px"><span class="br">On Track</span><span class="su"> · </span><span class="mu">November 2026</span></div></div>
+      <div style="display:flex;gap:10px;align-items:center"><span class="br b" style="font-size:15px">Edit plan</span><span class="tb"><svg width="17" height="17"><use href="#i-sun"/></svg></span></div>
+    </div>
+
+    <div class="gw">
+      <svg viewBox="0 0 300 186" width="100%">
+        <g fill="rgb(63,122,85)">
+          <use href="#seg" transform="rotate(-100 150 150)"/><use href="#seg" transform="rotate(-90 150 150)"/><use href="#seg" transform="rotate(-80 150 150)"/><use href="#seg" transform="rotate(-70 150 150)"/><use href="#seg" transform="rotate(-60 150 150)"/><use href="#seg" transform="rotate(-50 150 150)"/><use href="#seg" transform="rotate(-40 150 150)"/><use href="#seg" transform="rotate(-30 150 150)"/><use href="#seg" transform="rotate(-20 150 150)"/>
+        </g>
+        <g fill="rgb(226,214,193)" stroke="rgb(225,212,190)">
+          <use href="#seg" transform="rotate(-10 150 150)"/><use href="#seg" transform="rotate(0 150 150)"/><use href="#seg" transform="rotate(10 150 150)"/><use href="#seg" transform="rotate(20 150 150)"/><use href="#seg" transform="rotate(30 150 150)"/><use href="#seg" transform="rotate(40 150 150)"/><use href="#seg" transform="rotate(50 150 150)"/><use href="#seg" transform="rotate(60 150 150)"/><use href="#seg" transform="rotate(70 150 150)"/><use href="#seg" transform="rotate(80 150 150)"/><use href="#seg" transform="rotate(90 150 150)"/><use href="#seg" transform="rotate(100 150 150)"/>
+        </g>
+      </svg>
+      <div class="c">
+        <div class="l">Saved in your funds</div>
+        <div class="v">$5,350</div>
+        <div class="s">of $13,000 · +$750 this month</div>
+      </div>
+    </div>
+
+    <div class="card pillbtn">
+      <span style="text-align:center;line-height:1.25">
+        <span class="b num" style="display:block;font-size:14.5px">$950 of $2,200 contributed</span>
+        <span class="xs su" style="display:block">$1,250 left to deposit · Tap for the breakdown</span>
+      </span>
+      <svg width="17" height="17" class="mu" style="flex-shrink:0"><use href="#i-info"/></svg>
+    </div>
+
+    <div class="seg" style="margin:16px 0 4px"><span>Spending</span><span class="on">Saving</span></div>
+    <div class="sect"><h4>Contributions</h4><span class="add"><svg width="16" height="16"><use href="#i-plus"/></svg> Add account</span></div>
+    <div class="su sm" style="text-align:center;padding:6px 0 4px">(cards, see section 2 below)</div>
+  </div>
+</div>
+<div class="kp-cap"><span class="kp-pick">A · Funds in the gauge</span><br>The gauge is the running total of all your funds against their targets (like today's "Total saved"), with this month's +$750 under it. Contributions are the text pill, which is the "still nice in the UI" part you asked for. Tapping the pill opens the month's breakdown (screen 3).</div>
+</div>
+
+<div class="option-like" data-choice="gauge-b" onclick="this.parentNode.querySelectorAll('.option-like').forEach(function(o){o.classList.remove('selected')});toggleSelect(this)">
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="in">
+    <div class="hd">
+      <div><div class="lt">Budget</div><div class="sm" style="margin-top:3px"><span class="br">On Track</span><span class="su"> · </span><span class="mu">November 2026</span></div></div>
+      <div style="display:flex;gap:10px;align-items:center"><span class="br b" style="font-size:15px">Edit plan</span><span class="tb"><svg width="17" height="17"><use href="#i-sun"/></svg></span></div>
+    </div>
+
+    <div class="gw">
+      <svg viewBox="0 0 300 186" width="100%">
+        <g fill="rgb(63,122,85)">
+          <use href="#seg" transform="rotate(-100 150 150)"/><use href="#seg" transform="rotate(-90 150 150)"/><use href="#seg" transform="rotate(-80 150 150)"/><use href="#seg" transform="rotate(-70 150 150)"/><use href="#seg" transform="rotate(-60 150 150)"/><use href="#seg" transform="rotate(-50 150 150)"/><use href="#seg" transform="rotate(-40 150 150)"/><use href="#seg" transform="rotate(-30 150 150)"/><use href="#seg" transform="rotate(-20 150 150)"/><use href="#seg" transform="rotate(-10 150 150)"/><use href="#seg" transform="rotate(0 150 150)"/><use href="#seg" transform="rotate(10 150 150)"/>
+        </g>
+        <g fill="rgb(226,214,193)" stroke="rgb(225,212,190)">
+          <use href="#seg" transform="rotate(20 150 150)"/><use href="#seg" transform="rotate(30 150 150)"/><use href="#seg" transform="rotate(40 150 150)"/><use href="#seg" transform="rotate(50 150 150)"/><use href="#seg" transform="rotate(60 150 150)"/><use href="#seg" transform="rotate(70 150 150)"/><use href="#seg" transform="rotate(80 150 150)"/><use href="#seg" transform="rotate(90 150 150)"/><use href="#seg" transform="rotate(100 150 150)"/>
+        </g>
+      </svg>
+      <div class="c">
+        <div class="l">Put away in November</div>
+        <div class="v">$1,700</div>
+        <div class="s">of $2,950 savings plan</div>
+      </div>
+    </div>
+
+    <div class="card pillbtn">
+      <span style="text-align:center;line-height:1.25">
+        <span class="b num" style="display:block;font-size:14.5px">$1,250 left to deposit</span>
+        <span class="xs su" style="display:block">Funds $750 ✓ · Contributions $950 of $2,200</span>
+      </span>
+      <svg width="17" height="17" class="mu" style="flex-shrink:0"><use href="#i-info"/></svg>
+    </div>
+
+    <div class="seg" style="margin:16px 0 4px"><span>Spending</span><span class="on">Saving</span></div>
+    <div class="sect"><h4>Contributions</h4><span class="add"><svg width="16" height="16"><use href="#i-plus"/></svg> Add account</span></div>
+    <div class="su sm" style="text-align:center;padding:6px 0 4px">(cards, see section 2 below)</div>
+  </div>
+</div>
+<div class="kp-cap"><span class="kp-pick">B · This month in the gauge</span><br>The gauge is everything put away this month: funds count when you confirm, contributions count once deposited. It starts the month around a quarter lit and fills as you log deposits. This includes contributions, which you said you didn't need, so it's here only to compare against A.</div>
+</div>
+
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="dim"><div class="dimtxt">Budget</div></div>
+  <div class="sh">
+    <div class="grab"></div>
+    <div class="shh"><span class="t">Saving in November</span><svg width="20" height="20" class="mu"><use href="#i-x"/></svg></div>
+
+    <div class="bdh"><span>Funds</span><span>Added when you confirmed</span></div>
+    <div class="bd"><span><span class="dot" style="background:#e9a3a0"></span>Emergency fund</span><span class="v">$500.00</span></div>
+    <div class="bd"><span><span class="dot" style="background:#9cc0e6"></span>Vacation</span><span class="v">$250.00</span></div>
+    <div class="bd tot"><span>Funds</span><span class="v">$750.00</span></div>
+
+    <div class="bdh" style="margin-top:16px"><span>Contributions</span><span>Counted once deposited</span></div>
+    <div class="bd"><span><span class="dot" style="background:#a5a3e8"></span>RRSP</span><span class="v"><b>$350</b> <span class="mu">of $600</span></span></div>
+    <div class="bd"><span><span class="dot" style="background:#8fd3b5"></span>TFSA</span><span class="v br" style="display:flex;align-items:center;gap:5px"><svg width="14" height="14"><use href="#i-check"/></svg><b>$600</b></span></div>
+    <div class="bd"><span><span class="dot" style="background:#efc679"></span>FHSA</span><span class="v"><span class="wa b" style="font-size:12px;margin-right:6px">Due</span><b>$0</b> <span class="mu">of $1,000</span></span></div>
+    <div class="bd tot"><span>Contributions</span><span class="v">$950 <span class="mu" style="font-weight:500">of $2,200</span></span></div>
+
+    <div class="bd tot" style="margin-top:8px;font-size:16px"><span>Put away</span><span class="v br">$1,700 <span class="mu" style="font-weight:500;font-size:14px">of $2,950</span></span></div>
+    <p class="xs su" style="line-height:1.5;margin:10px 0 0">All $2,950 already came off the top of your budget. The $1,250 still to deposit is waiting in your bank account for the RRSP and FHSA.</p>
+  </div>
+</div>
+<div class="kp-cap"><b>3.</b> The month's breakdown sheet, the Saving version of "How we got $1,284". Opens from the pill under either gauge.</div>
+</div>
+
+</div>
+
+<!-- ============================================================ card options -->
+<div class="kp-sec">
+  <h3>2 · Which contribution card?</h3>
+  <p class="subtitle">Both fix the squashed "goal$13,100" line. C puts the three numbers in their own columns. D keeps the progress next to the name and gives the room its own quiet line.</p>
+</div>
+
+<div class="kp-grid">
+
+<div class="option-like" data-choice="card-c" onclick="this.parentNode.querySelectorAll('.option-like').forEach(function(o){o.classList.remove('selected')});toggleSelect(this)">
+<div class="ph">
+  <div class="in" style="padding-top:16px">
+    <div class="card" style="padding:13px 14px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#e6e5f6;color:#4f46e5"><svg width="20" height="20"><use href="#i-landmark"/></svg></span>
+        <div style="flex:1"><div class="ttl">RRSP</div><div class="xs su">2026 tax year · by Mar 1, 2027</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+      <div class="panel" style="margin:11px 0 11px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><div class="xs mu">November</div><div class="num"><span class="b">$350</span> <span class="mu">of $600 deposited</span></div></div>
+          <span class="chip on sm"><svg width="13" height="13"><use href="#i-plus"/></svg>Log deposit</span>
+        </div>
+        <div class="bar sm" style="margin-top:7px"><i style="width:58%;background:rgba(79,70,229,.45)"></i></div>
+      </div>
+      <div class="bar"><i style="width:66%;background:rgba(99,102,241,.32)"></i><b>66%</b></div>
+      <div class="stats">
+        <div><div class="k">Contributed</div><div class="v">$3,950</div></div>
+        <div><div class="k">Goal</div><div class="v">$6,000</div></div>
+        <div><div class="k">Room left</div><div class="v">$10,250</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:13px 14px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#d8efe3;color:#0f8a63"><svg width="20" height="20"><use href="#i-sprout"/></svg></span>
+        <div style="flex:1"><div class="ttl">TFSA</div><div class="xs su">2026 · by Dec 31, 2026</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+      <div class="panel ok" style="margin:11px 0 11px;display:flex;align-items:center;gap:8px">
+        <svg width="16" height="16" class="br"><use href="#i-check"/></svg>
+        <div class="num"><span class="b">$600</span> <span class="mu">deposited · November done</span></div>
+      </div>
+      <div class="bar"><i style="width:91%;background:rgba(16,185,129,.32)"></i><b>91%</b></div>
+      <div class="stats">
+        <div><div class="k">Contributed</div><div class="v">$6,400</div></div>
+        <div><div class="k">Goal</div><div class="v">$7,000</div></div>
+        <div><div class="k">Room left</div><div class="v">$13,100</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:13px 14px 12px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#f6e8cb;color:#b77708"><svg width="20" height="20"><use href="#i-home"/></svg></span>
+        <div style="flex:1"><div class="ttl">FHSA</div><div class="xs su">2026 · by Dec 31, 2026</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+      <div class="panel warn" style="margin:11px 0 11px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><div class="xs wa b">Deposit due</div><div class="num"><span class="b">$0</span> <span class="mu">of $1,000 deposited</span></div></div>
+          <span class="chip on sm"><svg width="13" height="13"><use href="#i-plus"/></svg>Log deposit</span>
+        </div>
+      </div>
+      <div class="bar"><i style="width:75%;background:rgba(245,158,11,.32)"></i><b>75%</b></div>
+      <div class="stats">
+        <div><div class="k">Contributed</div><div class="v">$6,000</div></div>
+        <div><div class="k">Goal</div><div class="v">$8,000</div></div>
+        <div><div class="k">Room left</div><div class="v">$2,000</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="kp-cap"><span class="kp-pick">C · Three columns</span><br>Contributed, Goal and Room left each get their own labelled column under the bar, so nothing has to share a line. It's the easiest to scan but a little taller.</div>
+</div>
+
+<div class="option-like" data-choice="card-d" onclick="this.parentNode.querySelectorAll('.option-like').forEach(function(o){o.classList.remove('selected')});toggleSelect(this)">
+<div class="ph">
+  <div class="in" style="padding-top:16px">
+    <div class="card" style="padding:13px 14px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#e6e5f6;color:#4f46e5"><svg width="20" height="20"><use href="#i-landmark"/></svg></span>
+        <div style="flex:1;min-width:0"><div class="ttl">RRSP</div><div class="xs su">by Mar 1, 2027</div></div>
+        <div style="text-align:right"><div class="b num" style="font-size:16px">$3,950</div><div class="xs mu num">of $6,000 goal</div></div>
+      </div>
+      <div class="bar" style="margin-top:11px"><i style="width:66%;background:rgba(99,102,241,.32)"></i><b>66%</b></div>
+      <div class="xs mu num" style="margin:7px 2px 11px">$10,250 room left · 4 months to go</div>
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><div class="xs mu">November</div><div class="num"><span class="b">$350</span> <span class="mu">of $600 deposited</span></div></div>
+          <span class="chip on sm"><svg width="13" height="13"><use href="#i-plus"/></svg>Log deposit</span>
+        </div>
+        <div class="bar sm" style="margin-top:7px"><i style="width:58%;background:rgba(79,70,229,.45)"></i></div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:13px 14px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#d8efe3;color:#0f8a63"><svg width="20" height="20"><use href="#i-sprout"/></svg></span>
+        <div style="flex:1;min-width:0"><div class="ttl">TFSA</div><div class="xs su">by Dec 31, 2026</div></div>
+        <div style="text-align:right"><div class="b num" style="font-size:16px">$6,400</div><div class="xs mu num">of $7,000 goal</div></div>
+      </div>
+      <div class="bar" style="margin-top:11px"><i style="width:91%;background:rgba(16,185,129,.32)"></i><b>91%</b></div>
+      <div class="xs mu num" style="margin:7px 2px 11px">$13,100 room left · 2 months to go</div>
+      <div class="panel ok" style="display:flex;align-items:center;gap:8px">
+        <svg width="16" height="16" class="br"><use href="#i-check"/></svg>
+        <div class="num"><span class="b">$600</span> <span class="mu">deposited · November done</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:13px 14px 12px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#f6e8cb;color:#b77708"><svg width="20" height="20"><use href="#i-home"/></svg></span>
+        <div style="flex:1;min-width:0"><div class="ttl">FHSA</div><div class="xs su">by Dec 31, 2026</div></div>
+        <div style="text-align:right"><div class="b num" style="font-size:16px">$6,000</div><div class="xs mu num">of $8,000 goal</div></div>
+      </div>
+      <div class="bar" style="margin-top:11px"><i style="width:75%;background:rgba(245,158,11,.32)"></i><b>75%</b></div>
+      <div class="xs mu num" style="margin:7px 2px 11px">$2,000 room left · 2 months to go</div>
+      <div class="panel warn">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><div class="xs wa b">Deposit due</div><div class="num"><span class="b">$0</span> <span class="mu">of $1,000 deposited</span></div></div>
+          <span class="chip on sm"><svg width="13" height="13"><use href="#i-plus"/></svg>Log deposit</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="kp-cap"><span class="kp-pick">D · Progress beside the name</span><br>The year's amount sits top-right like a balance, and room left gets its own quiet line under the bar. This month's deposit moves to the bottom of the card, where your thumb is. It's shorter than C.</div>
+</div>
+
+</div>
+
+<div style="height:40px"></div>
+</div>

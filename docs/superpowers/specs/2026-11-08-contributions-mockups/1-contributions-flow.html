@@ -1,0 +1,575 @@
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  .kp { --page:#EEE5D5; --card:#FBF7EF; --ink:rgb(43,34,25); --muted:rgb(104,89,68); --subtle:rgb(141,126,104);
+        --track:rgb(243,237,226); --line:rgb(234,225,210); --brand:rgb(63,122,85); --brandsoft:rgb(221,235,221);
+        --warn:rgb(184,120,0); --warnsoft:rgb(248,234,205); --danger:rgb(184,58,42); }
+  .kp-sec { margin: 34px 0 10px; }
+  .kp-sec h3 { margin: 0 0 4px; }
+  .kp-sec p { margin: 0; max-width: 760px; }
+  .kp-grid { display:flex; flex-wrap:wrap; gap:26px; align-items:flex-start; }
+  .kp-cap { width:330px; font-size:13px; line-height:1.45; margin-top:8px; opacity:.85; }
+  .ph { width:330px; background:var(--page); border-radius:40px; border:9px solid #1d1e1c; overflow:hidden; position:relative;
+        font-family:Inter,system-ui,sans-serif; color:var(--ink); font-size:14px; line-height:1.35; box-shadow:0 12px 30px rgba(0,0,0,.22); }
+  .ph * { box-sizing:border-box; }
+  .ph .st { display:flex; justify-content:space-between; font-size:12px; font-weight:600; padding:12px 24px 2px; }
+  .ph .in { padding:6px 14px 18px; }
+  .ph .hd { display:flex; align-items:flex-start; justify-content:space-between; padding:6px 2px 10px; }
+  .ph .lt { font-family:'Hanken Grotesk',Inter,sans-serif; font-size:30px; font-weight:700; letter-spacing:-.01em; line-height:1.1; }
+  .ph .tb { width:34px; height:34px; border-radius:50%; background:var(--card); border:1px solid rgba(225,212,190,.8); display:grid; place-items:center; color:var(--muted); }
+  .ph .nav { display:flex; align-items:center; justify-content:space-between; padding:6px 2px 12px; }
+  .ph .nav .t { font-weight:600; font-size:16px; }
+  .ph .card { background:var(--card); border:1px solid rgba(225,212,190,.7); border-radius:22px; box-shadow:0 1px 2px rgba(60,40,10,.06),0 6px 16px rgba(60,40,10,.05); }
+  .ph .grp > .row + .row { border-top:1px solid var(--line); }
+  .ph .row { display:flex; align-items:center; gap:12px; padding:12px 14px; }
+  .ph .row .g { flex:1; min-width:0; }
+  .ph .seg { background:rgb(226,214,193); border-radius:12px; padding:3px; display:flex; }
+  .ph .card .seg, .ph .sh .seg { background:var(--track); }
+  .ph .seg span { flex:1; text-align:center; padding:7px 0; font-size:13px; font-weight:600; border-radius:9px; color:var(--muted); }
+  .ph .seg .on { background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(60,40,10,.15); }
+  .ph .card .seg .on, .ph .sh .seg .on { background:#fff; }
+  .ph .av { width:40px; height:40px; border-radius:50%; display:grid; place-items:center; flex-shrink:0; }
+  .ph .av.xl { width:76px; height:76px; }
+  .ph .bar { position:relative; height:22px; border-radius:6px; overflow:hidden;
+             background:repeating-linear-gradient(90deg,rgba(141,126,104,.42) 0 1.5px,transparent 1.5px 5px); }
+  .ph .bar.sm { height:9px; border-radius:5px; }
+  .ph .bar i { position:absolute; top:0; bottom:0; left:0; border-radius:6px; }
+  .ph .bar b { position:absolute; left:4px; top:50%; transform:translateY(-50%); background:#fff; border-radius:5px; padding:0 6px;
+               font-size:11px; line-height:16px; font-weight:600; color:#0f172a; box-shadow:0 1px 2px rgba(0,0,0,.12); }
+  .ph .mu { color:var(--muted); } .ph .su { color:var(--subtle); } .ph .br { color:var(--brand); } .ph .wa { color:var(--warn); }
+  .ph .num { font-variant-numeric:tabular-nums; }
+  .ph .b { font-weight:600; } .ph .xs { font-size:12px; } .ph .sm { font-size:13px; }
+  .ph .ttl { font-size:17px; font-weight:600; }
+  .ph .disp { font-family:'Hanken Grotesk',Inter,sans-serif; font-weight:700; }
+  .ph .chip { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:500; background:var(--track); white-space:nowrap; }
+  .ph .chip.on { background:var(--ink); color:#FBF7EF; }
+  .ph .chip.sm { padding:4px 10px; font-size:12px; }
+  .ph .ban { border-radius:20px; border:1px solid; padding:13px 14px; display:flex; gap:11px; align-items:flex-start; }
+  .ph .ban.brand { background:var(--brandsoft); border-color:rgba(63,122,85,.22); }
+  .ph .ban.neutral { background:var(--card); border-color:rgba(225,212,190,.8); }
+  .ph .ban .ic { color:var(--brand); padding-top:1px; }
+  .ph .sect { display:flex; align-items:center; justify-content:space-between; padding:0 4px; margin:20px 0 8px; }
+  .ph .sect h4 { margin:0; font-family:'Hanken Grotesk',Inter,sans-serif; font-size:17px; font-weight:600; }
+  .ph .add { display:inline-flex; align-items:center; gap:4px; font-size:14px; font-weight:500; }
+  .ph .panel { background:var(--track); border-radius:14px; padding:9px 11px; }
+  .ph .panel.warn { background:var(--warnsoft); }
+  .ph .panel.ok { background:var(--brandsoft); }
+  .ph .dim { background:rgba(43,34,25,.38); height:84px; }
+  .ph .dimtxt { color:rgba(251,247,239,.75); font-size:12px; padding:30px 20px 0; }
+  .ph .sh { background:var(--card); border-radius:26px 26px 0 0; margin-top:-22px; position:relative; padding:8px 16px 20px; }
+  .ph .grab { width:38px; height:5px; border-radius:3px; background:rgb(209,193,164); margin:0 auto 12px; }
+  .ph .shh { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .ph .shh .t { font-family:'Hanken Grotesk',Inter,sans-serif; font-size:19px; font-weight:700; }
+  .ph .btn { display:block; text-align:center; background:var(--ink); color:#FBF7EF; border-radius:16px; padding:14px; font-weight:600; font-size:15px; }
+  .ph .btn.dis { opacity:.35; }
+  .ph .link { text-align:center; font-size:14px; font-weight:600; color:var(--muted); padding:12px 0 0; }
+  .ph .lbl { font-size:12.5px; font-weight:600; color:var(--muted); margin:0 0 6px 2px; }
+  .ph .inp { background:#fff; border:1px solid var(--line); border-radius:13px; padding:10px 12px; font-size:15px; }
+  .ph .hint { font-size:11.5px; color:var(--subtle); margin:5px 2px 0; line-height:1.35; }
+  .ph .fld { margin-bottom:13px; }
+  .ph .tog { width:46px; height:28px; border-radius:14px; background:var(--brand); position:relative; flex-shrink:0; }
+  .ph .tog::after { content:''; position:absolute; right:3px; top:3px; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.2); }
+  .ph .bigamt { text-align:center; font-family:'Hanken Grotesk',Inter,sans-serif; font-size:44px; font-weight:700; padding:6px 0 4px; }
+  .ph .bigamt.ph0 { color:rgba(141,126,104,.55); }
+  .ph .new { display:inline-block; font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--brand); background:var(--brandsoft); border-radius:6px; padding:1px 6px; margin-left:6px; vertical-align:2px; }
+  .ph .tag { display:inline-block; font-size:11px; font-weight:600; border-radius:6px; padding:1px 6px; }
+  .ph .tag.ex { color:var(--brand); background:var(--brandsoft); }
+  .ph .tag.sh_ { color:var(--warn); background:var(--warnsoft); }
+  .ph .mrow { display:flex; align-items:center; gap:10px; padding:10px 14px; }
+  .ph .mrow .m { width:58px; font-size:13px; font-weight:600; }
+  .ph .mrow .m.fut { color:var(--subtle); font-weight:500; }
+  .ph .mrow.now { background:rgba(221,235,221,.55); }
+  .ph .ico { display:inline-block; vertical-align:middle; }
+  .ph .pick { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+  .ph .pick9 { display:grid; grid-template-columns:repeat(9,1fr); gap:4px; }
+  .ph .pk { aspect-ratio:1; border-radius:12px; display:grid; place-items:center; background:var(--track); color:var(--ink); }
+  .ph .pk.on { background:var(--brandsoft); box-shadow:inset 0 0 0 2px var(--brand); }
+  .ph .pk.all { background:transparent; border:1.5px dashed rgb(209,193,164); flex-direction:column; font-size:9.5px; font-weight:600; color:var(--muted); gap:1px; }
+  .ph .pills { display:flex; flex-wrap:wrap; gap:7px; }
+  .ph .pill { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:6px 11px; font-size:13px; border:1px solid var(--line); background:var(--card); }
+  .ph .prog { display:flex; gap:4px; margin:4px 2px 14px; }
+  .ph .prog i { flex:1; height:4px; border-radius:2px; background:rgb(226,214,193); }
+  .ph .prog i.on { background:var(--brand); }
+  .ph .bd { display:flex; justify-content:space-between; padding:7px 0; color:var(--muted); font-size:14.5px; }
+  .ph .bd .v { font-weight:500; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .ph .bd.tot { border-top:1px solid var(--line); margin-top:2px; padding-top:9px; font-weight:600; color:var(--ink); }
+  .ph .bd.tot .v { font-weight:600; }
+  .ph .bd.hl { background:var(--brandsoft); margin:0 -8px; padding:7px 8px; border-radius:10px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-landmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2 20 7H4z"/></symbol>
+    <symbol id="i-sprout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-plane" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h.01M12 12h.01M19 12h.01"/></symbol>
+    <symbol id="i-piggy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/></symbol>
+    <symbol id="i-hour" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></symbol>
+    <symbol id="i-utensils" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></symbol>
+    <symbol id="i-coffee" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2M14 2v2M6 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/></symbol>
+    <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
+    <symbol id="i-pill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></symbol>
+    <symbol id="i-pkg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01M2 8.82a15 15 0 0 1 20 0M5 12.86a10 10 0 0 1 14 0M8.5 16.43a5 5 0 0 1 7 0"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M3 7.5h4M3 12h18M3 16.5h4M17 3v18M17 7.5h4M17 16.5h4"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
+    <symbol id="i-fuel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22h12M4 9h10M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9.83a2 2 0 0 0-.59-1.42L18 5"/></symbol>
+  </defs>
+</svg>
+
+<div class="kp">
+
+<h2>Contributions, deposits, and two fixes: mockups</h2>
+<p class="subtitle">November 2026 example. One person with an RRSP, a TFSA and an FHSA, plus two ordinary funds. The numbers carry through every screen. Tell me in the terminal what to change (e.g. "3: drop the room-left number").</p>
+
+<!-- ============================================================ 1 + 2 -->
+<div class="kp-sec">
+  <h3>1 · The Saving tab: this month at a glance</h3>
+  <p class="subtitle">The summary card at the top splits the month into Funds and Contributions. Each contribution card leads with this month's deposit, then the year's progress.</p>
+</div>
+<div class="kp-grid">
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="in">
+    <div class="hd">
+      <div><div class="lt">Budget</div><div class="sm" style="margin-top:3px"><span class="br">On Track</span><span class="su"> · </span><span class="mu">November 2026</span></div></div>
+      <div style="display:flex;gap:10px;align-items:center"><span class="br b" style="font-size:15px">Edit plan</span><span class="tb"><svg width="17" height="17"><use href="#i-sun"/></svg></span></div>
+    </div>
+    <div class="seg" style="margin-bottom:12px"><span>Spending</span><span class="on">Saving</span></div>
+
+    <div class="card" style="padding:14px 15px">
+      <div class="xs mu b" style="text-transform:uppercase;letter-spacing:.05em">Saving in November</div>
+      <div style="margin:4px 0 12px"><span class="disp num" style="font-size:28px">$1,700</span> <span class="mu">put away</span> <span class="su sm">of $2,950 planned</span></div>
+      <div style="display:flex;justify-content:space-between" class="sm"><span class="b">Funds</span><span class="num"><span class="b">$750</span><span class="mu"> of $750</span></span></div>
+      <div class="bar sm" style="margin:5px 0 3px"><i style="width:100%;background:rgba(63,122,85,.55)"></i></div>
+      <div class="xs su" style="margin-bottom:10px">Added when you confirmed November</div>
+      <div style="display:flex;justify-content:space-between" class="sm"><span class="b">Contributions</span><span class="num"><span class="b">$950</span><span class="mu"> of $2,200</span></span></div>
+      <div class="bar sm" style="margin:5px 0 3px"><i style="width:43%;background:rgba(63,122,85,.55)"></i></div>
+      <div class="xs wa b">$1,250 still to deposit</div>
+    </div>
+
+    <div class="sect"><h4>Contributions</h4><span class="add"><svg width="16" height="16"><use href="#i-plus"/></svg> Add account</span></div>
+
+    <div class="card" style="padding:13px 14px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#e6e5f6;color:#4f46e5"><svg width="20" height="20"><use href="#i-landmark"/></svg></span>
+        <div style="flex:1"><div class="ttl">RRSP</div><div class="xs su">2026 tax year · by Mar 1, 2027</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+      <div class="panel" style="margin:11px 0 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div class="xs mu">November</div><div class="num"><span class="b">$350</span><span class="mu"> of $600 deposited</span></div></div>
+          <span class="chip on sm"><svg width="13" height="13"><use href="#i-plus"/></svg>Log deposit</span>
+        </div>
+        <div class="bar sm" style="margin-top:7px;background:repeating-linear-gradient(90deg,rgba(141,126,104,.3) 0 1.5px,transparent 1.5px 5px)"><i style="width:58%;background:rgba(79,70,229,.45)"></i></div>
+      </div>
+      <div class="bar"><i style="width:66%;background:rgba(99,102,241,.32)"></i><b>66%</b></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px" class="sm"><span class="num"><span class="b">$3,950</span><span class="mu"> of $6,000 goal</span></span><span class="mu num">$10,250 room left</span></div>
+    </div>
+
+    <div class="card" style="padding:13px 14px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#d8efe3;color:#0f8a63"><svg width="20" height="20"><use href="#i-sprout"/></svg></span>
+        <div style="flex:1"><div class="ttl">TFSA</div><div class="xs su">2026 · by Dec 31, 2026</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+      <div class="panel ok" style="margin:11px 0 10px;display:flex;align-items:center;gap:8px">
+        <svg width="16" height="16" class="br"><use href="#i-check"/></svg>
+        <div class="num"><span class="b">$600</span><span class="mu"> deposited · November done</span></div>
+      </div>
+      <div class="bar"><i style="width:91%;background:rgba(16,185,129,.32)"></i><b>91%</b></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px" class="sm"><span class="num"><span class="b">$6,400</span><span class="mu"> of $7,000 goal</span></span><span class="mu num">$13,100 room left</span></div>
+    </div>
+
+    <div class="card" style="padding:13px 14px 12px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#f6e8cb;color:#b77708"><svg width="20" height="20"><use href="#i-home"/></svg></span>
+        <div style="flex:1"><div class="ttl">FHSA</div><div class="xs su">2026 · by Dec 31, 2026</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+      <div class="panel warn" style="margin:11px 0 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div class="xs wa b">Deposit due</div><div class="num"><span class="b">$0</span><span class="mu"> of $1,000 deposited</span></div></div>
+          <span class="chip on sm"><svg width="13" height="13"><use href="#i-plus"/></svg>Log deposit</span>
+        </div>
+      </div>
+      <div class="bar"><i style="width:75%;background:rgba(245,158,11,.32)"></i><b>75%</b></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px" class="sm"><span class="num"><span class="b">$6,000</span><span class="mu"> of $8,000 goal</span></span><span class="mu num">$2,000 room left</span></div>
+    </div>
+
+    <div class="sect"><h4>Funds</h4><span class="add"><svg width="16" height="16"><use href="#i-plus"/></svg> Add fund</span></div>
+    <div class="card" style="padding:13px 14px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#f7dede;color:#c2413b"><svg width="20" height="20"><use href="#i-shield"/></svg></span>
+        <div style="flex:1"><div class="ttl">Emergency fund</div><div class="xs su">+$500 this month</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+      <div class="bar" style="margin-top:11px"><i style="width:42%;background:rgba(239,68,68,.28)"></i><b>42%</b></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px" class="sm"><span class="num"><span class="b">$4,200</span><span class="mu"> of $10,000</span></span><span class="mu">no deadline</span></div>
+    </div>
+    <div class="card" style="padding:13px 14px 12px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#dbe9f6;color:#2f6db0"><svg width="20" height="20"><use href="#i-plane"/></svg></span>
+        <div style="flex:1"><div class="ttl">Vacation</div><div class="xs su">+$250 this month</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+      <div class="bar" style="margin-top:11px"><i style="width:38%;background:rgba(59,130,246,.28)"></i><b>38%</b></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px" class="sm"><span class="num"><span class="b">$1,150</span><span class="mu"> of $3,000</span></span><span class="mu">by Jun 1, 2027</span></div>
+    </div>
+  </div>
+</div>
+<div class="kp-cap"><b>1.</b> Contributions come before Funds. "Log deposit" sits on each card so you never have to dig. The "Registered accounts" entry in More goes away; this is their new home.</div>
+</div>
+
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="in">
+    <div class="hd">
+      <div><div class="lt">Budget</div><div class="sm" style="margin-top:3px"><span class="br">On Track</span><span class="su"> · </span><span class="mu">November 2026</span></div></div>
+      <div style="display:flex;gap:10px;align-items:center"><span class="br b" style="font-size:15px">Edit plan</span><span class="tb"><svg width="17" height="17"><use href="#i-sun"/></svg></span></div>
+    </div>
+    <div class="ban brand">
+      <span class="ic"><svg width="20" height="20"><use href="#i-piggy"/></svg></span>
+      <div style="flex:1">
+        <div class="b" style="font-size:15px">Deposit $1,250 this month</div>
+        <div class="sm mu" style="margin:2px 0 9px">RRSP $250 · FHSA $1,000. It's already set aside in your plan. Log each one once it's in the account.</div>
+        <span class="chip on">Log deposits</span>
+      </div>
+    </div>
+    <svg viewBox="0 0 260 150" width="100%" style="margin-top:14px">
+      <path d="M30 130 A100 100 0 0 1 230 130" fill="none" stroke="rgb(226,214,193)" stroke-width="18" stroke-linecap="round"/>
+      <path d="M30 130 A100 100 0 0 1 178 44" fill="none" stroke="rgb(63,122,85)" stroke-width="18" stroke-linecap="round"/>
+      <text x="130" y="92" text-anchor="middle" font-family="Inter" font-size="13" fill="rgb(104,89,68)">Left to spend</text>
+      <text x="130" y="124" text-anchor="middle" font-family="Hanken Grotesk, Inter" font-weight="700" font-size="34" fill="rgb(43,34,25)">$1,284</text>
+      <text x="130" y="145" text-anchor="middle" font-family="Inter" font-size="11.5" fill="rgb(141,126,104)">of $2,400 spending plan</text>
+    </svg>
+    <div style="display:flex;justify-content:center;margin-top:6px">
+      <div class="card" style="border-radius:999px;padding:9px 18px;display:flex;align-items:center;gap:10px">
+        <div style="text-align:center"><div class="b num" style="font-size:14.5px">$55.83 / day safe to spend</div><div class="xs su">Tap for the breakdown · Next budget Dec 1</div></div>
+        <svg width="17" height="17" class="mu"><use href="#i-info"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="kp-cap"><b>2.</b> The Budget home tells you a deposit is due. The banner disappears once every account's month is logged. Tapping it opens the Saving tab.</div>
+</div>
+
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="dim"><div class="dimtxt">Budget</div></div>
+  <div class="sh">
+    <div class="grab"></div>
+    <div class="shh"><span class="t">How we got $1,284</span><svg width="20" height="20" class="mu"><use href="#i-x"/></svg></div>
+    <div class="bd"><span>Income in November</span><span class="v b">$7,200.00</span></div>
+    <div class="bd"><span>− Recurring costs</span><span class="v">$1,450.00</span></div>
+    <div class="bd"><span>− Debt payments</span><span class="v">$400.00</span></div>
+    <div class="bd"><span>− Savings funds</span><span class="v">$750.00</span></div>
+    <div class="bd hl"><span>− Contributions <span class="new">new</span></span><span class="v">$2,200.00</span></div>
+    <div class="bd tot"><span>Spending plan</span><span class="v">$2,400.00</span></div>
+    <div class="bd"><span>− Spent so far</span><span class="v">$1,116.00</span></div>
+    <div class="bd tot"><span>Left to spend</span><span class="v br" style="font-size:17px">$1,284.00</span></div>
+    <p class="xs su" style="line-height:1.5;margin:10px 0 0">That's $55.83 a day for the 23 days left in November. Recurring charges, purchases paid from a fund, and RRSP/TFSA/FHSA contributions don't count as spending here. They're already covered above.</p>
+  </div>
+</div>
+<div class="kp-cap"><b>3.</b> Contributions come off the top as their own line in the breakdown, next to funds. Planned amounts count here even before you've deposited.</div>
+</div>
+</div>
+
+<!-- ============================================================ account detail + deposit -->
+<div class="kp-sec">
+  <h3>2 · An account and logging a deposit</h3>
+  <p class="subtitle">"By month" shows each month's deposit and how the plan adjusts. August came up short, so later months went up. September had extra, so later months went down.</p>
+</div>
+<div class="kp-grid">
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="in">
+    <div class="nav">
+      <span class="br b" style="display:flex;align-items:center;font-size:15px"><svg width="20" height="20"><use href="#i-back"/></svg>Budget</span>
+      <span class="t">RRSP</span>
+      <span class="tb"><svg width="17" height="17"><use href="#i-more"/></svg></span>
+    </div>
+    <div class="card" style="padding:18px 16px 16px;text-align:center">
+      <div style="display:flex;justify-content:center;margin-bottom:12px"><span class="av xl" style="background:#e6e5f6;color:#4f46e5"><svg width="36" height="36"><use href="#i-landmark"/></svg></span></div>
+      <div class="disp num" style="font-size:22px">$3,950 <span class="mu" style="font-weight:600">of $6,000</span></div>
+      <div class="sm mu" style="margin-top:2px">2026 goal · by March 1, 2027</div>
+      <div class="bar" style="margin-top:14px;text-align:left"><i style="width:66%;background:rgba(99,102,241,.32)"></i><b>66%</b></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px" class="sm"><span class="b">$2,050 to go</span><span class="mu">4 months left</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;text-align:left">
+        <div class="panel"><div class="xs mu">Room for 2026</div><div class="b num">$14,200</div></div>
+        <div class="panel"><div class="xs mu">Room left</div><div class="b num">$10,250</div></div>
+      </div>
+      <div style="display:flex;justify-content:center;gap:8px;margin-top:14px">
+        <span class="chip on"><svg width="14" height="14"><use href="#i-plus"/></svg>Log deposit</span>
+        <span class="chip">Edit</span>
+      </div>
+    </div>
+
+    <div class="sect"><h4>By month</h4></div>
+    <div class="card grp" style="overflow:hidden">
+      <div class="mrow"><span class="m">Aug</span><span style="flex:1" class="sm num">$500 <span class="mu">of $643</span></span><span class="tag sh_">$143 short</span></div>
+      <div class="mrow" style="border-top:1px solid var(--line)"><span class="m">Sep</span><span style="flex:1" class="sm num">$1,000 <span class="mu">of $667</span></span><span class="tag ex">+$333 extra</span></div>
+      <div class="mrow" style="border-top:1px solid var(--line)"><span class="m">Oct</span><span style="flex:1" class="sm num">$600 <span class="mu">of $600</span></span><svg width="16" height="16" class="br"><use href="#i-check"/></svg></div>
+      <div class="mrow now" style="border-top:1px solid var(--line)"><span class="m">Nov</span><span style="flex:1"><span class="sm num">$350 <span class="mu">of $600</span></span><div class="bar sm" style="margin-top:4px;height:6px"><i style="width:58%;background:rgba(79,70,229,.45)"></i></div></span><span class="xs b br" style="margin-left:6px">This month</span></div>
+      <div class="mrow" style="border-top:1px solid var(--line)"><span class="m fut">Dec</span><span style="flex:1" class="sm su num">$600 planned</span></div>
+      <div class="mrow" style="border-top:1px solid var(--line)"><span class="m fut">Jan</span><span style="flex:1" class="sm su num">$600 planned</span></div>
+      <div class="mrow" style="border-top:1px solid var(--line)"><span class="m fut">Feb</span><span style="flex:1" class="sm su num">$600 planned</span></div>
+    </div>
+    <div class="xs su" style="margin:7px 4px 0">Put in extra and the months ahead go down. Miss one and what's left spreads over the rest.</div>
+
+    <div class="sect"><h4>Contribution history</h4></div>
+    <div class="card grp" style="overflow:hidden">
+      <div class="row"><div class="g"><div class="b sm">Deposit</div><div class="xs su">Nov 3, 2026</div></div><span class="b br num">+$350.00</span></div>
+      <div class="row"><div class="g"><div class="b sm">Deposit</div><div class="xs su">Oct 1, 2026</div></div><span class="b br num">+$600.00</span></div>
+      <div class="row"><div class="g"><div class="b sm">Deposit · bonus</div><div class="xs su">Sep 1, 2026</div></div><span class="b br num">+$1,000.00</span></div>
+      <div class="row"><div class="g"><div class="b sm">Deposit</div><div class="xs su">Aug 1, 2026</div></div><span class="b br num">+$500.00</span></div>
+      <div class="row"><div class="g"><div class="b sm">Already in when you set it up</div><div class="xs su">Mar 20, 2026</div></div><span class="b br num">+$1,500.00</span></div>
+    </div>
+  </div>
+</div>
+<div class="kp-cap"><b>4.</b> The account screen. "By month" covers the whole tax year: past months are actual deposits, the current month shows progress, future months show the recalculated split. History lists every deposit (swipe or tap to remove).</div>
+</div>
+
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="dim" style="height:150px"><div class="dimtxt">RRSP</div></div>
+  <div class="sh">
+    <div class="grab"></div>
+    <div class="shh"><span class="t">Log RRSP deposit</span><svg width="20" height="20" class="mu"><use href="#i-x"/></svg></div>
+    <div class="sm mu" style="text-align:center">November plan: $600 · $350 in so far</div>
+    <div class="bigamt num">$250.00</div>
+    <div class="xs su" style="text-align:center;margin-bottom:16px">Filled in with what's left for November. Change it if you put in more or less.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="inp" style="display:flex;align-items:center;gap:7px"><svg width="15" height="15" class="mu"><use href="#i-cal"/></svg>Nov 8, 2026</div>
+      <div class="inp su">Note (optional)</div>
+    </div>
+    <div class="panel" style="margin-bottom:14px"><div class="xs mu">After this: <span class="b" style="color:var(--ink)">$4,200 of $6,000</span>. Dec – Feb stay at $600 a month.</div></div>
+    <div class="btn">I deposited it</div>
+  </div>
+</div>
+<div class="kp-cap"><b>5.</b> "I deposited it." Only this moves the account's balance; a confirmed month alone doesn't. Your budget is unaffected because the money already came off the top.</div>
+</div>
+
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="dim" style="height:40px"></div>
+  <div class="sh">
+    <div class="grab"></div>
+    <div class="shh"><span class="t">Add a registered account</span><svg width="20" height="20" class="mu"><use href="#i-x"/></svg></div>
+    <div class="seg" style="margin-bottom:14px"><span class="on">RRSP</span><span>TFSA</span><span>FHSA</span></div>
+    <div class="fld"><div class="lbl">Contribution room for 2026</div><div class="inp num">$14,200</div><div class="hint">Your "RRSP deduction limit" on your Notice of Assessment or CRA My Account.</div></div>
+    <div class="fld"><div class="lbl">Already put in for 2026</div><div class="inp num">$3,600</div><div class="hint">Anything since Mar 2, 2026. Leave blank if none.</div></div>
+    <div class="fld"><div class="lbl" style="display:flex;justify-content:space-between">Goal by the deadline <span class="br">Use all my room</span></div><div class="inp num">$6,000</div></div>
+    <div class="fld"><div class="lbl">Deadline</div><div class="inp" style="display:flex;align-items:center;gap:7px"><svg width="15" height="15" class="mu"><use href="#i-cal"/></svg>Mar 1, 2027</div><div class="hint">RRSP default: 60 days after the year ends. Change it if you like.</div></div>
+    <div class="card" style="padding:11px 13px;display:flex;align-items:center;gap:12px;margin-bottom:14px;box-shadow:none">
+      <div style="flex:1"><div class="b">Budget it monthly</div><div class="xs mu num">$600 a month · Nov – Feb (4 months)</div></div>
+      <span class="tog"></span>
+    </div>
+    <div class="btn">Add RRSP</div>
+  </div>
+</div>
+<div class="kp-cap"><b>6.</b> Adding (or editing) an account. Picking TFSA or FHSA changes the hints and default deadline (Dec 31). "Already put in" lets you start mid-year without logging old deposits one by one. If the goal is over your room, a warning shows (RRSP: up to $2,000 over is allowed).</div>
+</div>
+</div>
+
+<!-- ============================================================ deadlines -->
+<div class="kp-sec">
+  <h3>3 · When a deadline passes</h3>
+  <p class="subtitle">TFSA and FHSA roll straight into a new year using suggested room. The RRSP waits for your Notice of Assessment, and deposits still count while it waits.</p>
+</div>
+<div class="kp-grid">
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="dim" style="height:40px"></div>
+  <div class="sh">
+    <div class="grab"></div>
+    <div class="shh"><span class="t">Your 2027 TFSA year</span><svg width="20" height="20" class="mu"><use href="#i-x"/></svg></div>
+    <div class="panel ok" style="display:flex;gap:9px;align-items:center;margin-bottom:14px">
+      <svg width="18" height="18" class="br"><use href="#i-check"/></svg>
+      <div class="sm"><span class="b">2026 done:</span> you put in <span class="b num">$7,000</span> of your $7,000 goal.</div>
+    </div>
+    <div class="fld"><div class="lbl">Room for 2027</div><div class="inp num">$19,500</div><div class="hint">$12,500 unused + $7,000 new for 2027. Took money out in 2026? Add it here, since CRA gives it back on Jan 1.</div></div>
+    <div class="fld"><div class="lbl" style="display:flex;justify-content:space-between">Goal by the deadline <span class="br">Use all my room</span></div><div class="inp num">$7,000</div></div>
+    <div class="fld"><div class="lbl">Deadline</div><div class="inp" style="display:flex;align-items:center;gap:7px"><svg width="15" height="15" class="mu"><use href="#i-cal"/></svg>Dec 31, 2027</div></div>
+    <div class="card" style="padding:11px 13px;display:flex;align-items:center;gap:12px;margin-bottom:14px;box-shadow:none">
+      <div style="flex:1"><div class="b">Budget it monthly</div><div class="xs mu num">$583 a month · Jan – Dec (12 months)</div></div>
+      <span class="tog"></span>
+    </div>
+    <div class="btn">Start 2027</div>
+    <div class="link">Not now</div>
+  </div>
+</div>
+<div class="kp-cap"><b>7.</b> On Jan 1 the TFSA (and FHSA) prompt opens from a banner on the Budget screen. The room is pre-filled from what you didn't use plus the new year's limit. For the FHSA, that's at most $8,000 carried forward + $8,000, capped by what's left of the $40,000 lifetime limit. Everything is editable.</div>
+</div>
+
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="in">
+    <div class="hd">
+      <div><div class="lt">Budget</div><div class="sm" style="margin-top:3px"><span class="br">On Track</span><span class="su"> · </span><span class="mu">March 2027</span></div></div>
+      <span class="tb"><svg width="17" height="17"><use href="#i-sun"/></svg></span>
+    </div>
+    <div class="ban brand" style="margin-bottom:12px">
+      <span class="ic"><svg width="20" height="20"><use href="#i-check"/></svg></span>
+      <div style="flex:1"><div class="b" style="font-size:15px">Your 2026 RRSP year is done</div>
+      <div class="sm mu" style="margin-top:2px">You put in $6,000 of your $6,000 goal. Add your 2027 room when your Notice of Assessment arrives.</div></div>
+    </div>
+    <div class="seg" style="margin-bottom:12px"><span>Spending</span><span class="on">Saving</span></div>
+    <div class="sect" style="margin-top:6px"><h4>Contributions</h4><span class="add"><svg width="16" height="16"><use href="#i-plus"/></svg> Add account</span></div>
+    <div class="card" style="padding:13px 14px 13px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#e6e5f6;color:#4f46e5"><svg width="20" height="20"><use href="#i-landmark"/></svg></span>
+        <div style="flex:1"><div class="ttl">RRSP</div><div class="xs su">2027 · waiting for your room</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+      <div class="panel" style="margin:11px 0 10px;display:flex;gap:9px;align-items:flex-start">
+        <svg width="17" height="17" class="mu" style="flex-shrink:0;margin-top:1px"><use href="#i-hour"/></svg>
+        <div class="sm mu">Enter your 2027 room from your Notice of Assessment to start budgeting. Not in your plan until then.</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="sm num"><span class="b">$500</span><span class="mu"> in since Mar 2</span></span>
+        <div style="display:flex;gap:6px"><span class="chip sm">Log deposit</span><span class="chip on sm">Enter room</span></div>
+      </div>
+    </div>
+    <div class="card" style="padding:13px 14px 12px;margin-top:10px;opacity:.9">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="av" style="background:#d8efe3;color:#0f8a63"><svg width="20" height="20"><use href="#i-sprout"/></svg></span>
+        <div style="flex:1"><div class="ttl">TFSA</div><div class="xs su">2027 · by Dec 31, 2027</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="kp-cap"><b>8.</b> RRSP after March 1. Last year's summary shows once in a banner. The card sits in "waiting" with no plan line, but deposits still log (the $500 here). "Enter room" opens the same form as 6, and the monthly split takes off the $500 already in.</div>
+</div>
+</div>
+
+<!-- ============================================================ setup + fixes -->
+<div class="kp-sec">
+  <h3>4 · First-time setup, the icon picker, and the expense sheet</h3>
+  <p class="subtitle">The new setup step comes right after Funds. Accounts added here flow into the AI export and the first month's plan.</p>
+</div>
+<div class="kp-grid">
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="in">
+    <div class="nav" style="padding-bottom:6px">
+      <span class="tb" style="background:transparent;border:none"><svg width="22" height="22"><use href="#i-back"/></svg></span>
+      <span class="xs mu b">Step 5 of 7</span>
+      <span style="width:34px"></span>
+    </div>
+    <div class="prog"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+    <div class="disp" style="font-size:26px;line-height:1.15;margin:0 2px 6px">Registered accounts</div>
+    <div class="sm mu" style="margin:0 2px 16px">Have an RRSP, TFSA or FHSA? Add it to plan this year's contributions. You can skip this and add them later from Saving.</div>
+    <div class="card grp" style="overflow:hidden;margin-bottom:10px">
+      <div class="row">
+        <span class="av" style="background:#d8efe3;color:#0f8a63"><svg width="20" height="20"><use href="#i-sprout"/></svg></span>
+        <div class="g"><div class="b">TFSA</div><div class="xs mu num">$7,000 goal by Dec 31 · $600/month</div></div>
+        <svg width="18" height="18" class="su"><use href="#i-chev"/></svg>
+      </div>
+    </div>
+    <div class="card grp" style="overflow:hidden">
+      <div class="row"><span class="av" style="background:#e6e5f6;color:#4f46e5"><svg width="20" height="20"><use href="#i-landmark"/></svg></span><div class="g b">Add an RRSP</div><svg width="18" height="18" class="mu"><use href="#i-plus"/></svg></div>
+      <div class="row"><span class="av" style="background:#f6e8cb;color:#b77708"><svg width="20" height="20"><use href="#i-home"/></svg></span><div class="g b">Add an FHSA</div><svg width="18" height="18" class="mu"><use href="#i-plus"/></svg></div>
+    </div>
+    <div style="height:110px"></div>
+    <div class="btn">Continue</div>
+    <div class="link">Skip for now</div>
+  </div>
+</div>
+<div class="kp-cap"><b>9.</b> Setup: pay → recurring → debts → funds → <b>registered accounts</b> → export → plan. Tap an added account to edit or delete it, the same as the other steps. Each account type can be added once, since your room is per person, not per bank.</div>
+</div>
+
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="dim" style="height:40px"></div>
+  <div class="sh">
+    <div class="grab"></div>
+    <div class="shh"><span class="t">New category</span><svg width="20" height="20" class="mu"><use href="#i-x"/></svg></div>
+    <div class="fld"><div class="lbl">Name</div><div class="inp">Groceries</div></div>
+    <div class="lbl">Icon</div>
+    <div class="pick">
+      <span class="pk on"><svg width="19" height="19"><use href="#i-cart"/></svg></span>
+      <span class="pk"><svg width="19" height="19"><use href="#i-utensils"/></svg></span>
+      <span class="pk"><svg width="19" height="19"><use href="#i-home"/></svg></span>
+      <span class="pk"><svg width="19" height="19"><use href="#i-car"/></svg></span>
+      <span class="pk"><svg width="19" height="19"><use href="#i-bag"/></svg></span>
+      <span class="pk all"><svg width="15" height="15"><use href="#i-grid"/></svg>See all</span>
+    </div>
+    <div class="hint" style="margin-bottom:18px">First one matches the name you typed.</div>
+
+    <div class="lbl" style="margin-top:4px">After "See all":</div>
+    <div class="pick9" style="margin-bottom:8px">
+      <span class="pk on"><svg width="16" height="16"><use href="#i-cart"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-utensils"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-home"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-car"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-bag"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-coffee"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-fuel"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-phone"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-wifi"/></svg></span>
+      <span class="pk"><svg width="16" height="16"><use href="#i-bulb"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-shield"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-pill"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-film"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-plane"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-gift"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-heart"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-book"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-piggy"/></svg></span>
+      <span class="pk"><svg width="16" height="16"><use href="#i-sprout"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-landmark"/></svg></span><span class="pk"><svg width="16" height="16"><use href="#i-pkg"/></svg></span>
+    </div>
+    <div class="br b sm" style="text-align:center;margin-bottom:12px">Show less</div>
+    <div class="btn">Save</div>
+  </div>
+</div>
+<div class="kp-cap"><b>10.</b> The icon picker in categories, funds and recurring, including during setup. Five suggestions plus "See all". The first suggestion matches the name, and the other four are common picks for that kind of item. If you've already picked an icon outside the five, it takes the first spot. "See all" opens today's full grid in place.</div>
+</div>
+
+<div>
+<div class="ph">
+  <div class="st"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="dim" style="height:30px"></div>
+  <div class="sh" style="padding-bottom:16px">
+    <div class="grab"></div>
+    <div class="shh"><span class="t">Log expense</span><svg width="20" height="20" class="mu"><use href="#i-x"/></svg></div>
+    <div class="bigamt ph0 num" style="padding-top:14px">$0.00</div>
+    <div class="xs su" style="text-align:center;margin-bottom:18px">Tap to enter the amount</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:14px">
+      <div class="inp su">What was it?</div>
+      <div class="inp" style="width:120px">Nov 8, 2026</div>
+    </div>
+    <div class="lbl">Category</div>
+    <div class="pills" style="margin-bottom:14px">
+      <span class="pill"><svg width="14" height="14"><use href="#i-cart"/></svg>Groceries</span>
+      <span class="pill"><svg width="14" height="14"><use href="#i-utensils"/></svg>Eating out</span>
+      <span class="pill"><svg width="14" height="14"><use href="#i-coffee"/></svg>Coffee</span>
+      <span class="pill"><svg width="14" height="14"><use href="#i-fuel"/></svg>Gas</span>
+      <span class="pill"><svg width="14" height="14"><use href="#i-bag"/></svg>Shopping</span>
+      <span class="pill"><svg width="14" height="14"><use href="#i-film"/></svg>Fun</span>
+    </div>
+    <div class="lbl">Paid from</div>
+    <div class="seg" style="margin-bottom:6px"><span class="on">Budget</span><span>A fund</span><span>Credit card</span></div>
+    <div class="xs su" style="margin:0 2px 14px">Counts against this month's spending.</div>
+    <div class="lbl">Note</div>
+    <div class="inp su" style="margin-bottom:16px">Optional</div>
+    <div class="btn dis">Save</div>
+  </div>
+</div>
+<div class="kp-cap"><b>11.</b> Log expense: the sheet opens at the top with the keyboard down, so you see the whole form first. Tapping the amount (or any field) brings the keyboard up. Editing an existing expense already works this way.</div>
+</div>
+</div>
+
+<div style="height:40px"></div>
+</div>

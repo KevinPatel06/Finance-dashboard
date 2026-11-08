@@ -21,3 +21,6 @@ ios/DerivedData/
 *.p12
 *.jks
 *.keystore
+
+# Brainstorm mockup server scratch
+.superpowers/
