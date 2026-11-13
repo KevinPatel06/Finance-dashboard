@@ -244,6 +244,23 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   `expenses.fund_id` (FK `SET NULL`), turning purchases paid from it into everyday spending
   and rewriting past months. `hardDeleteGoal` drops only this and later months' fund lines.
 - **Payday check-in** replaces the wizard on the phone (`paydays.confirm/snooze`).
+- **Budget home layout** (Nov 2026 revamp; mockups in the "Finance Phone Revamp" design canvas):
+  Spending/Saving switch under the title, then the gauge in a card (or `SavingSummary`), then
+  every to-do banner in one swipeable **Needs you** row (`budget/NeedsYou.tsx`) so they never push
+  the gauge off screen. Category rows use `Bar` (plain track, filled in the item's `fillTint`).
+  The breakdown sheet (`BreakdownSheet.tsx`) lists income, then every plan line **sorted biggest
+  first**; the Edit plan sheet opens on a "Left to assign" card with one stacked bar (a line marks
+  where income runs out) and folds each section to one row (`PlanSection`, `collapsible`; setup
+  leaves them open). Plan-line colours live in `budget/planColors.ts` so the breakdown, Edit plan
+  and Saving bar agree. No pace markers: the "Spending fast" chip is the only pace signal.
+- **Expenses calendar**: fixed-step green shades (`HEAT` in `MonthCalendar.tsx`, not relative to
+  the month's biggest day), `$1.5k` from $1,000 up (`moneyCompact`), today's date in a dark pill,
+  the picked day ringed with its expenses (notes included) in a card under the calendar.
+  Calendar · Categories · Upcoming is one segmented control.
+- **Log expense** (`ExpenseEditor`): its own number pad (`expenses/Keypad.tsx`, `pressKey` is
+  unit-tested) so the amount never raises the phone keyboard; Today / Yesterday / Pick a day
+  chips; three suggested categories (the description's `guessCategory`, then most used lately)
+  + "All". Paid from stays a segmented control; the note field stays.
 - **Contributions (RRSP / TFSA / FHSA)** — spec `docs/superpowers/specs/2026-11-08-contributions-
   design.md`. **Optional**: no accounts → the budget is exactly as before; "Not for me" hides the
   section. CRA rules live in `shared/registered.ts` (limits, `rrspDeadline` = 60th day, weekend →
@@ -259,9 +276,11 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   `listRegisteredAccounts`/`budgetMonth` → both write): row in `registered_years`, account
   `waiting`; TFSA/FHSA get a "Start your <year>" banner with suggested room (snooze = meta
   `reg_newyear_snooze:<id>`), the RRSP waits for the user's NOA number (summary ack = meta
-  `reg_summary_ack:<id>:<year>`). Saving tab: the gauge **swaps with the tab** ("Put away in
-  <Month>" = confirmed fund lines + deposits this month; button copy in `budget/savingCopy.ts`),
-  card per account, account screen `/account/:id`. The More entry and `/registered` route are gone.
+  `reg_summary_ack:<id>:<year>`). Saving tab: the Budget hero **swaps with the tab** for
+  `SavingSummary` ("Put away in <Month>" = confirmed fund lines + deposits this month, as one
+  number with a bar split by funds and each account; status copy in `budget/savingCopy.ts`), then
+  a "To deposit this month" list with Log buttons, a card per account, account screen
+  `/account/:id`. The More entry and `/registered` route are gone.
   Small rules, all in `shared/registered.ts` so the UI, budget and export can't disagree:
   `overRoomBy` (an RRSP may be $2,000 over with **no** charge; only the part above is taxed 1%/mo,
   TFSA/FHSA the whole excess), `depositEffect` (the deposit sheet's "From Dec: $600 → $350 a month"

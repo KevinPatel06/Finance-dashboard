@@ -15,7 +15,7 @@ import { iconInk } from '../ui/pastel';
 import Keypad from './Keypad';
 
 /** How many categories show before "All". */
-const SUGGESTED = 4;
+const SUGGESTED = 3;
 
 type PaidFrom = 'budget' | 'fund' | 'card';
 
@@ -228,7 +228,7 @@ export default function ExpenseEditor({
 
         <div>
           <div className="label">Category</div>
-          <div role="radiogroup" aria-label="Category" className={cn(allCats ? 'flex flex-wrap gap-2' : 'grid grid-cols-5 gap-2')}>
+          <div role="radiogroup" aria-label="Category" className={cn(allCats ? 'flex flex-wrap gap-2' : 'grid grid-cols-4 gap-2')}>
             {(allCats ? ranked : suggested).map((c) =>
               allCats ? (
                 <button

@@ -68,26 +68,27 @@ export default function BudgetScreen() {
 
   return (
     <div className="space-y-4">
-      <LargeHeader
-        title="Budget"
-        subtitle={
-          <span className="flex items-center gap-2.5">
-            <span className={cn('inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-semibold', pace.chip)}>
-              <PaceIcon size={14} strokeWidth={2.5} aria-hidden />
-              {pace.label}
-            </span>
-            <span className="text-content-muted font-normal text-[15px]">{monthLabel(v.month)}</span>
+      <div>
+        <LargeHeader
+          title="Budget"
+          right={
+            <button
+              className="press [--dip:0.94] min-h-11 px-1 text-base font-semibold text-brand-ink"
+              onClick={() => setEditor('edit')}
+            >
+              Edit plan
+            </button>
+          }
+        />
+        {/* Its own full-width row: beside the title it shared space with Edit plan and wrapped. */}
+        <div className="flex items-center gap-2.5 whitespace-nowrap">
+          <span className={cn('inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-semibold', pace.chip)}>
+            <PaceIcon size={14} strokeWidth={2.5} aria-hidden />
+            {pace.label}
           </span>
-        }
-        right={
-          <button
-            className="press [--dip:0.94] min-h-11 px-1 text-base font-semibold text-brand-ink"
-            onClick={() => setEditor('edit')}
-          >
-            Edit plan
-          </button>
-        }
-      />
+          <span className="text-content-muted text-[15px]">{monthLabel(v.month)}</span>
+        </div>
+      </div>
 
       <SegmentedControl
         value={tab}

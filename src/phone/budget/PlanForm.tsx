@@ -273,16 +273,12 @@ function PlanSummaryCard({
 
   return (
     <div className="rounded-[22px] bg-surface-2 border border-border/70 shadow-card px-4 pt-3.5 pb-3 mt-2">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium text-content-muted">Left to assign</div>
-          <div className={cn('text-[40px] leading-none font-display font-bold num-display mt-1', over && 'text-danger')}>
-            {over ? '−' : ''}
-            {money(Math.abs(left))}
-          </div>
-        </div>
-        <div className="text-sm text-content-muted text-right num pb-0.5">of {money(income)} income</div>
+      <div className="text-sm font-medium text-content-muted">Left to assign</div>
+      <div className={cn('text-[40px] leading-none font-display font-bold num-display mt-1 whitespace-nowrap', over && 'text-danger')}>
+        {over ? '−' : ''}
+        {money(Math.abs(left))}
       </div>
+      <div className="text-sm text-content-muted num mt-1">of {money(income)} income</div>
 
       <div className="relative mt-4 pt-4">
         {over && (

@@ -183,7 +183,7 @@ if (fresh) {
   await shot('02a-saving-cards');
   await evaluate(`(() => { const el = [...document.querySelectorAll('*')].find((e) => e.scrollHeight > e.clientHeight + 40 && getComputedStyle(e).overflowY !== 'visible' && e.clientHeight > 400) || document.scrollingElement; el.scrollTop = 0; return true; })()`);
   await sleep(300);
-  await click('[aria-label$="Show the breakdown"]');
+  await click('Show the saving breakdown');
   await sleep(700);
   await shot('02b-saving-breakdown');
   await click('[aria-label="Close"]');

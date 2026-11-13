@@ -11,7 +11,7 @@ import FundEditor from '../funds/FundEditor';
 import AccountCard from '../contributions/AccountCard';
 import AccountEditor from '../contributions/AccountEditor';
 import DepositSheet from '../contributions/DepositSheet';
-import { KIND_META, KIND_ORDER } from '../contributions/meta';
+import { cash, KIND_META, KIND_ORDER } from '../contributions/meta';
 
 type Filter = 'active' | 'completed' | 'plan';
 
@@ -82,7 +82,7 @@ export default function SavingTab({ view }: { view: BudgetMonthView }) {
                 <div className="flex-1 min-w-0">
                   <div className="text-base font-semibold truncate">{c.label}</div>
                   <div className="text-sm text-content-muted num">
-                    {c.deposited > 0 ? `${money(c.deposited)} of ${money(c.amount)} deposited` : `${money(c.amount)} due`}
+                    {c.deposited > 0 ? `${cash(c.deposited)} of ${cash(c.amount)} deposited` : `${cash(c.amount)} due`}
                   </div>
                 </div>
                 <button
