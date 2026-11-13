@@ -45,8 +45,9 @@ export default function SegmentedControl<T extends string>({
             data-on-card={active ? '' : undefined}
             onClick={() => onChange(o.value)}
             className={cn(
-              'relative rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-200',
-              active ? 'text-content' : 'text-content-muted'
+              // 36px tall inside the 4px track: the whole control is a 44px target.
+              'relative min-h-9 rounded-full px-2 py-1.5 text-[15px] leading-tight transition-colors duration-200',
+              active ? 'text-content font-semibold' : 'text-content-muted font-medium'
             )}
           >
             {o.label}

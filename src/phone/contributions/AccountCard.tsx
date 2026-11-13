@@ -5,7 +5,7 @@ import { taxYearFor } from '@shared/registered';
 import { cn } from '@/lib/utils';
 import { monthName, todayIso } from '../dates';
 import { pct } from '../format';
-import { EmojiAvatar, HatchedBar } from '../ui/kit';
+import { EmojiAvatar, Bar } from '../ui/kit';
 import { cash, KIND_META, overRoom, shortDate } from './meta';
 
 function SmallChip({ children, onClick, active }: { children: ReactNode; onClick: () => void; active?: boolean }) {
@@ -17,7 +17,7 @@ function SmallChip({ children, onClick, active }: { children: ReactNode; onClick
         onClick();
       }}
       className={cn(
-        'press [--dip:0.94] inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap',
+        'press [--dip:0.94] min-h-11 inline-flex items-center gap-1 rounded-full px-3.5 text-sm font-medium whitespace-nowrap',
         active ? 'bg-content text-surface' : 'bg-surface-3 text-content'
       )}
     >
@@ -75,58 +75,14 @@ export default function AccountCard({
         </div>
       </div>
     );
-  } else if (a.this_month) {
-    const { planned, deposited } = a.this_month;
-    if (planned <= 0) {
-      const met = a.goal != null && a.contributed >= a.goal;
-      panel = (
-        <div className={cn('rounded-2xl px-3 py-2.5 mt-3 flex items-center justify-between gap-2', met ? 'bg-brand-soft' : 'bg-surface-3')}>
-          <span className="text-[13px] text-content-muted flex items-center gap-1.5">
-            {met && <Check size={15} strokeWidth={2.6} className="text-brand" />}
-            {met ? 'Goal met for this year' : 'Nothing planned this month'}
-          </span>
-          <SmallChip onClick={onDeposit}>
-            <Plus size={12} strokeWidth={2.4} /> Log deposit
-          </SmallChip>
-        </div>
-      );
-    } else if (deposited >= planned) {
-      panel = (
-        <div className="rounded-2xl bg-brand-soft px-3 py-2.5 mt-3 flex items-center gap-2 text-[14px]">
-          <Check size={16} strokeWidth={2.6} className="text-brand shrink-0" />
-          <span className="num">
-            <span className="font-semibold">{cash(deposited)}</span>
-            <span className="text-content-muted"> deposited · {monthName(month)} done</span>
-          </span>
-        </div>
-      );
-    } else {
-      const due = deposited === 0;
-      panel = (
-        <div className={cn('rounded-2xl px-3 py-2.5 mt-3', due ? 'bg-warning/15' : 'bg-surface-3')}>
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className={cn('text-xs', due ? 'text-warning font-semibold' : 'text-content-muted')}>
-                {due ? 'Deposit due' : monthName(month)}
-              </div>
-              <div className="text-[14px] num">
-                <span className="font-semibold">{cash(deposited)}</span>
-                <span className="text-content-muted"> of {cash(planned)} deposited</span>
-              </div>
-            </div>
-            <SmallChip active onClick={onDeposit}>
-              <Plus size={12} strokeWidth={2.4} /> Log deposit
-            </SmallChip>
-          </div>
-          {!due && (
-            <div className="mt-2">
-              <HatchedBar pct={pct(deposited, planned)} color={meta.color} height="sm" />
-            </div>
-          )}
-        </div>
-      );
-    }
   }
+  // A deposit still due this month is on the Saving tab's "To deposit" list,
+  // which has its own Log button; otherwise the card offers one.
+  const plannedNow = a.this_month?.planned ?? 0;
+  const depositedNow = a.this_month?.deposited ?? 0;
+  const dueNow = !a.waiting && plannedNow > 0 && depositedNow < plannedNow;
+  const monthDone = !a.waiting && plannedNow > 0 && depositedNow >= plannedNow;
+  const goalMet = a.goal != null && a.goal > 0 && a.contributed >= a.goal;
 
   return (
     <div
@@ -152,23 +108,30 @@ export default function AccountCard({
       {!a.waiting && (
         <>
           <div className="mt-3">
-            <HatchedBar pct={p} color={meta.color} badge={`${Math.floor(p)}%`} />
+            <Bar pct={p} color={meta.color} label={`${Math.floor(p)}% of the goal`} />
           </div>
-          <div className="grid grid-cols-3 mt-3 pt-2.5 border-t border-border/70 divide-x divide-border/70">
-            {[
-              ['Contributed', cash(a.contributed)],
-              ['Goal', a.goal != null && a.goal > 0 ? cash(a.goal) : '—'],
-              ['Room left', cash(Math.max(0, a.remaining))],
-            ].map(([k, v], i) => (
-              <div key={k} className={cn('min-w-0', i === 0 ? 'pr-2' : 'px-2')}>
-                <div className="text-[11px] text-content-subtle">{k}</div>
-                <div className="text-[15px] font-semibold num truncate">{v}</div>
-              </div>
-            ))}
+          <div className="mt-2 flex items-baseline justify-between gap-2 text-sm text-content-muted num">
+            <span>
+              <span className="font-semibold text-content">{cash(a.contributed)}</span>
+              {a.goal != null && a.goal > 0 ? ` of ${cash(a.goal)} goal` : ' contributed'}
+            </span>
+            <span className="text-right">{cash(Math.max(0, a.remaining))} room left</span>
           </div>
-          {over && <div className="mt-2 text-xs font-medium text-warning">{over}</div>}
-          {!a.this_month && (
-            <div className="mt-2.5">
+          {over && <div className="mt-2 text-[13px] font-medium text-warning-ink">{over}</div>}
+          {!dueNow && (
+            <div className="mt-2.5 flex items-center justify-between gap-2">
+              <span className="text-[13px] text-content-muted inline-flex items-center gap-1.5 min-w-0">
+                {(monthDone || goalMet) && <Check size={15} strokeWidth={2.6} className="text-brand-ink shrink-0" />}
+                <span className="truncate">
+                  {goalMet
+                    ? 'Goal met for this year'
+                    : monthDone
+                      ? `${cash(depositedNow)} deposited · ${monthName(month)} done`
+                      : a.this_month
+                        ? 'Nothing planned this month'
+                        : ''}
+                </span>
+              </span>
               <SmallChip onClick={onDeposit}>
                 <Plus size={12} strokeWidth={2.4} /> Log deposit
               </SmallChip>

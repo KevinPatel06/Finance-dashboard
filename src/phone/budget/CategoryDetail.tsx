@@ -5,12 +5,12 @@ import type { Debt, Expense, ExpenseCategory, SavingsGoal } from '@shared/types'
 import { useConfirm, useToast } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import { useApi, useMonth } from '../data';
-import { friendlyDate, nextBudgetLabel } from '../dates';
+import { friendlyDate, nextBudgetLabel, todayIso } from '../dates';
 import { money, pct } from '../format';
 import { useQuickAdd } from '../PhoneLayout';
 import MoneySheet from '../ui/MoneySheet';
 import Sheet from '../ui/Sheet';
-import { CircleButton, Group, HatchedBar, NavHeader, PCard, PercentRing, Row, SectionTitle, StatTrio } from '../ui/kit';
+import { Bar, CircleButton, Group, NavHeader, PCard, Row, SectionTitle, StatTrio } from '../ui/kit';
 import ExpenseEditor from '../expenses/ExpenseEditor';
 import ExpenseRow from '../expenses/ExpenseRow';
 import CategoryEditor from './CategoryEditor';
@@ -43,7 +43,10 @@ export default function CategoryDetail() {
   const over = !!line && left < 0;
   const leftPct = line ? pct(Math.max(0, left), line.amount) : 0;
   const isRecurring = (e: Expense) => e.recurring_id != null || e.note === 'Recurring';
-  const list = expenses.filter((e) => e.category_id === catId && e.date.startsWith(v.month) && !isRecurring(e));
+  const today = todayIso();
+  const list = expenses
+    .filter((e) => e.category_id === catId && e.date.startsWith(v.month) && !isRecurring(e))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
   const fixed = v.recurring.items.filter((r) => r.category_id === catId);
   const fundName = new Map((funds ?? []).map((f) => [f.id, f.name]));
   const cardName = new Map((debts ?? []).map((d) => [d.id, d.name]));
@@ -52,32 +55,42 @@ export default function CategoryDetail() {
     <div className="space-y-4">
       <NavHeader title={cat.name} right={<CircleButton icon={MoreHorizontal} label="Options" onClick={() => setMenu(true)} />} />
 
-      <PCard className="p-5">
-        <div className="flex justify-center mb-5">
-          <PercentRing pct={line ? leftPct : null} color={cat.color} over={over} />
-        </div>
-        <StatTrio
-          items={[
-            { label: 'Budget', value: line ? money(line.amount) : 'None' },
-            { label: 'Spent', value: money(spent) },
-            { label: 'Next budget', value: nextBudgetLabel(v.month) },
-          ]}
-        />
-        <div className="mt-5">
-          <HatchedBar
-            pct={over ? 100 : leftPct}
-            color={cat.color}
-            over={over}
-            badge={line ? (over ? 'Over' : `${Math.round(leftPct)}%`) : undefined}
+      <PCard className="px-[18px] pt-[18px] pb-4">
+        {line ? (
+          <>
+            <div className={cn('text-[28px] leading-none font-display font-bold num-display', over && 'text-danger')}>
+              {money(Math.abs(left))}
+            </div>
+            <div className="mt-1.5 text-[15px] text-content-muted">
+              {over ? `over the ${money(line.amount)} budget` : `left of ${money(line.amount)}`} · {v.daysLeft} day
+              {v.daysLeft === 1 ? '' : 's'} to go
+            </div>
+            <div className="mt-4">
+              <Bar
+                pct={over ? 100 : leftPct}
+                color={cat.color}
+                over={over}
+                label={over ? 'Over budget' : `${Math.round(leftPct)}% left`}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-[28px] leading-none font-display font-bold num-display">{money(spent)}</div>
+            <div className="mt-1.5 text-[15px] text-content-muted">spent · not in this month’s plan</div>
+          </>
+        )}
+        <div className="mt-4 pt-3 border-t border-border/70">
+          <StatTrio
+            items={[
+              { label: 'Spent', value: money(spent) },
+              {
+                label: 'Per day now',
+                value: line && left > 0 && v.daysLeft > 0 ? money(left / v.daysLeft) : '—',
+              },
+              { label: 'Resets', value: nextBudgetLabel(v.month) },
+            ]}
           />
-        </div>
-        <div className="mt-2 flex items-baseline justify-between">
-          <span className={cn('text-[15px] font-semibold num', over && 'text-danger')}>
-            {line ? `${money(Math.abs(left))} ${over ? 'over' : 'left'}` : 'Not in this month’s plan'}
-          </span>
-          <span className="text-sm text-content-muted">
-            {v.daysLeft} day{v.daysLeft === 1 ? '' : 's'} left
-          </span>
         </div>
       </PCard>
 
@@ -96,19 +109,33 @@ export default function CategoryDetail() {
       {list.length === 0 ? (
         <p className="text-sm text-content-subtle px-1">Nothing logged here this month.</p>
       ) : (
-        <Group>
-          {list.map((e) => (
-            <ExpenseRow
-              key={e.id}
-              expense={e}
-              category={cat}
-              hideCategory
-              fundName={e.fund_id != null ? fundName.get(e.fund_id) : undefined}
-              cardName={e.debt_id != null ? cardName.get(e.debt_id) : undefined}
-              onClick={() => setEditing(e)}
-            />
-          ))}
-        </Group>
+        [
+          { title: 'Today', rows: list.filter((e) => e.date === today), showDate: false },
+          { title: 'Earlier this month', rows: list.filter((e) => e.date !== today), showDate: true },
+        ]
+          .filter((g) => g.rows.length > 0)
+          .map((g) => (
+            <div key={g.title}>
+              <div className="px-1 mb-1.5 text-[13px] font-semibold uppercase tracking-wide text-content-subtle">
+                {g.title}
+              </div>
+              <Group>
+                {g.rows.map((e) => (
+                  <ExpenseRow
+                    key={e.id}
+                    expense={e}
+                    category={cat}
+                    hideCategory
+                    hideDate={!g.showDate}
+                    byName
+                    fundName={e.fund_id != null ? fundName.get(e.fund_id) : undefined}
+                    cardName={e.debt_id != null ? cardName.get(e.debt_id) : undefined}
+                    onClick={() => setEditing(e)}
+                  />
+                ))}
+              </Group>
+            </div>
+          ))
       )}
 
       {fixed.length > 0 && (

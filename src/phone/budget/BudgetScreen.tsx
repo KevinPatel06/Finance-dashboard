@@ -1,71 +1,31 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Info, PiggyBank } from 'lucide-react';
+import { ChevronRight, PiggyBank, TrendingDown, TrendingUp } from 'lucide-react';
 import type { AppSettings, PaceStatus, RegisteredAccount } from '@shared/types';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { cn } from '@/lib/utils';
 import { useApi, useMonth, useRefresh } from '../data';
-import { monthLabel, monthName, nextBudgetLabel } from '../dates';
+import { monthLabel, monthName } from '../dates';
 import { money, moneyWhole } from '../format';
 import CountUp from '../ui/CountUp';
 import Gauge from '../ui/Gauge';
-import Sheet from '../ui/Sheet';
 import { Banner, BigButton, Chip, EmojiIcon, LargeHeader, PCard } from '../ui/kit';
 import PaydayCard from './PaydayCard';
 import PlanEditor from './PlanEditor';
 import AccountEditor from '../contributions/AccountEditor';
 import { cash, KIND_META } from '../contributions/meta';
-import SavingGauge from './SavingGauge';
+import BreakdownSheet from './BreakdownSheet';
+import NeedsYou from './NeedsYou';
+import SavingSummary from './SavingSummary';
 import SavingTab from './SavingTab';
 import { depositBanner } from './savingCopy';
 import SpendingTab from './SpendingTab';
 
-const PACE: Record<PaceStatus, { label: string; className: string; tone: 'success' | 'warning' | 'danger' }> = {
-  on_track: { label: 'On Track', className: 'text-success', tone: 'success' },
-  fast: { label: 'Spending fast', className: 'text-warning', tone: 'warning' },
-  over: { label: 'Over budget', className: 'text-danger', tone: 'danger' },
+const PACE: Record<PaceStatus, { label: string; chip: string; tone: 'success' | 'warning' | 'danger' }> = {
+  on_track: { label: 'On track', chip: 'bg-brand-soft text-brand-ink', tone: 'success' },
+  fast: { label: 'Spending fast', chip: 'bg-warning/15 text-warning-ink', tone: 'warning' },
+  over: { label: 'Over budget', chip: 'bg-danger/10 text-danger', tone: 'danger' },
 };
-
-/** One line of the "how we got this number" sheet: income down to what's left. */
-function BreakdownRow({
-  label,
-  amount,
-  minus,
-  plus,
-  total,
-  hero,
-}: {
-  label: string;
-  amount: number;
-  minus?: boolean;
-  plus?: boolean;
-  total?: boolean;
-  hero?: 'brand' | 'danger';
-}) {
-  return (
-    <div
-      className={cn(
-        'flex items-baseline justify-between gap-4 py-[7px]',
-        total ? 'mt-0.5 border-t border-border pt-[9px] font-semibold text-content' : 'text-content-muted'
-      )}
-    >
-      <span>
-        {minus ? '− ' : plus ? '+ ' : ''}
-        {label}
-      </span>
-      <span
-        className={cn(
-          'num',
-          minus || plus ? 'font-medium' : 'font-semibold text-content',
-          hero === 'brand' && 'text-[17px] text-brand',
-          hero === 'danger' && 'text-[17px] text-danger'
-        )}
-      >
-        {money(amount)}
-      </span>
-    </div>
-  );
-}
 
 /** The phone's home: how much is safe to spend this month, and where it's going. */
 export default function BudgetScreen() {
@@ -102,6 +62,7 @@ export default function BudgetScreen() {
   }
 
   const pace = PACE[v.pace];
+  const PaceIcon = v.pace === 'on_track' ? TrendingDown : TrendingUp;
   const fraction = v.planned.spend > 0 ? Math.max(0, v.leftToSpend) / v.planned.spend : 0;
   const unassigned = Math.round(v.leftToAllocate * 100) / 100;
 
@@ -110,20 +71,67 @@ export default function BudgetScreen() {
       <LargeHeader
         title="Budget"
         subtitle={
-          <>
-            <span className={pace.className}>{pace.label}</span>
-            <span className="text-content-subtle"> · </span>
-            <span>{monthLabel(v.month)}</span>
-          </>
+          <span className="flex items-center gap-2.5">
+            <span className={cn('inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-semibold', pace.chip)}>
+              <PaceIcon size={14} strokeWidth={2.5} aria-hidden />
+              {pace.label}
+            </span>
+            <span className="text-content-muted font-normal text-[15px]">{monthLabel(v.month)}</span>
+          </span>
         }
         right={
-          <button className="press [--dip:0.94] text-[15px] font-semibold text-brand" onClick={() => setEditor('edit')}>
+          <button
+            className="press [--dip:0.94] min-h-11 px-1 text-base font-semibold text-brand-ink"
+            onClick={() => setEditor('edit')}
+          >
             Edit plan
           </button>
         }
       />
 
-      <div className="space-y-2.5">
+      <SegmentedControl
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'spending', label: 'Spending' },
+          { value: 'saving', label: 'Saving' },
+        ]}
+      />
+
+      {tab === 'saving' ? (
+        <SavingSummary view={v} />
+      ) : (
+        <PCard className="px-4 pt-3 pb-1.5">
+          <button
+            onClick={() => setInfo(true)}
+            aria-label={`${v.leftToSpend < 0 ? 'Over by' : 'Left to spend'} ${money(Math.abs(v.leftToSpend))}. Show the breakdown`}
+            className="press [--dip:0.98] block w-full"
+          >
+            <Gauge
+              fraction={fraction}
+              tone={pace.tone}
+              label={v.leftToSpend < 0 ? 'Over by' : 'Left to spend'}
+              value={<CountUp value={Math.abs(v.leftToSpend)} format={moneyWhole} />}
+              sub={v.planned.spend > 0 ? `of ${moneyWhole(v.planned.spend)} spending plan` : undefined}
+            />
+          </button>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[15px] font-semibold num">
+              {v.leftToSpend > 0 && v.daysLeft > 0
+                ? `${money(v.safePerDay)} a day · ${v.daysLeft} day${v.daysLeft === 1 ? '' : 's'} left`
+                : `${v.daysLeft} day${v.daysLeft === 1 ? '' : 's'} left`}
+            </span>
+            <button
+              onClick={() => setInfo(true)}
+              className="press [--dip:0.94] min-h-11 inline-flex items-center gap-0.5 pl-3 text-[15px] font-semibold text-brand"
+            >
+              Breakdown <ChevronRight size={18} strokeWidth={2.2} />
+            </button>
+          </div>
+        </PCard>
+      )}
+
+      <NeedsYou>
         {v.status === 'draft' && (
           <Banner
             tone="brand"
@@ -222,49 +230,7 @@ export default function BudgetScreen() {
             You've spent {money(v.spent.wants)} on wants against {money(v.planned.wants)} planned.
           </Banner>
         )}
-      </div>
-
-      {tab === 'saving' ? (
-        <SavingGauge view={v} />
-      ) : (
-      <div className="pt-1">
-        <button
-          onClick={() => setInfo(true)}
-          aria-label={`${v.leftToSpend < 0 ? 'Over by' : 'Left to spend'} ${money(Math.abs(v.leftToSpend))}. Show the breakdown`}
-          className="press [--dip:0.98] block w-full"
-        >
-          <Gauge
-            fraction={fraction}
-            tone={pace.tone}
-            label={v.leftToSpend < 0 ? 'Over by' : 'Left to spend'}
-            value={<CountUp value={Math.abs(v.leftToSpend)} format={moneyWhole} />}
-            sub={v.planned.spend > 0 ? `of ${moneyWhole(v.planned.spend)} spending plan` : undefined}
-          />
-        </button>
-        <button
-          onClick={() => setInfo(true)}
-          className="press mx-auto -mt-1 flex items-center gap-3 rounded-full bg-surface-2 border border-border/70 shadow-card px-5 py-2.5"
-        >
-          <span className="text-center leading-tight">
-            <span className="block text-[15px] font-semibold num">{money(v.safePerDay)} / day safe to spend</span>
-            <span className="block text-xs text-content-subtle">
-              Tap for the breakdown · Next budget {nextBudgetLabel(v.month)}
-            </span>
-          </span>
-          <Info size={18} className="text-content-muted" />
-        </button>
-      </div>
-      )}
-
-      <SegmentedControl
-        className={cn('mt-2')}
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: 'spending', label: 'Spending' },
-          { value: 'saving', label: 'Saving' },
-        ]}
-      />
+      </NeedsYou>
 
       <div key={tab} className="animate-page-in">
         {tab === 'spending' ? <SpendingTab view={v} onEditPlan={() => setEditor('edit')} /> : <SavingTab view={v} />}
@@ -294,39 +260,7 @@ export default function BudgetScreen() {
         />
       )}
 
-      <Sheet
-        open={info}
-        onClose={() => setInfo(false)}
-        title={v.leftToSpend < 0 ? `Why you're over by ${money(-v.leftToSpend)}` : `How we got ${money(v.leftToSpend)}`}
-      >
-        <div className="pb-2 text-[15px]">
-          <BreakdownRow label={`Income in ${monthName(v.month)}`} amount={v.income} />
-          <BreakdownRow label="Recurring costs" amount={v.recurring.total} minus />
-          <BreakdownRow label="Debt payments" amount={v.planned.debt} minus />
-          <BreakdownRow label="Savings funds" amount={v.planned.fund} minus />
-          {v.planned.contribution > 0 && <BreakdownRow label="Contributions" amount={v.planned.contribution} minus />}
-          {unassigned >= 0.01 && <BreakdownRow label="Not assigned yet" amount={unassigned} minus />}
-          {unassigned <= -0.01 && <BreakdownRow label="Planned beyond income" amount={-unassigned} plus />}
-          <BreakdownRow label="Spending plan" amount={v.planned.spend} total />
-          <BreakdownRow label="Spent so far" amount={v.spent.total} minus />
-          <BreakdownRow
-            label={v.leftToSpend < 0 ? 'Over by' : 'Left to spend'}
-            amount={Math.abs(v.leftToSpend)}
-            total
-            hero={v.leftToSpend < 0 ? 'danger' : 'brand'}
-          />
-          <p className="mt-3 text-[13px] leading-relaxed text-content-subtle">
-            {v.daysLeft > 0 && v.leftToSpend > 0 && (
-              <>
-                That's {money(v.safePerDay)} a day for the {v.daysLeft} day{v.daysLeft === 1 ? '' : 's'} left in{' '}
-                {monthName(v.month)}.{' '}
-              </>
-            )}
-            Recurring charges, purchases paid from a fund, and RRSP/TFSA/FHSA contributions don't count as spending
-            here. They're already covered above.
-          </p>
-        </div>
-      </Sheet>
+      <BreakdownSheet view={v} open={info} onClose={() => setInfo(false)} onFix={() => setEditor('edit')} />
     </div>
   );
 }

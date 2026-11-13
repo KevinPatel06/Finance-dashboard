@@ -4,7 +4,7 @@ import { ArrowDownUp, ChevronRight } from 'lucide-react';
 import type { BudgetMonthView, SpendLineView } from '@shared/types';
 import { cn } from '@/lib/utils';
 import { money, pct } from '../format';
-import { EmojiAvatar, Group, HatchedBar, PCard, Row, SectionTitle } from '../ui/kit';
+import { EmojiAvatar, Group, Bar, PCard, Row, SectionTitle } from '../ui/kit';
 
 type Filter = 'all' | 'need' | 'want';
 type Sort = 'used' | 'name';
@@ -65,9 +65,13 @@ export default function SpendingTab({ view: v, onEditPlan }: { view: BudgetMonth
         </PCard>
       )}
 
-      {lines.map((l) => (
-        <CategoryCard key={l.category_id} line={l} onClick={() => navigate(`/category/${l.category_id}`)} />
-      ))}
+      {lines.length > 0 && (
+        <Group>
+          {lines.map((l) => (
+            <CategoryRow key={l.category_id} line={l} onClick={() => navigate(`/category/${l.category_id}`)} />
+          ))}
+        </Group>
+      )}
 
       {v.unbudgeted.length > 0 && (
         <>
@@ -130,31 +134,32 @@ function SplitCard({
   );
 }
 
-export function CategoryCard({ line: l, onClick }: { line: SpendLineView; onClick: () => void }) {
+/** One category in this month's plan: name, what's left, and a bar in its own colour. */
+function CategoryRow({ line: l, onClick }: { line: SpendLineView; onClick: () => void }) {
   const over = l.left < 0;
   const leftPct = pct(Math.max(0, l.left), l.amount);
   return (
-    <PCard onClick={onClick} className="px-4 pt-3.5 pb-3">
-      <div className="flex items-center gap-3">
-        <EmojiAvatar emoji={l.emoji} color={l.color} />
-        <div className="flex-1 min-w-0 text-[17px] font-semibold truncate">{l.name}</div>
-        <ChevronRight size={18} className="text-content-subtle" />
+    <button onClick={onClick} className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors active:bg-surface-3/60">
+      <EmojiAvatar emoji={l.emoji} color={l.color} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-base font-semibold truncate">{l.name}</span>
+          <span className={cn('text-[15px] font-semibold num shrink-0', over && 'text-danger')}>
+            {money(Math.abs(l.left))}{' '}
+            <span className={cn('font-normal', over ? 'text-danger' : 'text-content-muted')}>{over ? 'over' : 'left'}</span>
+          </span>
+        </div>
+        <div className="mt-2">
+          <Bar
+            pct={over ? 100 : leftPct}
+            color={l.color}
+            over={over}
+            label={over ? `${l.name}: over budget` : `${l.name}: ${Math.round(leftPct)}% left of ${money(l.amount)}`}
+          />
+        </div>
       </div>
-      <div className="mt-3">
-        <HatchedBar
-          pct={over ? 100 : leftPct}
-          color={l.color}
-          over={over}
-          badge={over ? 'Over' : `${Math.round(leftPct)}%`}
-        />
-      </div>
-      <div className="mt-2 flex items-baseline justify-between">
-        <span className={cn('text-[15px] font-semibold num', over && 'text-danger')}>
-          {money(Math.abs(l.left))} {over ? 'over' : 'left'}
-        </span>
-        <span className="text-[15px] num text-content-muted">{money(l.amount)}</span>
-      </div>
-    </PCard>
+      <ChevronRight size={18} className="text-content-subtle shrink-0" />
+    </button>
   );
 }
 

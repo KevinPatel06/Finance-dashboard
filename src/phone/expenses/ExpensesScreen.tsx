@@ -11,9 +11,8 @@ import { useToast } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import { useApi } from '../data';
 import { currentMonth, friendlyDate, monthLabel, monthName, shiftMonth, todayIso } from '../dates';
-import { money } from '../format';
+import { money, moneyWhole } from '../format';
 import { useQuickAdd } from '../PhoneLayout';
-import Sheet from '../ui/Sheet';
 import { CircleButton, EmojiIcon, Group, LargeHeader, PCard, Row, SectionTitle } from '../ui/kit';
 import CategoryDonut from './CategoryDonut';
 import ExpenseEditor from './ExpenseEditor';
@@ -27,10 +26,15 @@ export default function ExpensesScreen() {
   const navigate = useNavigate();
   const toast = useToast();
   const { openQuickAdd } = useQuickAdd();
-  const [month, setMonth] = useState(currentMonth());
-  const [view, setView] = useState<'calendar' | 'categories'>('calendar');
-  const [mode, setMode] = useState<CalendarMode>('amount');
-  const [day, setDay] = useState<string | null>(null);
+  const [month, setMonthState] = useState(currentMonth());
+  const [view, setView] = useState<'calendar' | 'categories' | 'upcoming'>('calendar');
+  const [day, setDay] = useState<string | null>(todayIso());
+  const mode: CalendarMode = view === 'upcoming' ? 'upcoming' : 'amount';
+  const setMonth = (m: string) => {
+    setMonthState(m);
+    // Keep a day picked only when it's in the month on screen: today, if it is.
+    setDay(m === currentMonth() ? todayIso() : null);
+  };
   const [editing, setEditing] = useState<Expense | null>(null);
 
   const { data: expenses } = useApi<Expense[]>(() => window.api.expenses.list());
@@ -69,7 +73,7 @@ export default function ExpensesScreen() {
       for (const date of occurrencesInRange(r.anchor_date, r.frequency, r.interval_count, start, end)) {
         if (date <= today) continue;
         const d = days.get(date) ?? blankDay();
-        d.upcoming.push({ emoji: r.emoji, amount: r.amount });
+        d.upcoming.push({ emoji: r.emoji, amount: r.amount, description: r.description });
         days.set(date, d);
       }
     }
@@ -91,6 +95,10 @@ export default function ExpensesScreen() {
   if (!stats || !cats) return <div className="pt-24 text-center text-content-subtle">Loading…</div>;
 
   const change = stats.prevTotal > 0 ? ((stats.total - stats.prevTotal) / stats.prevTotal) * 100 : null;
+  // A day's average so far: the current month counts the days up to today.
+  const daysSoFar =
+    month === currentMonth() ? Number(todayIso().slice(8, 10)) : month < currentMonth() ? monthBounds(month).days : 0;
+  const perDay = daysSoFar > 0 ? stats.total / daysSoFar : null;
   const lastWeekStart = format(addDays(startOfWeek(parseISO(todayIso()), { weekStartsOn: 1 }), -7), 'yyyy-MM-dd');
 
   const grouped = new Map<string, Expense[]>();
@@ -120,17 +128,23 @@ export default function ExpensesScreen() {
         right={<CircleButton icon={Download} label="Export this month as CSV" onClick={csv} />}
       />
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <CircleButton icon={ChevronLeft} label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))} />
-        <button className="text-[17px] font-semibold" onClick={() => setMonth(currentMonth())}>
-          {monthLabel(month)}
-        </button>
+        <div className="min-w-0 text-center">
+          <div className="text-[44px] leading-tight font-display font-bold num-display">{money(stats.total)}</div>
+          <button
+            className="text-sm text-content-muted"
+            onClick={() => setMonth(currentMonth())}
+            aria-label={`${monthLabel(month)}. Go to this month`}
+          >
+            spent in {month === currentMonth() ? monthName(month) : monthLabel(month)}
+            {perDay != null && <span className="num"> · {moneyWhole(perDay)} a day</span>}
+          </button>
+        </div>
         <CircleButton icon={ChevronRight} label="Next month" onClick={() => setMonth(shiftMonth(month, 1))} />
       </div>
 
-      <div className="text-center pt-2">
-        <div className="text-sm text-content-muted">Total spent</div>
-        <div className="text-[44px] leading-tight font-display font-bold num-display">{money(stats.total)}</div>
+      <div className="text-center -mt-2">
         {change != null && (
           <div className="mt-1 inline-flex items-center gap-1.5 text-sm">
             <span
@@ -153,23 +167,25 @@ export default function ExpensesScreen() {
         options={[
           { value: 'calendar', label: 'Calendar' },
           { value: 'categories', label: 'Categories' },
+          { value: 'upcoming', label: 'Upcoming' },
         ]}
       />
 
-      {view === 'calendar' ? (
+      {view !== 'categories' ? (
         <>
-          <div className="flex justify-end">
-            <SegmentedControl
-              className="w-[11rem]"
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: 'amount', label: 'Amount' },
-                { value: 'upcoming', label: 'Upcoming' },
-              ]}
+          <MonthCalendar month={month} days={stats.days} mode={mode} selected={day} onPick={setDay} />
+          {day && day.startsWith(month) && (
+            <DayCard
+              date={day}
+              expenses={dayList}
+              upcoming={mode === 'upcoming' ? stats.days.get(day)?.upcoming ?? [] : []}
+              catById={catById}
+              fundName={fundName}
+              cardName={cardName}
+              onEdit={setEditing}
+              onAdd={() => openQuickAdd({ date: day, manual: true })}
             />
-          </div>
-          <MonthCalendar month={month} days={stats.days} mode={mode} onPick={setDay} />
+          )}
         </>
       ) : (
         <>
@@ -215,7 +231,7 @@ export default function ExpensesScreen() {
         <ChevronRight size={18} className="text-content-subtle" />
       </PCard>
 
-      {view === 'calendar' && (
+      {view !== 'categories' && (
         <>
           <SectionTitle>{monthName(month)} expenses</SectionTitle>
           {grouped.size === 0 && <p className="text-sm text-content-subtle px-1">No expenses logged.</p>}
@@ -242,44 +258,68 @@ export default function ExpensesScreen() {
         </>
       )}
 
-      <Sheet
-        open={!!day}
-        onClose={() => setDay(null)}
-        title={day ? friendlyDate(day) : ''}
-        subtitle={day ? money(dayList.reduce((s, e) => s + e.amount, 0)) : undefined}
-      >
-        {dayList.length === 0 ? (
-          <p className="text-center text-sm text-content-subtle py-6">Nothing logged this day.</p>
-        ) : (
-          <Group>
-            {dayList.map((e) => (
-              <ExpenseRow
-                key={e.id}
-                expense={e}
-                category={e.category_id != null ? catById.get(e.category_id) : undefined}
-                onClick={() => {
-                  setDay(null);
-                  setEditing(e);
-                }}
-              />
-            ))}
-          </Group>
-        )}
-        {day && (
-          <button
-            className="w-full mt-3 py-3 rounded-full bg-surface-3 text-[15px] font-semibold"
-            onClick={() => {
-              const d = day;
-              setDay(null);
-              openQuickAdd({ date: d, manual: true });
-            }}
-          >
-            Log an expense on this day
-          </button>
-        )}
-      </Sheet>
-
       {editing && <ExpenseEditor expense={editing} onClose={() => setEditing(null)} />}
     </div>
+  );
+}
+
+/** The picked calendar day, right under the calendar: what was spent (with notes) and what's still coming. */
+function DayCard({
+  date,
+  expenses,
+  upcoming,
+  catById,
+  fundName,
+  cardName,
+  onEdit,
+  onAdd,
+}: {
+  date: string;
+  expenses: Expense[];
+  upcoming: DayCell['upcoming'];
+  catById: Map<number, ExpenseCategory>;
+  fundName: Map<number, string>;
+  cardName: Map<number, string>;
+  onEdit: (e: Expense) => void;
+  onAdd: () => void;
+}) {
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  return (
+    <section aria-label={`Expenses on ${friendlyDate(date)}`} className="rounded-[22px] bg-surface-2 border border-border/70 shadow-card overflow-hidden">
+      <div className="flex items-center justify-between px-4 h-12 border-b border-border/70">
+        <span className="text-base font-semibold">{format(parseISO(date), 'EEE, MMM d')}</span>
+        <span className="text-base font-semibold num">{money(total)}</span>
+      </div>
+      <div className="divide-y divide-border/70">
+        {expenses.map((e) => (
+          <ExpenseRow
+            key={e.id}
+            expense={e}
+            hideDate
+            category={e.category_id != null ? catById.get(e.category_id) : undefined}
+            fundName={e.fund_id != null ? fundName.get(e.fund_id) : undefined}
+            cardName={e.debt_id != null ? cardName.get(e.debt_id) : undefined}
+            onClick={() => onEdit(e)}
+          />
+        ))}
+        {upcoming.map((u, i) => (
+          <Row
+            key={`u${i}`}
+            emoji={u.emoji ?? '🔁'}
+            color="#64748b"
+            title={u.description}
+            subtitle="Recurring · coming up"
+            value={money(u.amount)}
+            valueTone="muted"
+          />
+        ))}
+        {expenses.length === 0 && upcoming.length === 0 && (
+          <p className="px-4 py-3 text-sm text-content-muted">Nothing logged this day.</p>
+        )}
+      </div>
+      <button onClick={onAdd} className="w-full h-12 border-t border-border/70 text-[15px] font-semibold text-brand-ink">
+        Log an expense on this day
+      </button>
+    </section>
   );
 }

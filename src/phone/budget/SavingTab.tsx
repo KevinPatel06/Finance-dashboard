@@ -6,12 +6,12 @@ import SegmentedControl from '@/components/ui/SegmentedControl';
 import { fmtDate } from '@/lib/format';
 import { useApi, useRefresh } from '../data';
 import { money, pct } from '../format';
-import { Chip, EmojiAvatar, HatchedBar, PCard } from '../ui/kit';
+import { Bar, Chip, EmojiAvatar, Group, PCard } from '../ui/kit';
 import FundEditor from '../funds/FundEditor';
 import AccountCard from '../contributions/AccountCard';
 import AccountEditor from '../contributions/AccountEditor';
 import DepositSheet from '../contributions/DepositSheet';
-import { KIND_ORDER } from '../contributions/meta';
+import { KIND_META, KIND_ORDER } from '../contributions/meta';
 
 type Filter = 'active' | 'completed' | 'plan';
 
@@ -26,15 +26,16 @@ function Header({ title, right }: { title: string; right?: React.ReactNode }) {
 
 function AddButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="inline-flex items-center gap-1 text-[15px] font-medium">
+    <button onClick={onClick} className="min-h-11 inline-flex items-center gap-1 text-[15px] font-medium text-brand-ink">
       <Plus size={17} /> {children}
     </button>
   );
 }
 
 /**
- * Saving: registered-account contributions first (optional — "Not for me"
- * hides them), then funds with their filters and progress cards.
+ * Saving: this month's deposits still to make, then each registered account's
+ * tax year (optional — "Not for me" hides them), then funds with their filters
+ * and progress cards.
  */
 export default function SavingTab({ view }: { view: BudgetMonthView }) {
   const navigate = useNavigate();
@@ -63,12 +64,44 @@ export default function SavingTab({ view }: { view: BudgetMonthView }) {
     bump();
   };
 
+  // This month's deposits still to make, each with its own Log button.
+  const due = view.lines.contribution
+    .filter((c) => c.amount > 0 && c.left > 0)
+    .map((c) => ({ line: c, account: accounts.find((a) => a.id === c.account_id) }))
+    .filter((d): d is { line: (typeof view.lines.contribution)[number]; account: RegisteredAccount } => !!d.account);
+
   return (
     <div className="space-y-3">
+      {!hidden && due.length > 0 && (
+        <>
+          <Header title="To deposit this month" />
+          <Group>
+            {due.map(({ line: c, account: a }) => (
+              <div key={c.account_id} className="flex items-center gap-3 px-4 py-3">
+                <EmojiAvatar emoji={KIND_META[a.kind].emoji} color={KIND_META[a.kind].color} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-base font-semibold truncate">{c.label}</div>
+                  <div className="text-sm text-content-muted num">
+                    {c.deposited > 0 ? `${money(c.deposited)} of ${money(c.amount)} deposited` : `${money(c.amount)} due`}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDepositFor(a)}
+                  className="press [--dip:0.94] min-h-11 px-4 rounded-full bg-content text-surface text-sm font-semibold"
+                  aria-label={`Log a ${c.label} deposit`}
+                >
+                  Log
+                </button>
+              </div>
+            ))}
+          </Group>
+          <div className="h-2" />
+        </>
+      )}
       {!hidden && (
         <>
           <Header
-            title="Contributions"
+            title={accounts.length > 0 ? 'This tax year' : 'Contributions'}
             right={
               accounts.length > 0 && missingKinds.length > 0 ? (
                 <AddButton onClick={() => setAddingAccount(true)}>Add account</AddButton>
@@ -197,7 +230,7 @@ export function FundCard({
         <ChevronRight size={18} className="text-content-subtle" />
       </div>
       <div className="mt-3">
-        <HatchedBar pct={p} color={g.color} badge={`${Math.floor(p)}%`} />
+        <Bar pct={p} color={g.color} label={`${Math.floor(p)}% of the goal`} />
       </div>
       <div className="mt-2 flex items-baseline justify-between gap-2">
         <span className="text-[15px] num">

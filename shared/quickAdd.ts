@@ -154,7 +154,8 @@ const KEYWORDS: Array<{ re: RegExp; names: string[] }> = [
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-function guessCategory(description: string, ctx: QuickAddContext): number | null {
+/** The category a description most likely belongs to (history first, then keywords); the Log expense sheet's first suggestion. */
+export function guessCategory(description: string, ctx: QuickAddContext): number | null {
   const d = norm(description);
   if (!d) return null;
 

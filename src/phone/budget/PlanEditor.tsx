@@ -7,10 +7,12 @@ import { friendlyDate, monthLabel, monthName, todayIso } from '../dates';
 import { money } from '../format';
 import MoneySheet from '../ui/MoneySheet';
 import Sheet from '../ui/Sheet';
-import { BigButton, Group, Row, SectionTitle } from '../ui/kit';
+import { BigButton, Group, Row } from '../ui/kit';
 import FundEditor from '../funds/FundEditor';
 import CategoryEditor from './CategoryEditor';
+import { PLAN_COLOR } from './planColors';
 import PlanForm, { draftFromView, draftToLines, type PlanDraft } from './PlanForm';
+import PlanSection from './PlanSection';
 
 /**
  * Edit the month's plan — or, for a draft month, review last month's copy and
@@ -43,6 +45,7 @@ export default function PlanEditor({
   const { data: accounts } = useApi<RegisteredAccount[]>(() => window.api.registered.list());
 
   const confirming = view.status !== 'confirmed';
+  const unconfirmed = view.paydays.filter((p) => !p.paycheck && p.date <= todayIso()).length;
   const refreshView = async () => setView((await window.api.budget.month(view.month)) as BudgetMonthView);
 
   const save = async () => {
@@ -55,6 +58,69 @@ export default function PlanEditor({
       setBusy(false);
     }
   };
+
+  // Income and Recurring fold like the plan sections and sit right under the summary.
+  const incomeAndRecurring = (
+    <>
+        <PlanSection
+          collapsible
+          title="Income"
+          subtitle={`${view.paydays.length} payday${view.paydays.length === 1 ? '' : 's'}${unconfirmed ? ` · ${unconfirmed} not confirmed` : ''}`}
+          total={money(view.income)}
+        >
+        <Group>
+          {view.paydays.map((p) => (
+            <Row
+              key={p.date}
+              emoji={p.kind === 'bonus' ? '🎉' : '💵'}
+              color="#10b981"
+              title={`${friendlyDate(p.date)}${p.kind === 'bonus' ? ' · bonus' : ''}`}
+              subtitle={p.paycheck ? 'Confirmed' : p.date <= todayIso() ? 'Not confirmed yet' : 'Expected'}
+              value={money(p.paycheck ? p.paycheck.amount : p.kind === 'regular' ? p.expected : 0)}
+              valueTone={p.paycheck ? 'default' : 'muted'}
+              chevron
+              onClick={() => setPayday(p)}
+            />
+          ))}
+          {view.paydays.length === 0 && (
+            <Row
+              emoji="💵"
+              color="#10b981"
+              title="No pay set up"
+              subtitle="Add your pay in Settings"
+              chevron
+              onClick={() => navigate('/settings')}
+            />
+          )}
+        </Group>
+        </PlanSection>
+
+        <PlanSection
+          collapsible
+          title="Recurring"
+          subtitle={view.recurring.items.slice(0, 3).map((r) => r.description).join(', ') || 'None yet'}
+          total={money(view.recurring.total)}
+          color={PLAN_COLOR.recurring}
+        >
+        <Group>
+          {view.recurring.items.length === 0 && (
+            <Row emoji="🔁" color="#64748b" title="No recurring expenses" chevron onClick={() => navigate('/recurring')} />
+          )}
+          {view.recurring.items.map((r) => (
+            <Row
+              key={`${r.recurring_id}-${r.date}`}
+              emoji={r.emoji}
+              color="#64748b"
+              title={r.description}
+              subtitle={friendlyDate(r.date)}
+              value={money(r.amount)}
+              valueTone="muted"
+            />
+          ))}
+        </Group>
+        </PlanSection>
+    </>
+  );
 
   return (
     <Sheet
@@ -76,53 +142,6 @@ export default function PlanEditor({
         </p>
       )}
 
-      <SectionTitle>Income</SectionTitle>
-      <Group>
-        {view.paydays.map((p) => (
-          <Row
-            key={p.date}
-            emoji={p.kind === 'bonus' ? '🎉' : '💵'}
-            color="#10b981"
-            title={`${friendlyDate(p.date)}${p.kind === 'bonus' ? ' · bonus' : ''}`}
-            subtitle={p.paycheck ? 'Confirmed' : p.date <= todayIso() ? 'Not confirmed yet' : 'Expected'}
-            value={money(p.paycheck ? p.paycheck.amount : p.kind === 'regular' ? p.expected : 0)}
-            valueTone={p.paycheck ? 'default' : 'muted'}
-            chevron
-            onClick={() => setPayday(p)}
-          />
-        ))}
-        {view.paydays.length === 0 && (
-          <Row
-            emoji="💵"
-            color="#10b981"
-            title="No pay set up"
-            subtitle="Add your pay in Settings"
-            chevron
-            onClick={() => navigate('/settings')}
-          />
-        )}
-      </Group>
-
-      <SectionTitle right={<span className="text-sm text-content-muted num">{money(view.recurring.total)}</span>}>
-        Recurring
-      </SectionTitle>
-      <Group>
-        {view.recurring.items.length === 0 && (
-          <Row emoji="🔁" color="#64748b" title="No recurring expenses" chevron onClick={() => navigate('/recurring')} />
-        )}
-        {view.recurring.items.map((r) => (
-          <Row
-            key={`${r.recurring_id}-${r.date}`}
-            emoji={r.emoji}
-            color="#64748b"
-            title={r.description}
-            subtitle={friendlyDate(r.date)}
-            value={money(r.amount)}
-            valueTone="muted"
-          />
-        ))}
-      </Group>
-
       {categories && funds && debts && (
         <PlanForm
           income={view.income}
@@ -135,6 +154,8 @@ export default function PlanEditor({
           accounts={accounts ?? []}
           onAddCategory={() => setAdding('category')}
           onAddFund={() => setAdding('fund')}
+          collapsible
+          lead={incomeAndRecurring}
         />
       )}
 

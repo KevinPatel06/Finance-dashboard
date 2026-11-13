@@ -17,6 +17,9 @@
   --brand: 16 185 129;
   --brand-hover: 5 150 105;
   --brand-soft: 209 250 229;
+  /* Text twins of brand/warning; only the phone palette sets them apart. */
+  --brand-ink: var(--brand);
+  --warning-ink: var(--warning);
   --success: 16 185 129;
   --warning: 234 179 8;
   --danger: 239 68 68;
@@ -207,10 +210,14 @@ html.phone {
   --border-strong: 209 193 164;
   --content: 43 34 25;
   --content-muted: 104 89 68;
-  --content-subtle: 141 126 104;
+  /* Every text colour here passes 4.5:1 on both Beige and Ivory. */
+  --content-subtle: 111 96 75;
   --brand: 63 122 85 !important;
   --brand-hover: 46 97 69 !important;
   --brand-soft: 221 235 221 !important;
+  /* Darker twins of brand/warning for small text on the page (the fills stay bright). */
+  --brand-ink: 51 102 74;
+  --warning-ink: 122 82 0;
   --success: 63 122 85;
   --warning: 184 120 0;
   --danger: 184 58 42;
@@ -246,10 +253,12 @@ html.phone.dark {
   --border-strong: 71 73 67;
   --content: 239 239 234;
   --content-muted: 171 172 164;
-  --content-subtle: 128 130 122;
+  --content-subtle: 146 148 140;
   --brand: 143 217 174 !important;
   --brand-hover: 166 232 194 !important;
   --brand-soft: 47 74 58 !important;
+  --brand-ink: 143 217 174;
+  --warning-ink: 242 184 102;
   --success: 143 217 174;
   --warning: 242 184 102;
   --danger: 245 154 138;
@@ -266,10 +275,12 @@ html.phone.dark :is([class*='bg-surface-2'], .card, .input, [data-on-card]) {
   --border-strong: 171 189 160;
   --content: 31 42 32;
   --content-muted: 77 92 77;
-  --content-subtle: 104 120 104;
+  --content-subtle: 82 96 82;
   --brand: 71 112 90;
   --brand-hover: 46 85 64;
   --brand-soft: 195 214 184;
+  --brand-ink: 46 85 64;
+  --warning-ink: 122 82 0;
   --success: 47 122 80;
   --warning: 168 100 0;
   --danger: 185 46 46;

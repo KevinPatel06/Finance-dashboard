@@ -12,7 +12,7 @@ import { friendlyDate, monthName, todayIso } from '../dates';
 import { money, pct } from '../format';
 import MoneySheet from '../ui/MoneySheet';
 import Sheet from '../ui/Sheet';
-import { Banner, Chip, CircleButton, EmojiAvatar, Group, HatchedBar, NavHeader, PCard, Row, SectionTitle } from '../ui/kit';
+import { Banner, Chip, CircleButton, EmojiAvatar, Group, Bar, NavHeader, PCard, Row, SectionTitle } from '../ui/kit';
 import FundEditor from './FundEditor';
 
 type Money = null | 'add' | 'withdraw' | 'plan';
@@ -79,7 +79,7 @@ export default function FundDetail() {
           {g.target_date ? `by ${fmtDate(g.target_date, 'MMMM d, yyyy')}` : 'No deadline'}
         </div>
         <div className="mt-5 text-left">
-          <HatchedBar pct={p} color={g.color} badge={`${Math.floor(p)}%`} />
+          <Bar pct={p} color={g.color} label={`${Math.floor(p)}% of the goal`} />
           <div className="mt-2 flex justify-between text-sm">
             <span className="font-semibold">{toGo > 0 ? `${money(toGo)} to go` : 'Goal reached'}</span>
             {monthsLeft != null && toGo > 0 && (

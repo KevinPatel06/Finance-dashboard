@@ -1,12 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { format, parseISO, subDays } from 'date-fns';
+import { CalendarDays, MoreHorizontal } from 'lucide-react';
 import type { Debt, Expense, ExpenseCategory, ExpenseInput, SavingsGoal } from '@shared/types';
+import { guessCategory } from '@shared/quickAdd';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { useConfirm, useToast } from '@/lib/ui';
 import { cn } from '@/lib/utils';
 import { useApi, useRefresh } from '../data';
 import { todayIso } from '../dates';
+import { money } from '../format';
 import Sheet from '../ui/Sheet';
-import { BigButton, EmojiIcon, MoneyInput, parseMoney } from '../ui/kit';
+import { BigButton, EmojiIcon, parseMoney } from '../ui/kit';
+import { iconInk } from '../ui/pastel';
+import Keypad from './Keypad';
+
+/** How many categories show before "All". */
+const SUGGESTED = 4;
 
 type PaidFrom = 'budget' | 'fund' | 'card';
 
@@ -43,10 +52,41 @@ export default function ExpenseEditor({
   const [cardId, setCardId] = useState<number | null>(seed.debt_id ?? null);
   const [busy, setBusy] = useState(false);
 
+  const [allCats, setAllCats] = useState(false);
   const { data: categories } = useApi<ExpenseCategory[]>(() => window.api.expenseCategories.list());
   const { data: funds } = useApi<SavingsGoal[]>(() => window.api.goals.list());
   const { data: debts } = useApi<Debt[]>(() => window.api.debts.list());
+  const { data: history } = useApi<Expense[]>(() => window.api.expenses.list());
   const cards = (debts ?? []).filter((d) => d.type === 'credit_card' || d.type === 'line_of_credit');
+
+  const today = todayIso();
+  const yesterday = format(subDays(parseISO(today), 1), 'yyyy-MM-dd');
+
+  // Suggestions: what the description points to, then the most used lately,
+  // then the rest. The pick the sheet opened with stays in place, and a pick
+  // from "All" takes the last slot, so tapping never reshuffles the row.
+  const ranked = useMemo(() => {
+    const cats = categories ?? [];
+    const recent = (history ?? []).slice(0, 200);
+    const uses = new Map<number, number>();
+    for (const e of recent) if (e.category_id != null) uses.set(e.category_id, (uses.get(e.category_id) ?? 0) + 1);
+    const guess = guessCategory(description, {
+      today,
+      categories: cats,
+      history: recent.map((e) => ({ description: e.description, category_id: e.category_id })),
+    });
+    const order = [seed.category_id ?? null, guess, ...[...cats].sort((a, b) => (uses.get(b.id) ?? 0) - (uses.get(a.id) ?? 0)).map((c) => c.id)];
+    const ids = [...new Set(order.filter((id): id is number => id != null && cats.some((c) => c.id === id)))];
+    return ids.map((id) => cats.find((c) => c.id === id)!);
+    // Re-rank as the description changes, not on every tap (categoryId is left out on purpose).
+  }, [categories, history, description, seed.category_id, today]);
+  const suggested = (() => {
+    const top = ranked.slice(0, SUGGESTED);
+    if (categoryId == null || top.some((c) => c.id === categoryId)) return top;
+    const picked = ranked.find((c) => c.id === categoryId);
+    return picked ? [...top.slice(0, SUGGESTED - 1), picked] : top;
+  })();
+  const picked = (categories ?? []).find((c) => c.id === categoryId);
 
   const value = parseMoney(amount);
   const valid =
@@ -111,57 +151,132 @@ export default function ExpenseEditor({
       onClose={onClose}
       title={expense ? 'Edit expense' : onDraft ? 'Edit expense' : 'Log expense'}
       footer={
-        <BigButton onClick={save} disabled={!valid || busy}>
-          {busy ? 'Saving…' : onDraft ? 'Done' : 'Save'}
-        </BigButton>
+        <div className="space-y-2.5">
+          <BigButton onClick={save} disabled={!valid || busy}>
+            {busy
+              ? 'Saving…'
+              : onDraft
+                ? 'Done'
+                : value > 0
+                  ? `Save ${money(value)}${picked ? ` to ${picked.name}` : ''}`
+                  : 'Save'}
+          </BigButton>
+          <Keypad value={amount} onChange={setAmount} />
+        </div>
       }
     >
-      <div className="py-5">
-        <MoneyInput big value={amount} onChange={setAmount} ariaLabel="Amount" />
-        {amount === '' && (
-          <p className="text-xs text-content-subtle text-center mt-1">Tap to enter the amount</p>
-        )}
+      <div className="py-3 flex items-baseline justify-center gap-1 font-display font-bold" aria-live="polite">
+        <span className="text-3xl text-content-muted">$</span>
+        <span className={cn('text-5xl num-display', amount === '' && 'text-content-subtle/60')} aria-label={`Amount ${amount || '0'} dollars`}>
+          {amount || '0'}
+        </span>
       </div>
 
       <div className="space-y-4">
-        <div className="grid grid-cols-[1fr_auto] gap-2">
+        <div>
+          <label className="label" htmlFor="expense-what">
+            What was it?
+          </label>
           <input
+            id="expense-what"
             className="input text-base"
-            placeholder="What was it?"
+            placeholder="e.g. Coffee"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             maxLength={80}
             data-no-autofocus
           />
-          <input
-            type="date"
-            className="input text-base w-[9.5rem]"
-            value={date}
-            max="2100-12-31"
-            onChange={(e) => setDate(e.target.value)}
-            aria-label="Date"
-          />
+        </div>
+
+        <div role="radiogroup" aria-label="Date" className="flex flex-wrap gap-2">
+          {[
+            { iso: today, label: 'Today' },
+            { iso: yesterday, label: 'Yesterday' },
+          ].map((d) => (
+            <button
+              key={d.label}
+              type="button"
+              role="radio"
+              aria-checked={date === d.iso}
+              onClick={() => setDate(d.iso)}
+              className={cn(
+                'press [--dip:0.94] min-h-11 rounded-full px-4 text-[15px] font-medium',
+                date === d.iso ? 'bg-content text-surface' : 'bg-surface-2 border border-border text-content'
+              )}
+            >
+              {d.label}
+            </button>
+          ))}
+          <label
+            className={cn(
+              'relative min-h-11 rounded-full px-4 inline-flex items-center gap-1.5 text-[15px] font-medium',
+              date !== today && date !== yesterday ? 'bg-content text-surface' : 'bg-surface-2 border border-border text-content'
+            )}
+          >
+            <CalendarDays size={17} aria-hidden />
+            {date !== today && date !== yesterday && date ? format(parseISO(date), 'EEE, MMM d') : 'Pick a day'}
+            <input
+              type="date"
+              className="absolute inset-0 opacity-0"
+              value={date}
+              max="2100-12-31"
+              onChange={(e) => e.target.value && setDate(e.target.value)}
+              aria-label="Pick a date"
+            />
+          </label>
         </div>
 
         <div>
           <div className="label">Category</div>
-          <div className="flex flex-wrap gap-2">
-            {(categories ?? []).map((c) => (
+          <div role="radiogroup" aria-label="Category" className={cn(allCats ? 'flex flex-wrap gap-2' : 'grid grid-cols-5 gap-2')}>
+            {(allCats ? ranked : suggested).map((c) =>
+              allCats ? (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={categoryId === c.id}
+                  onClick={() => {
+                    setCategoryId(c.id);
+                    setAllCats(false);
+                  }}
+                  className={cn(
+                    'press [--dip:0.94] min-h-11 inline-flex items-center gap-1.5 rounded-full px-3.5 text-[15px] border',
+                    categoryId === c.id ? 'bg-content text-surface border-transparent' : 'bg-surface-2 border-border text-content'
+                  )}
+                >
+                  <EmojiIcon emoji={c.emoji} size={16} />
+                  {c.name}
+                </button>
+              ) : (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={categoryId === c.id}
+                  onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}
+                  className={cn(
+                    'press [--dip:0.94] h-[60px] min-w-0 rounded-2xl bg-surface-2 border-2 flex flex-col items-center justify-center gap-1 px-1',
+                    categoryId === c.id ? 'border-content' : 'border-transparent'
+                  )}
+                >
+                  <span style={{ color: iconInk(c.color) }} className="leading-none">
+                    <EmojiIcon emoji={c.emoji} size={20} />
+                  </span>
+                  <span className="text-[12px] font-medium leading-none truncate max-w-full">{c.name}</span>
+                </button>
+              )
+            )}
+            {!allCats && ranked.length > SUGGESTED && (
               <button
-                key={c.id}
                 type="button"
-                onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border transition',
-                  categoryId === c.id
-                    ? 'bg-content text-surface border-transparent'
-                    : 'bg-surface-2 border-border text-content'
-                )}
+                onClick={() => setAllCats(true)}
+                className="press [--dip:0.94] h-[60px] rounded-2xl border-2 border-dashed border-border-strong flex flex-col items-center justify-center gap-1"
               >
-                <EmojiIcon emoji={c.emoji} size={15} />
-                {c.name}
+                <MoreHorizontal size={20} aria-hidden />
+                <span className="text-[12px] font-medium leading-none">All {ranked.length}</span>
               </button>
-            ))}
+            )}
           </div>
         </div>
 

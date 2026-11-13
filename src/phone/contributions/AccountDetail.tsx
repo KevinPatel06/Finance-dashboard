@@ -10,7 +10,7 @@ import { friendlyDate, monthName, todayIso } from '../dates';
 import { money, pct } from '../format';
 import MoneySheet from '../ui/MoneySheet';
 import Sheet from '../ui/Sheet';
-import { Chip, CircleButton, EmojiAvatar, Group, HatchedBar, NavHeader, PCard, Row, SectionTitle } from '../ui/kit';
+import { Chip, CircleButton, EmojiAvatar, Group, Bar, NavHeader, PCard, Row, SectionTitle } from '../ui/kit';
 import AccountEditor from './AccountEditor';
 import DepositSheet from './DepositSheet';
 import { cash, KIND_META, monthShort, overRoom, shortDate } from './meta';
@@ -75,7 +75,7 @@ export default function AccountDetail() {
               {a.goal ? `${a.tax_year} goal · by ${shortDate(a.goal_deadline)}` : `${a.tax_year} room`}
             </div>
             <div className="mt-5 text-left">
-              <HatchedBar pct={pct(a.contributed, target)} color={meta.color} badge={`${Math.floor(pct(a.contributed, target))}%`} />
+              <Bar pct={pct(a.contributed, target)} color={meta.color} label={`${Math.floor(pct(a.contributed, target))}% of the goal`} />
               {a.goal ? (
                 <div className="mt-2 flex justify-between text-sm">
                   <span className="font-semibold">{toGo > 0 ? `${cash(toGo)} to go` : 'Goal met'}</span>
@@ -156,7 +156,7 @@ export default function AccountDetail() {
                     )}
                     {r.state === 'current' && r.planned != null && r.planned > 0 && (
                       <span className="block mt-1">
-                        <HatchedBar pct={pct(r.deposited, r.planned)} color={meta.color} height="sm" />
+                        <Bar pct={pct(r.deposited, r.planned)} color={meta.color} height="sm" />
                       </span>
                     )}
                   </span>

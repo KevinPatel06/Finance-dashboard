@@ -8,7 +8,7 @@ import { iconFor } from './icons';
 
 /**
  * The phone's visual vocabulary, after DaTrack: line icons on pastel circles,
- * hatched progress tracks with a % badge, soft rounded cards, circle nav
+ * plain progress bars in each item's tint, soft rounded cards, circle nav
  * buttons and full-width pill CTAs. Everything reads the theme tokens, so
  * light/dark and the accent picker keep working.
  */
@@ -52,6 +52,24 @@ export function EmojiAvatar({
   );
 }
 
+/**
+ * A name's first letter on the item's pastel circle: for lists where every row
+ * shares one category, so its icon would repeat on each line.
+ */
+export function InitialAvatar({ name, color }: { name: string; color: string }) {
+  const { theme } = useTheme();
+  const letter = name.trim().charAt(0).toUpperCase() || '?';
+  return (
+    <span
+      className="w-11 h-11 rounded-full grid place-items-center shrink-0 select-none text-base font-semibold"
+      style={{ backgroundColor: pastel(color, theme), color: iconInk(color) }}
+      aria-hidden
+    >
+      {letter}
+    </span>
+  );
+}
+
 /** A bare line icon for a stored emoji, sized to sit in a line of text. */
 export function EmojiIcon({
   emoji,
@@ -71,21 +89,22 @@ export function EmojiIcon({
 // ---------------------------------------------------------------- bar
 
 /**
- * Filled portion = `pct` (0–100) in the item's tint; the rest is fine vertical
- * hatching. The badge sits at the start of the bar, like DaTrack's.
+ * A plain progress bar: filled portion = `pct` (0–100) in the item's own tint
+ * on a quiet track. `over` paints it danger.
  */
-export function HatchedBar({
+export function Bar({
   pct,
   color,
-  badge,
   over,
   height = 'md',
+  label,
 }: {
   pct: number;
   color: string;
-  badge?: string;
   over?: boolean;
   height?: 'sm' | 'md';
+  /** What the bar measures, for screen readers. */
+  label?: string;
 }) {
   const { theme } = useTheme();
   const w = Math.max(0, Math.min(100, pct));
@@ -97,87 +116,22 @@ export function HatchedBar({
   }, []);
   return (
     <div
-      className={cn('relative w-full rounded-md overflow-hidden', height === 'md' ? 'h-[22px]' : 'h-3')}
+      className={cn('relative w-full rounded-full overflow-hidden bg-surface-3', height === 'md' ? 'h-2.5' : 'h-1.5')}
       role="progressbar"
+      aria-label={label}
       aria-valuenow={Math.round(w)}
       aria-valuemin={0}
       aria-valuemax={100}
     >
-      <div
-        className="absolute inset-0 text-content-subtle opacity-45"
-        style={{
-          backgroundImage:
-            'repeating-linear-gradient(90deg, currentColor 0 1.5px, transparent 1.5px 5px)',
-        }}
-      />
       {w > 0 && (
         <div
-          className="absolute inset-y-0 left-0 rounded-md transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
           style={{
             width: shown ? `${w}%` : '0%',
             backgroundColor: over ? 'rgb(var(--danger) / 0.55)' : fillTint(color, theme),
           }}
         />
       )}
-      {badge && height === 'md' && (
-        <span className="absolute left-1 top-1/2 -translate-y-1/2 rounded-[5px] bg-white px-1.5 text-[11px] font-semibold leading-[16px] text-slate-900 shadow-soft num">
-          {badge}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/**
- * The hero of a category screen: how much of the budget is left, as a ring in
- * the category's tint. Same footprint as the xl avatar it replaced (96px).
- * `pct` null = no budget this month; `over` paints the whole ring danger.
- */
-export function PercentRing({ pct, color, over }: { pct: number | null; color: string; over?: boolean }) {
-  const { theme } = useTheme();
-  const SIZE = 96;
-  const STROKE = 9;
-  const r = (SIZE - STROKE) / 2;
-  const c = 2 * Math.PI * r;
-  const w = over ? 100 : Math.max(0, Math.min(100, pct ?? 0));
-  // Start empty and fill on the next frame, like HatchedBar.
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const id = window.requestAnimationFrame(() => setShown(true));
-    return () => window.cancelAnimationFrame(id);
-  }, []);
-  return (
-    <div
-      className="relative w-24 h-24 shrink-0"
-      role="progressbar"
-      aria-valuenow={Math.round(w)}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label={pct === null ? 'No budget this month' : over ? 'Over budget' : `${Math.round(w)}% left`}
-    >
-      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90">
-        <circle cx={SIZE / 2} cy={SIZE / 2} r={r} fill="none" stroke="rgb(var(--surface-3))" strokeWidth={STROKE} />
-        {w > 0 && (
-          <circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={r}
-            fill="none"
-            stroke={over ? 'rgb(var(--danger) / 0.55)' : fillTint(color, theme)}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeDasharray={c}
-            strokeDashoffset={shown ? c * (1 - w / 100) : c}
-            className="transition-[stroke-dashoffset] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
-          />
-        )}
-      </svg>
-      <div className="absolute inset-0 grid place-content-center text-center leading-none">
-        <span className={cn('text-[22px] font-display font-bold num', over && 'text-danger')}>
-          {pct === null ? '—' : over ? 'Over' : `${Math.round(w)}%`}
-        </span>
-        <span className="text-[11px] text-content-subtle mt-1">{pct === null ? 'no budget' : over ? 'budget' : 'left'}</span>
-      </div>
     </div>
   );
 }
