@@ -18,7 +18,7 @@ function subtitle(m: LeftoverMonth): string {
     case 'kept':
       return m.amount >= 1 ? 'Left in the bank' : 'Spent it all';
     case 'pending':
-      return 'Not decided yet · tap to put it away';
+      return 'Not decided yet';
     case 'over':
       return 'Spent more than planned';
   }
