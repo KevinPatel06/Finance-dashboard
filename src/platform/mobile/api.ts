@@ -134,6 +134,7 @@ export async function installMobileApi(): Promise<void> {
       leftover: () => invoke(IPC.BUDGET_LEFTOVER),
       settleLeftover: (month: string, goalId: number | null, amount: number) =>
         invoke(IPC.BUDGET_SETTLE_LEFTOVER, month, goalId, amount),
+      leftoverYear: (year?: number) => invoke(IPC.BUDGET_LEFTOVER_YEAR, year),
     },
     paydays: {
       confirm: (payday: string, amount: number) => invoke(IPC.PAYDAY_CONFIRM, payday, amount),

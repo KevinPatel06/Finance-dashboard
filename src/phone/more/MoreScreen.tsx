@@ -9,6 +9,7 @@ const LINKS: Array<{ to: string; emoji: string; color: string; title: string; su
   { to: '/reports', emoji: '📊', color: '#8b5cf6', title: 'Reports', subtitle: 'Charts across months' },
   { to: '/expenses/week', emoji: '🗞️', color: '#f59e0b', title: 'Weekly report', subtitle: 'Last week at a glance' },
   { to: '/pay-history', emoji: '💵', color: '#10b981', title: 'Pay history', subtitle: 'Every paycheck you’ve confirmed' },
+  { to: '/leftovers', emoji: '🪙', color: '#14b8a6', title: 'Leftovers', subtitle: 'What you didn’t spend, month by month' },
 ];
 
 /** Everything that isn't Budget or Expenses. */

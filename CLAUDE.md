@@ -246,7 +246,11 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
 - **Month-end leftover**: months never roll over. When last month was confirmed and ended with
   $1+ left to spend, `monthLeftover()` puts a "Needs you" card up (`LeftoverSheet`): pick a fund →
   a deposit dated today (note "Left over from <Month>"), or "Leave it in the bank". Either sets
-  meta `leftover_done:<YYYY-MM>`. Last month's numbers are unchanged.
+  meta `leftover_done:<YYYY-MM>` = JSON `{date, goal_id?, tx_id?}` (a bare date from the first
+  build = kept). Last month's numbers are unchanged. **Leftovers screen** (`/leftovers`, from
+  More and the Saving tab): `leftoverYear(year)` derives every finished confirmed month on read
+  (status saved/kept/pending/over; a deleted deposit turns "saved" back into "kept"); year total
+  counts only positive months, overspend is shown separately. Pending months can be settled there.
 - **Payday check-in** replaces the wizard on the phone (`paydays.confirm/snooze`).
 - **Budget home layout** (Nov 2026 revamp; mockups in the "Finance Phone Revamp" design canvas):
   Spending/Saving switch under the title, then the gauge in a card (or `SavingSummary`), then

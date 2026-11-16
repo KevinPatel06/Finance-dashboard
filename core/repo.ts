@@ -19,6 +19,8 @@ import type {
   ExpenseCategoryInput,
   ExpenseInput,
   FundActivityItem,
+  LeftoverMonth,
+  LeftoverYear,
   FundLineView,
   FundTransaction,
   MonthStatus,
@@ -2067,17 +2069,87 @@ export function monthLeftover(): { month: string; amount: number } | null {
 
 /** Put (some of) last month's leftover in a fund — or, with no fund, just leave it. */
 export function settleLeftover(month: string, goalId: number | null, amount: number): { ok: true } {
+  let record: { date: string; goal_id?: number; tx_id?: number } = { date: today() };
   if (goalId != null && amount > 0) {
-    addFundTransaction({
+    const tx = addFundTransaction({
       goal_id: goalId,
       kind: 'deposit',
       amount: r2(amount),
       date: today(),
       note: `Left over from ${format(parseISO(`${month}-01`), 'MMMM')}`,
     });
+    record = { ...record, goal_id: goalId, tx_id: tx.id };
   }
-  setMeta(`leftover_done:${month}`, today());
+  setMeta(`leftover_done:${month}`, JSON.stringify(record));
   return { ok: true };
+}
+
+/**
+ * What became of each finished month's spending money in `year` (default: this
+ * year). Derived on read from each confirmed month's view, so a late expense
+ * still moves the number. A month counts as saved only while its deposit exists:
+ * delete the deposit and that money is back to "left in the bank".
+ */
+export function leftoverYear(year?: number): LeftoverYear {
+  const db = getDb();
+  const currentMonth = monthOf(today());
+  const ended = (
+    db
+      .prepare('SELECT month FROM budget_months WHERE confirmed_at IS NOT NULL AND month < ? ORDER BY month DESC')
+      .all(currentMonth) as Array<{ month: string }>
+  ).map((r) => r.month);
+  const years = [...new Set(ended.map((m) => Number(m.slice(0, 4))))];
+  const y = year ?? (years[0] ?? Number(currentMonth.slice(0, 4)));
+
+  const months: LeftoverMonth[] = ended
+    .filter((m) => Number(m.slice(0, 4)) === y)
+    .map((month) => {
+      const amount = r2(budgetMonth(month).leftToSpend);
+      if (amount < 0) return { month, amount, status: 'over', saved: 0, fund: null };
+      const raw = getMeta(`leftover_done:${month}`);
+      if (raw == null) return { month, amount, status: amount >= 1 ? 'pending' : 'kept', saved: 0, fund: null };
+      let rec: { tx_id?: number } = {};
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') rec = parsed;
+      } catch {
+        // An early build stored just the date: that month was left in the bank.
+      }
+      const tx =
+        rec.tx_id != null
+          ? (db
+              .prepare(
+                `SELECT t.amount, g.id, g.name, g.emoji, g.color FROM fund_transactions t
+                   JOIN savings_goals g ON g.id = t.goal_id WHERE t.id = ?`
+              )
+              .get(rec.tx_id) as
+              | { amount: number; id: number; name: string; emoji: string | null; color: string }
+              | undefined)
+          : undefined;
+      if (!tx) return { month, amount, status: 'kept', saved: 0, fund: null };
+      return {
+        month,
+        amount,
+        status: 'saved',
+        saved: tx.amount,
+        fund: { id: tx.id, name: tx.name, emoji: tx.emoji, color: tx.color },
+      };
+    });
+
+  const sum = (f: (m: LeftoverMonth) => number) => r2(months.reduce((s, m) => s + f(m), 0));
+  const total = sum((m) => Math.max(0, m.amount));
+  const saved = sum((m) => m.saved);
+  const pending = sum((m) => (m.status === 'pending' ? m.amount : 0));
+  return {
+    year: y,
+    years: years.includes(y) ? years : [y, ...years].sort((a, b) => b - a),
+    total,
+    saved,
+    pending,
+    kept: r2(Math.max(0, total - saved - pending)),
+    overspent: sum((m) => (m.status === 'over' ? -m.amount : 0)),
+    months,
+  };
 }
 
 // ---------- The month view ----------

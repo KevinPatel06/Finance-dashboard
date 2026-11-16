@@ -825,6 +825,39 @@ export function runRepoContract(
         expect(repo.monthLeftover()).toBeNull();
       });
 
+      it('adds up the year by month: saved, kept, pending and overspent', () => {
+        const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+        expect(repo.leftoverYear().months).toHaveLength(0); // November is still running
+
+        // November: $170 left, put in the fund on Dec 2.
+        vi.setSystemTime(new Date(2026, 11, 2, 12));
+        repo.settleLeftover('2026-11', fund.id, 170);
+        // December: confirmed, $300 planned, $500 spent → over by $200.
+        repo.confirmBudgetMonth('2026-12');
+        repo.createExpense({ description: 'Gifts', amount: 500, date: '2026-12-10', category_id: groceriesId() });
+
+        vi.setSystemTime(new Date(2027, 0, 5, 12));
+        const y26 = repo.leftoverYear(2026);
+        expect(y26.months.map((m) => [m.month, m.status, m.amount])).toEqual([
+          ['2026-12', 'over', -200],
+          ['2026-11', 'saved', 170],
+        ]);
+        expect(y26.months[1].fund).toMatchObject({ id: fund.id, name: 'Trip' });
+        expect(y26).toMatchObject({ total: 170, saved: 170, kept: 0, pending: 0, overspent: 200, years: [2026] });
+
+        // Deleting the deposit puts that money back to "left in the bank".
+        const tx = repo.fundActivity(fund.id).find((a) => a.kind === 'deposit')!;
+        repo.deleteFundTransaction(tx.ref_id!);
+        expect(repo.leftoverYear(2026)).toMatchObject({ total: 170, saved: 0, kept: 170 });
+        expect(repo.leftoverYear(2026).months[1].status).toBe('kept');
+      });
+
+      it('a finished month not decided yet counts as pending', () => {
+        vi.setSystemTime(new Date(2026, 11, 2, 12));
+        expect(repo.leftoverYear()).toMatchObject({ year: 2026, total: 170, pending: 170, kept: 0 });
+        expect(repo.leftoverYear().months[0].status).toBe('pending');
+      });
+
       it('says nothing when the month was overspent', () => {
         repo.createExpense({ description: 'TV', amount: 400, date: '2026-11-15', category_id: groceriesId() });
         vi.setSystemTime(new Date(2026, 11, 2, 12));

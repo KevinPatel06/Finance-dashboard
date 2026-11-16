@@ -598,3 +598,31 @@ export interface WeeklyReport {
   fundsAdded: number;
   insights: string[];
 }
+
+/** One finished, confirmed month's left-to-spend, and what was done with it. */
+export interface LeftoverMonth {
+  month: string; // 'YYYY-MM'
+  /** Left to spend when the month ended; negative = overspent. */
+  amount: number;
+  /** saved = put in a fund · kept = left in the bank · pending = not decided yet · over = overspent */
+  status: 'saved' | 'kept' | 'pending' | 'over';
+  /** How much went into the fund (0 unless saved). */
+  saved: number;
+  fund: { id: number; name: string; emoji: string | null; color: string } | null;
+}
+
+/** A calendar year of month-end leftovers, for the Leftovers screen. */
+export interface LeftoverYear {
+  year: number;
+  /** Years with at least one finished, confirmed month, newest first. */
+  years: number[];
+  /** Sum of the months that ended with money left (overspent months don't subtract). */
+  total: number;
+  saved: number;
+  kept: number;
+  pending: number;
+  /** Sum of how much the overspent months went over (positive). */
+  overspent: number;
+  /** Finished, confirmed months of the year, newest first. */
+  months: LeftoverMonth[];
+}

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Plus } from 'lucide-react';
-import type { AppSettings, BudgetMonthView, RegisteredAccount, SavingsGoal } from '@shared/types';
+import type { AppSettings, BudgetMonthView, LeftoverYear, RegisteredAccount, SavingsGoal } from '@shared/types';
 import SegmentedControl from '@/components/ui/SegmentedControl';
 import { fmtDate } from '@/lib/format';
 import { useApi, useRefresh } from '../data';
-import { money, pct } from '../format';
+import { money, moneyWhole, pct } from '../format';
 import { Bar, Chip, EmojiAvatar, Group, PCard } from '../ui/kit';
 import FundEditor from '../funds/FundEditor';
 import AccountCard from '../contributions/AccountCard';
@@ -49,6 +49,7 @@ export default function SavingTab({ view }: { view: BudgetMonthView }) {
   const { data: done } = useApi<SavingsGoal[]>(() => window.api.goals.listArchived());
   const { data: accounts } = useApi<RegisteredAccount[]>(() => window.api.registered.list());
   const { data: settings } = useApi<AppSettings>(() => window.api.settings.get());
+  const { data: leftovers } = useApi<LeftoverYear>(() => window.api.budget.leftoverYear());
 
   if (!active || !done || !accounts || !settings) return null;
   const inPlan = new Set(view.lines.fund.map((l) => l.goal_id));
@@ -161,6 +162,18 @@ export default function SavingTab({ view }: { view: BudgetMonthView }) {
       {shown.map((g) => (
         <FundCard key={g.id} goal={g} planned={planned.get(g.id)} onClick={() => navigate(`/fund/${g.id}`)} />
       ))}
+
+      {leftovers && leftovers.months.length > 0 && (
+        <PCard onClick={() => navigate('/leftovers')} className="px-4 py-3 flex items-center gap-3">
+          <EmojiAvatar emoji="🪙" color="#14b8a6" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[15px] font-semibold">Leftovers in {leftovers.year}</div>
+            <div className="text-xs text-content-subtle">What you didn’t spend, month by month</div>
+          </div>
+          <span className="text-[15px] font-semibold num">{moneyWhole(leftovers.total)}</span>
+          <ChevronRight size={18} className="text-content-subtle" />
+        </PCard>
+      )}
 
       {hidden && (
         <button

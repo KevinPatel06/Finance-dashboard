@@ -93,6 +93,7 @@ export const IPC = {
   PAYDAY_SNOOZE: 'paydays:snooze',
   BUDGET_LEFTOVER: 'budget:leftover',
   BUDGET_SETTLE_LEFTOVER: 'budget:settleLeftover',
+  BUDGET_LEFTOVER_YEAR: 'budget:leftoverYear',
 
   // Funds (money in/out from outside the budget)
   FUND_ADD_TX: 'funds:addTransaction',

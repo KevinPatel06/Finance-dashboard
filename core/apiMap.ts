@@ -123,6 +123,7 @@ export const REPO_API: RepoApiEntry[] = [
   // Reads last month's view, which may close a registered year, so it writes.
   w(IPC.BUDGET_LEFTOVER, () => repo.monthLeftover()),
   w(IPC.BUDGET_SETTLE_LEFTOVER, (month, goalId, amount) => repo.settleLeftover(month, goalId, amount)),
+  w(IPC.BUDGET_LEFTOVER_YEAR, (year) => repo.leftoverYear(year)),
 
   // Funds
   w(IPC.FUND_ADD_TX, (input) => repo.addFundTransaction(input)),

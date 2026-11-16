@@ -16,6 +16,7 @@ import FundDetail from './funds/FundDetail';
 import AccountDetail from './contributions/AccountDetail';
 import MoreScreen from './more/MoreScreen';
 import PayHistory from './more/PayHistory';
+import LeftoverScreen from './budget/LeftoverScreen';
 import ExportPanel from './onboarding/ExportPanel';
 import PhoneOnboarding from './onboarding/PhoneOnboarding';
 import SetupFlow from './onboarding/SetupFlow';
@@ -109,6 +110,7 @@ export default function PhoneApp() {
             <Route path="/recurring" element={<RecurringScreen />} />
             <Route path="/more" element={<MoreScreen />} />
             <Route path="/pay-history" element={<PayHistory />} />
+            <Route path="/leftovers" element={<LeftoverScreen />} />
             <Route path="/export" element={<Subpage title="Get advice from your AI"><ExportPanel /></Subpage>} />
             <Route path="/payoff" element={<Subpage title="Payoff"><Payoff /></Subpage>} />
             <Route path="/account/:id" element={<AccountDetail />} />
