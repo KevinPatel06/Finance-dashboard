@@ -243,6 +243,10 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   list asks for `archived = 0` or `1`, so it disappears everywhere. A real DELETE would null
   `expenses.fund_id` (FK `SET NULL`), turning purchases paid from it into everyday spending
   and rewriting past months. `hardDeleteGoal` drops only this and later months' fund lines.
+- **Month-end leftover**: months never roll over. When last month was confirmed and ended with
+  $1+ left to spend, `monthLeftover()` puts a "Needs you" card up (`LeftoverSheet`): pick a fund →
+  a deposit dated today (note "Left over from <Month>"), or "Leave it in the bank". Either sets
+  meta `leftover_done:<YYYY-MM>`. Last month's numbers are unchanged.
 - **Payday check-in** replaces the wizard on the phone (`paydays.confirm/snooze`).
 - **Budget home layout** (Nov 2026 revamp; mockups in the "Finance Phone Revamp" design canvas):
   Spending/Saving switch under the title, then the gauge in a card (or `SavingSummary`), then

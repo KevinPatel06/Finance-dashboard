@@ -793,6 +793,45 @@ export function runRepoContract(
     });
     // ---------- Contributions: registered accounts and their CRA years ----------
 
+    describe('month-end leftover', () => {
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 10, 20, 12));
+        repo.updateSettings({ pay_amount: 1000, pay_frequency: 'monthly', next_paycheck_date: '2026-11-05' });
+        repo.saveBudgetPlan('2026-11', [{ kind: 'spend', ref_id: groceriesId(), amount: 300 }], true);
+        repo.createExpense({ description: 'No Frills', amount: 130, date: '2026-11-12', category_id: groceriesId() });
+      });
+      afterEach(() => vi.useRealTimers());
+
+      it('offers last month’s unspent money once the month is over', () => {
+        expect(repo.monthLeftover()).toBeNull(); // November isn't over yet
+        vi.setSystemTime(new Date(2026, 11, 2, 12));
+        expect(repo.monthLeftover()).toEqual({ month: '2026-11', amount: 170 });
+      });
+
+      it('putting it in a fund deposits it and clears the card', () => {
+        const fund = repo.createGoal({ name: 'Trip', target_amount: 1000, color: '#000' });
+        vi.setSystemTime(new Date(2026, 11, 2, 12));
+        repo.settleLeftover('2026-11', fund.id, 170);
+        expect(repo.fundBalance(fund.id)).toBe(170);
+        expect(repo.monthLeftover()).toBeNull();
+        // The deposit doesn't change November's spending numbers.
+        expect(repo.budgetMonth('2026-11').leftToSpend).toBe(170);
+      });
+
+      it('"leave it" clears the card without moving money', () => {
+        vi.setSystemTime(new Date(2026, 11, 2, 12));
+        repo.settleLeftover('2026-11', null, 0);
+        expect(repo.monthLeftover()).toBeNull();
+      });
+
+      it('says nothing when the month was overspent', () => {
+        repo.createExpense({ description: 'TV', amount: 400, date: '2026-11-15', category_id: groceriesId() });
+        vi.setSystemTime(new Date(2026, 11, 2, 12));
+        expect(repo.monthLeftover()).toBeNull();
+      });
+    });
+
     describe('contributions — accounts', () => {
       beforeEach(() => {
         vi.useFakeTimers({ toFake: ['Date'] });

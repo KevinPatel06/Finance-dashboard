@@ -2049,6 +2049,37 @@ export function snoozePayday(payday: string): { ok: true } {
   return { ok: true };
 }
 
+// ---------- Month-end leftover ----------
+
+/**
+ * Last month's unspent spending money, until the user files it into a fund or
+ * says "leave it". Months don't roll over, so without this it would silently
+ * drop out of the app. Only a confirmed month that ended with $1+ left counts.
+ */
+export function monthLeftover(): { month: string; amount: number } | null {
+  const db = getDb();
+  const prev = format(addMonths(parseISO(`${monthOf(today())}-01`), -1), 'yyyy-MM');
+  if (monthStatus(db, prev) !== 'confirmed') return null;
+  if (getMeta(`leftover_done:${prev}`) != null) return null;
+  const left = r2(budgetMonth(prev).leftToSpend);
+  return left >= 1 ? { month: prev, amount: left } : null;
+}
+
+/** Put (some of) last month's leftover in a fund — or, with no fund, just leave it. */
+export function settleLeftover(month: string, goalId: number | null, amount: number): { ok: true } {
+  if (goalId != null && amount > 0) {
+    addFundTransaction({
+      goal_id: goalId,
+      kind: 'deposit',
+      amount: r2(amount),
+      date: today(),
+      note: `Left over from ${format(parseISO(`${month}-01`), 'MMMM')}`,
+    });
+  }
+  setMeta(`leftover_done:${month}`, today());
+  return { ok: true };
+}
+
 // ---------- The month view ----------
 
 function monthRecurring(db: Db, month: string): BudgetMonthView['recurring'] {

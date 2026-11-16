@@ -15,6 +15,7 @@ import PlanEditor from './PlanEditor';
 import AccountEditor from '../contributions/AccountEditor';
 import { cash, KIND_META } from '../contributions/meta';
 import BreakdownSheet from './BreakdownSheet';
+import LeftoverSheet from './LeftoverSheet';
 import NeedsYou from './NeedsYou';
 import SavingSummary from './SavingSummary';
 import SavingTab from './SavingTab';
@@ -38,6 +39,10 @@ export default function BudgetScreen() {
   const [info, setInfo] = useState(false);
   const { data: accounts } = useApi<RegisteredAccount[]>(() => window.api.registered.list());
   const [newYear, setNewYear] = useState<RegisteredAccount | null>(null);
+  const { data: leftover, reload: reloadLeftover } = useApi<{ month: string; amount: number } | null>(() =>
+    window.api.budget.leftover()
+  );
+  const [leftoverOpen, setLeftoverOpen] = useState(false);
 
   if (!v) return <div className="pt-24 text-center text-content-subtle">Loading…</div>;
   const deposit = depositBanner(v);
@@ -145,6 +150,20 @@ export default function BudgetScreen() {
             }
           >
             It's a copy of last month's plan. Funds and debt payments are added once you confirm it.
+          </Banner>
+        )}
+        {leftover && (
+          <Banner
+            tone="brand"
+            icon={<PiggyBank size={20} />}
+            title={`${money(leftover.amount)} left over from ${monthName(leftover.month)}`}
+            action={
+              <Chip active onClick={() => setLeftoverOpen(true)}>
+                Put it away
+              </Chip>
+            }
+          >
+            You didn't spend it all. Put it in a fund, or leave it in the bank.
           </Banner>
         )}
         {v.pendingPaydays.map((p) => (
@@ -257,6 +276,19 @@ export default function BudgetScreen() {
           onSaved={() => {
             setNewYear(null);
             void reload();
+          }}
+        />
+      )}
+
+      {leftoverOpen && leftover && (
+        <LeftoverSheet
+          month={leftover.month}
+          amount={leftover.amount}
+          onClose={() => setLeftoverOpen(false)}
+          onDone={() => {
+            setLeftoverOpen(false);
+            void reloadLeftover();
+            bump();
           }}
         />
       )}

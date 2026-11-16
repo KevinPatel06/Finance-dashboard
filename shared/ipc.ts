@@ -91,6 +91,8 @@ export const IPC = {
   // Payday check-ins
   PAYDAY_CONFIRM: 'paydays:confirm',
   PAYDAY_SNOOZE: 'paydays:snooze',
+  BUDGET_LEFTOVER: 'budget:leftover',
+  BUDGET_SETTLE_LEFTOVER: 'budget:settleLeftover',
 
   // Funds (money in/out from outside the budget)
   FUND_ADD_TX: 'funds:addTransaction',
