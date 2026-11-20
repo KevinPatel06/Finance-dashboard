@@ -120,6 +120,7 @@ export const REPO_API: RepoApiEntry[] = [
   w(IPC.BUDGET_CONFIRM, (month) => repo.confirmBudgetMonth(month)),
   w(IPC.PAYDAY_CONFIRM, (payday, amount) => repo.confirmPayday(payday, amount)),
   w(IPC.PAYDAY_SNOOZE, (payday) => repo.snoozePayday(payday)),
+  r(IPC.PAYDAY_MISSED, () => repo.missedPaydays()),
   // Reads last month's view, which may close a registered year, so it writes.
   w(IPC.BUDGET_LEFTOVER, () => repo.monthLeftover()),
   w(IPC.BUDGET_SETTLE_LEFTOVER, (month, goalId, amount) => repo.settleLeftover(month, goalId, amount)),

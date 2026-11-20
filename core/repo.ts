@@ -67,7 +67,7 @@ import {
 import { periodRate } from '../shared/debtMath';
 import { suggestEmoji, suggestKind } from '../shared/emoji';
 import { latestOccurrenceOnOrBefore, occurrencesInRange } from '../shared/recurrence';
-import { monthBounds, monthOf, nextPaydayAfter, paydaysInMonth } from '../shared/paydays';
+import { addMonthsToMonth, monthBounds, monthOf, nextPaydayAfter, paydaysInMonth } from '../shared/paydays';
 import { monthlyLine, monthsLeft, scheduleRows, suggestNewYear, taxYearFor, yearBounds } from '../shared/registered';
 
 // ---------- helpers ----------
@@ -2043,6 +2043,39 @@ export function confirmPayday(payday: string, amount: number): BudgetMonthView {
     updateSettings({ next_paycheck_date: nextPaydayAfter(s.next_paycheck_date, s.pay_frequency, payday > t ? payday : t) });
   }
   return budgetMonth(monthOf(payday));
+}
+
+/**
+ * Scheduled paydays up to today with no paycheck, newest first, for Pay
+ * history. The Budget screen only asks about the last 14 days, so without this
+ * a removed (or never confirmed) older payday could never be re-entered.
+ * Starts at the user's first paycheck or budget month, at most 6 months back,
+ * so paydays from before they used the app don't show up.
+ */
+export function missedPaydays(): Payday[] {
+  const db = getDb();
+  const s = getSettings();
+  if (!s.next_paycheck_date) return [];
+  const todayIso = today();
+  const first = db
+    .prepare(
+      `SELECT MIN(d) AS d FROM (
+         SELECT MIN(COALESCE(payday, date)) AS d FROM paychecks
+         UNION ALL SELECT MIN(month) || '-01' FROM budget_months
+       )`
+    )
+    .get() as { d: string | null } | undefined;
+  if (!first?.d) return [];
+  const floor = formatISO(addMonths(parseISO(todayIso), -6), { representation: 'date' });
+  const start = first.d > floor ? first.d : floor;
+
+  const out: Payday[] = [];
+  for (let m = monthOf(start); m <= monthOf(todayIso); m = addMonthsToMonth(m, 1)) {
+    for (const p of monthPaydays(db, m, todayIso).paydays) {
+      if (!p.paycheck && p.date >= start && p.date <= todayIso) out.push(p);
+    }
+  }
+  return out.reverse();
 }
 
 /** "Not yet" — hide this payday's card until tomorrow. */

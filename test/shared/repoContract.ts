@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { Bill } from '../../shared/types';
-import { differenceInCalendarDays, formatISO, parseISO, subMonths } from 'date-fns';
+import { addDays, differenceInCalendarDays, formatISO, parseISO, subMonths } from 'date-fns';
 import { periodRate } from '../../shared/debtMath';
 import { occurrencesInRange } from '../../shared/recurrence';
 import { addMonthsToMonth } from '../../shared/paydays';
@@ -685,6 +685,24 @@ export function runRepoContract(
       payMonthly();
       repo.confirmPayday('2026-01-05', 1200);
       expect(repo.getSettings().next_paycheck_date! > formatISO(new Date(), { representation: 'date' })).toBe(true);
+    });
+
+    it('a removed payday check-in comes back as missed so it can be re-entered', () => {
+      const day = (n: number) => formatISO(addDays(new Date(), n), { representation: 'date' });
+      repo.updateSettings({ pay_amount: 500, pay_frequency: 'weekly', next_paycheck_date: day(0) });
+      expect(repo.missedPaydays()).toEqual([]); // nothing logged yet: no history to be missing from
+
+      repo.confirmPayday(day(-14), 500);
+      repo.confirmPayday(day(-7), 480);
+      expect(repo.missedPaydays().map((p) => p.date)).toEqual([day(0)]);
+
+      const removed = repo.listPaychecks().find((c) => c.payday === day(-7))!;
+      repo.deletePaycheck(removed.id);
+      expect(repo.missedPaydays().map((p) => p.date)).toEqual([day(0), day(-7)]);
+
+      repo.confirmPayday(day(-7), 490);
+      expect(repo.missedPaydays().map((p) => p.date)).toEqual([day(0)]);
+      expect(repo.listPaychecks().find((c) => c.payday === day(-7))!.amount).toBe(490);
     });
 
     it('"Not yet" snoozes a payday for today', () => {

@@ -139,6 +139,7 @@ export async function installMobileApi(): Promise<void> {
     paydays: {
       confirm: (payday: string, amount: number) => invoke(IPC.PAYDAY_CONFIRM, payday, amount),
       snooze: (payday: string) => invoke(IPC.PAYDAY_SNOOZE, payday),
+      missed: () => invoke(IPC.PAYDAY_MISSED),
     },
     funds: {
       addTransaction: (input: unknown) => invoke(IPC.FUND_ADD_TX, input),
