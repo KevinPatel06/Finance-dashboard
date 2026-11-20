@@ -47,6 +47,19 @@ npm run build:android  # build:mobile && cap sync android
 - **Android** (`android` job, `ubuntu-latest`): `build:mobile` → `cap sync android` → JDK 17 →
   `./gradlew assembleRelease` → artifact `FinanceDashboard-apk`. There's no Android SDK or Java
   on Kevin's PC, so the APK is only ever built in CI. Signing: see "Android app" below.
+- **Every phone build gets a changelog** (`CHANGELOG.md`, newest first, mirrored as a GitHub
+  release). When Kevin asks to build the ipa/apk:
+  1. `git log build-<last>..HEAD` (latest `build-*` tag) for what changed.
+  2. Add `## Build <N> — <Month D, YYYY>` at the top of `CHANGELOG.md`. `N` = what
+     `git rev-list --count HEAD` will be **after** the changelog commit (= Android versionCode).
+     Second line: `Version <package.json version>`. Sections `### New` / `### Improved` /
+     `### Fixed`, empty ones left out. Write for the person using the phone, not for developers:
+     plain words, screen names as the app shows them, no file/function names; leave out
+     docs/ci/test/refactor commits unless something on the phone changed.
+  3. Commit `chore: changelog for build <N>` and push `main` (that push is the build).
+  4. Once the "Build phone apps" run is green: `git tag build-<N> <sha>`, `git push origin
+     build-<N>`, then `gh release create build-<N> --title "Build <N> — <date>"
+     --notes-file <that entry>`.
 - **Install gotcha**: better-sqlite3 has no Node 24 prebuild + no VS Build Tools here.
   Install with `npm install --ignore-scripts`, then `npx electron-rebuild -f -w better-sqlite3`
   (pulls Electron's prebuilt binary). If Electron itself won't launch
@@ -251,7 +264,10 @@ Design: `docs/superpowers/specs/2026-10-22-iphone-budget-redesign-design.md`.
   More and the Saving tab): `leftoverYear(year)` derives every finished confirmed month on read
   (status saved/kept/pending/over; a deleted deposit turns "saved" back into "kept"); year total
   counts only positive months, overspend is shown separately. Pending months can be settled there.
-- **Payday check-in** replaces the wizard on the phone (`paydays.confirm/snooze`).
+- **Payday check-in** replaces the wizard on the phone (`paydays.confirm/snooze`). The Budget banner only asks about the last 14 days;
+  **Pay history** (`/pay-history`) lists every paycheck (tap → edit amount / remove) plus
+  `paydays.missed()` (`missedPaydays()`: unconfirmed scheduled paydays since the first paycheck or
+  budget month, max 6 months back), so a removed or older payday can always be re-entered.
 - **Budget home layout** (Nov 2026 revamp; mockups in the "Finance Phone Revamp" design canvas):
   Spending/Saving switch under the title, then the gauge in a card (or `SavingSummary`), then
   every to-do banner in one swipeable **Needs you** row (`budget/NeedsYou.tsx`) so they never push
